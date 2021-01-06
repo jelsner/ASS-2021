@@ -41,7 +41,7 @@ Expected learning outcomes
 Course materials
 
 * Access to the internet and a computer.
-* Course materials are available through GitHub.
+* Lesson and assignment files are available through Canvas (and GitHub).
 * There is no required textbook.
 * Many excellent online resources are available. Here are some of my favorites.
   - R for Data Science https://r4ds.had.co.nz/
@@ -53,7 +53,7 @@ Class meetings
 * Remote lessons
 * Remote/F2F lab assignments
 
-During each lesson I will work through and explain the R code within an Rmd file on Zoom. The notes are comprehensive and you can work through them on your own. The notes are written using markdown. Markdown is a way to write content for the Web. A markdown file has the suffix `.Rmd` (an R markdown file). The file is opened with the RStudio application.
+During each lesson I will work through and explain the R code within an `Rmd` file on Zoom. The notes are comprehensive and you can work through them on your own. The notes are written using markdown. Markdown is a way to write content for the Web. A markdown file has the suffix `.Rmd` (an R markdown file). The file is opened with the RStudio application.
 
 ## Grades {-}
 
