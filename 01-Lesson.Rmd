@@ -1,12 +1,16 @@
 ---
 title: "Lesson 1"
 author: "James B. Elsner"
-date: January 6, 2021
-output: 
-  html_document:
-editor_options: 
+date: "January 6, 2021"
+output:
+  html_document: null
+editor_options:
   chunk_output_type: console
 ---
+
+**"Any fool can write code that a computer can understand. Good programmers write code that humans can understand."** --- Martin Fowler
+
+In this lesson I talk a bit about my journey into data science and then tell you what this course is about. I give details about lessons, assignments, and grading, and about how to get the most out of this course. If time permits I will talk a bit about why I present the course in this way.
 
 * Is Milwaukee snowier than Madison?
 * Is global warming making hurricanes stronger?
@@ -28,7 +32,7 @@ Links to my stuff (if you are curious)
 
 ## Course description {-}
 
-This course is for students who want to learn how to analyze, map, and model spatial and geographical data using the R programming language. It assumes students know some basic statistics through multiple linear regression. It also assumes students have some prior experience with using R. Students without knowledge of R should seek help through various online tutorials.
+This course is for students who want to learn how to analyze, map, and model spatial and geographical data using the R programming language. It assumes students know some basic statistics through multiple linear regression. It also assumes students have some prior experience with using R. Students without knowledge of R should seek help through various online tutorials (see below).
 
 In this course we survey the methods used to describe, analyze, and model _spatial_ data. Focus is on applications. Emphasis is given to how spatial statistical methods are related through the concept of spatial autocorrelation.
 
@@ -36,7 +40,7 @@ Expected learning outcomes
 
 1. Learn how and when to apply statistical methods and models to spatial data, 
 2. learn various packages in R for analyzing and modeling spatial data, and 
-3. learn how to interpret the results of a spatial data model. 
+3. learn how to interpret the results of a spatial data model.
 
 Course materials
 
@@ -53,7 +57,7 @@ Class meetings
 * Remote lessons
 * Remote/F2F lab assignments
 
-During each lesson I will work through and explain the R code within an `Rmd` file on Zoom. The notes are comprehensive and you can work through them on your own. The notes are written using markdown. Markdown is a way to write content for the Web. A markdown file has the suffix `.Rmd` (an R markdown file). The file is opened with the RStudio application.
+During each lesson I will work through and explain the R code within an `xx-Lesson.Rmd` file on Zoom. The notes in the lesson files are comprehensive, so you can work through them on your own. The notes are written using the markdown language. Markdown is a way to write content for the Web. An R markdown file has the suffix `.Rmd` (R markdown file). The file is opened using the RStudio application.
 
 ## Grades {-}
 
@@ -86,13 +90,13 @@ Americans With Disabilities Act
 
 Students with disabilities needing academic accommodation should: (1) register with and provide documentation to the Student Disability Resource Center; (2) bring a letter indicating the need for accommodation and what type. This should be done during the first week of classes.
 
-Diversity & inclusiveness
+Diversity and inclusiveness
 
-It is my intent to present materials and activities that are respectful of diversity: gender identity, sexuality, disability, age, socioeconomic status, ethnicity, race, nationality, religion, and culture.
+It is my intent to present notes and data that are respectful of diversity: gender identity, sexuality, disability, age, socioeconomic status, ethnicity, race, nationality, religion, and culture.
 
 Learning during a pandemic
 
-The pandemic has made it difficult for most of us. I am committed to making sure that you learn everything you were hoping to learn from this class. I will make whatever accommodations are needed to help you learn the material and finish your assignments. Under normal conditions I am quite flexible and lenient with grading with students facing difficult challenges. Under these pandemic conditions, this generosity is amplified. 
+The pandemic has made it difficult for most of us. I am committed to making sure that you learn everything you were hoping to learn from this class. I will make whatever accommodations are needed to help you learn the material and finish your assignments. Under normal conditions I am quite flexible and lenient with grading with students facing difficult challenges. My generosity is amplified under these pandemic conditions.
 
 ## Outline of topics {-}
 
@@ -129,7 +133,7 @@ Remote Lessons:
 
 Lab Assignments: 
 
-* January 8 (no assignment)
+* January 8 (no assignment, get setup with the R & RStudio)
 * January 15
 * January 22
 * January 29
