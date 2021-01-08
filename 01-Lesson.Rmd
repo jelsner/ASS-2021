@@ -203,9 +203,10 @@ Spatial networks:
 * Spatial Networks in R with {sf} and {tidygraph}: https://www.r-spatial.org/r/2019/09/26/spatial-networks.html
 * Travel times/distances: https://github.com/rCarto/osrm
 
-Transport planning: 
+Transport planning/routing: 
 
 https://docs.ropensci.org/stplanr/index.html
+https://www.urbandemographics.org/post/r5r-fast-multimodal-transport-routing-in-r/
 
 Time series forecasting: 
 

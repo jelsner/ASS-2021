@@ -1,0 +1,531 @@
+---
+title: "Lesson 2"
+author: "James B. Elsner"
+date: "January 11, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+## Main take aways from the syllabus
+
+Lesson Hours: Mon/Wed 9:05 a.m. - 9:55 a.m., Lab Hours: Fri 9:05 a.m. - 9:55 a.m., Student Hours: Mon/Wed 9:55 a.m. - 10:30 a.m.
+Best way to contact me: Email: <jelsner@fsu.edu>
+
+This course surveys the methods used to describe, analyze, and model _spatial_ data. Focus is on applications. Emphasis is given to how spatial statistical methods are related through the concept of spatial autocorrelation.
+
+Lessons and lab assignments are available remotely. I might have a chance to do some F2F later in the semester. During each lesson I will work through and explain the R code within an `xx-Lesson.Rmd` file on Zoom. The notes in the lesson files are comprehensive, so you can work through them on your own. The notes are written using the markdown language. Think of this as a master class in spatial data science using R.
+
+Grades are determined by how well you do on the weekly assignments.
+
+There are many online sites dedicated to all aspects of the R programming language. I gave you a list of some of the ones related to spatial analysis and modeling in Lesson 1.
+
+You should now be set up with R and RStudio. If you are not set up just yet, please stay after class with me and I will help you.
+
+In this lesson I provide a quick review (or introduction) to working with data using functions from the {base} packages R. The {base} R packages are the functions included in your initial installation. They form the scaffolding for working in R but much of what we will do in this class will involve
+
+## Working with base R
+
+Applied spatial statistics is the analysis and modeling of spatial data. To begin our journey we need to know about data objects in R.
+
+The `c()` function creates a 'vector' data object (vector object). The function combines (concatenates) individual data values, where each data value is separated by a comma, into a vector object with a length equal to the number of data values.
+
+Consider a set of hypothetical annual land falling hurricane counts over a ten-year period.
+
+2  3  0  3  1  0  0  1  2  1
+
+We save these ten values to our working environment by assigning them to an object that we call `counts`.
+```{r}
+counts <- c(2, 3, 0, 3, 1, 0, 0, 1, 2, 1)
+```
+
+The assignment operator is an equal sign (`<-` or `=`). By clicking on the _Environment_ tab in the upper-right panel we see that the object `counts` with numerical values (`num`) 2 3, etc below word _Values_. We see that the elements are indexed between 1 and 10 (`1:10`).
+
+We print the values to the console by typing the name of the data object.
+```{r}
+counts
+```
+
+When printed to the console, the values are prefaced with a `[1]`. This indicates that the object is a vector and the first element in the vector has a value of 2 (The number immediately to the right of `[1]`).
+
+Note: We can assign and print by wrapping the entire line of code in parantheses.
+```{r}
+( counts <- c(2, 3, 0, 3, 1, 0, 0, 1, 2, 1) )
+```
+
+We can use the arrow keys on our keyboard to retrieve previous commands. Each command is stored in the history file (click on the _History_ tab in the upper-right panel). The up-arrow key moves backwards through the history file. The left and right arrow keys move the cursor along the line.
+
+We can then apply functions to this vector data object. Examples include:
+```{r}
+sum(counts)
+length(counts)
+sum(counts)/length(counts)
+mean(counts)
+```
+
+The function `sum()` totals the hurricane counts over all years, `length()` returns the number of elements in the vector. Other functions include, `sort()`, `min()`, `max()`, `range()`, `diff()`, and `cumsum()`. Try these functions on the landfall counts. What does the function `range()` return?  What does the function `diff()` do?
+
+The object `counts` is a vector containing the hurricane data. This means that the elements are ordered. There is a first element, a second element, and so on. This is good for data objects for several reasons.
+
+The hurricane counts have an order: year 1, year 2, etc and we want that ordered reflected in our data object. Also, we would like to be able to make changes to the data values by element. Finally, vectors are mathematical objects so that math operations can be performed on them in a natural way.
+
+For example, math tells us that a scalar multiplied by a vector is a vector where each element of the product has been multiplied by the scalar.
+```{r}
+10 * counts
+```
+
+Further, suppose `counts` contain the annual landfall count from the first decade of a longer record.  We want to keep track of counts over other decades. This could be done by the following, example.
+```{r}
+d1 <- counts
+d2 <- c(0, 5, 4, 2, 3, 0, 3, 3, 2, 1)
+```
+
+Most functions operate on each element of the data vector at the same time.
+```{r}
+d1 + d2
+```
+
+The first year of the first decade is added from the first year of the second decade and so on.
+
+What happens if we apply the `c()` function to these two vectors?  Try it.
+```{r}
+c(d1, d2)
+```
+
+If we are interested in each year's count as a difference from the decade mean, we type:
+```{r}
+d1 - mean(d1)
+```
+
+In this case a single number (the mean of the first decade) is subtracted from a vector. The result is from subtracting the number from each entry in the data vector. This is an example of data recycling. R repeats values from one vector so that the vector lengths match. Here the mean is repeated 10 times.
+
+Suppose we are interested in the variance of the set of landfall counts. The variance is computed as
+$$
+\hbox{var}(x) = \frac{(x_1 - \bar x)^2 + (x_2 - \bar x)^2 + \cdots + (x_n - \bar x)^2}{n-1} = \frac{1}{n-1}\sum_{i=1}^n (x_i - \bar x)^2
+$$
+
+Although the `var()` function computes this, here we see how to do this using simpler functions. The key is to find the squared differences and then sum.
+```{r}
+x <- d1
+xbar <- mean(x)
+x - xbar
+(x - xbar)^2
+sum((x - xbar)^2)
+n <- length(x)
+n
+sum((x - xbar)^2)/(n - 1)
+var(x)
+```
+
+Elements in a vector object must all have the same type. This type can be numeric, as in counts, character strings, as in
+```{r}
+simpsons <- c('Homer', 'Marge', 'Bart', 'Lisa', 'Maggie')
+simpsons
+```
+
+Character strings are made with matching quotes, either double, `"`, or single, `'`. If we mix types the values will be coerced into a common type, which is usually a character string. Arithmetic operations do not work on character strings.
+
+Returning to the land falling hurricane counts. Now suppose the National Hurricane Center (NHC) reanalyzes a storm, and that the 6th year of the 2nd decade is a 1 rather than a 0 for the number of landfalls. In this case we type:
+```{r}
+d2[6] <- 1
+```
+
+This assigns to the 6th year of the decade a value of one. The assignment to the 6th entry in the vector `d2` is done by referencing the entry with square brackets `[]`. 
+
+It is important to keep this straight: Parentheses `()` are used for functions and square brackets `[]` are used to extract values from vectors (and data frames, arrays, lists, etc).
+```{r}
+d2
+d2[2]
+d2[-4]
+d2[c(1, 3, 5, 7, 9)]
+```
+
+The first line prints all the elements of the vector `df2`. The second prints only the 2nd value of the vector. The third prints all but the 4th value. The fourth prints the values with odd element numbers.
+
+Sometimes we need to create structured data. For example, the integers 1 through 99. To enter these we use the `:` operator.
+```{r, eval=FALSE}
+1:99
+rev(1:99)
+99:1
+```
+
+The `seq()` function is more general than `:`. We specify the sequence interval with the `by =` or `length =` arguments.
+```{r}
+seq(from = 1, to = 9, by = 2)
+seq(1, 10, by = 2)
+seq(1, 9, length = 5)
+```
+
+The `rep()` function is to create repetitive sequences. The first argument is a value or vector that we want repeated and the second argument is the number of times we want it repeated.
+```{r}
+rep(1, times = 10)
+rep(simpsons, times = 2)
+```
+
+In the second example the vector `simpsons` containing the Simpson characters is repeated twice.
+
+To repeat each element of the vector use the `each =` argument.
+```{r}
+rep(simpsons, each = 2)
+```
+
+More complicated patterns can be repeated by specifying pairs of equal length vectors. In this case, each element of the first vector is repeated the corresponding number of times specified by the element in the second vector.
+```{r}
+rep(c("long", "short"),  times = c(2, 3))
+```
+
+To find the maximum number of landfalls in the first decade we type.
+```{r}
+max(d1)
+```
+
+Which years had the maximum?
+```{r}
+d1 == 3
+```
+
+Notice the double equals signs (`==`).  This is a logical operation that tests each value in `d1` to see if it is equal to 3. The 2nd and 4th values are equal to 3 so `TRUE`s are returned. Think of this as asking R a question. Is the value equal to 3?  R answers all at once with a vector of `TRUE`'s and `FALSE`'s.
+
+Which years had fewer than 2 hurricanes?
+```{r}
+d1 < 2
+```
+
+Now the question is how do you get the vector element corresponding to the `TRUE` values?  That is, which years have 3 landfalls?
+```{r}
+which(d1 == 3)
+```
+
+The function `which.max()` can be used to get the first maximum.
+```{r}
+which.max(d1)
+```
+
+We might also want to know the total number of landfalls in each decade and the number of years in a decade without a landfall. Or how about the ratio of the mean number of landfalls over the two decades.
+```{r}
+sum(d1)
+sum(d2)
+sum(d1 == 0)
+sum(d2 == 0)
+mean(d2)/mean(d1)
+```
+
+So there is 85% more landfalls during the second decade. Is this difference statistically significant?
+
+To remove an object from the environment use the `rm()` function.
+```{r}
+rm(d1, d2)
+```
+
+## Data frames
+
+The data frame is the most important object in R. It stores data in a tabular format like a spreadsheet. A data frame is a list of vectors each with the same length. A data frame also has column names (and sometimes row names).
+
+For example, we create a data frame object `df` containing three vectors `n`, `s`, `b` each with three elements with the `data.frame()` function.
+```{r}
+n <- c(2, 3, 5) 
+s <- c("aa", "bb", "cc") 
+b <- c(TRUE, FALSE, TRUE) 
+
+df <- data.frame(n, s, b)
+```
+
+To find out what type of object `df` is we use the `class()` function.
+```{r}
+class(df)
+```
+
+It is of class `data.frame`. Note that the object name shows up in our _Environment_ under _Data_ and it includes a little blue arrow indicating that we can view it by clicking on the row.
+
+The data frame shows up as a table (like a spreadsheet) in the `View()` mode (see the command in the console below). Caution: This is not advised for large data frames. The top line of the table is called the header. Each line below the header contains a row of data, which begins with the name (or number) of the row followed by the data values. 
+
+Each data element is in a cell. To retrieve data in a cell, we enter its row and column coordinates in that order in the single square bracket `[]` operator and separated by a column.
+
+Here is the cell value from the first row, second column of mtcars.
+```{r}
+df[1, 2]
+```
+
+We can print the column names (located in the top row in the `View()` mode)  with the `names()` function.
+```{r}
+names(df)
+```
+
+The list of names is a vector of length three containing the elements "n", "s", and "b" in that order. 
+
+We access individual columns of a data frame as vectors by appending the dollar sign (`$`) to the data frame name. For example, to print the values of the column labeled `s` we type
+```{r}
+df$s
+```
+
+Base R and many of the packages we will use this semester include example data frames. The data frame called `mtcars`, for instance, contains information extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models).
+```{r}
+class(mtcars)
+
+names(mtcars)
+```
+
+The number of data rows in the data frame is given by the `nrow()` function.
+```{r}
+nrow(mtcars)
+```
+
+The number of columns of a data frame is given by the `ncol()` function.
+```{r}
+ncol(mtcars)
+```
+
+Further details of built-in data frames like `mtcars` is available in the R documentation accessed with the `help()` (or `?`) function.
+```{r, eval=FALSE}
+help(mtcars)
+```
+
+If we simply type the name of the data frame in the console (this is not advisable!) all the data are printed. 
+```{r}
+mtcars
+```
+
+Instead, to get a glimpse of our data we used the functions `head()` or `str()`. 
+```{r}
+head(mtcars)
+
+str(mtcars)
+```
+
+The first function prints the first six rows of the data frame and the second lists the columns by type.
+
+Consider another built-in data frame called `studentdata` from the {LearnBayes} package. First, install the package with the `install.packages()` function. Put the name of the package {LearnBayes} in quotes (single or double). Then to make the functions available use the `library()` function.
+```{r}
+install.packages("LearnBayes")
+
+library(LearnBayes)
+```
+
+Next, make a copy of the data frame and call it `df`. Then print the first six rows using the `head()` function.
+```{r}
+df <- studentdata
+head(df)
+```
+
+Data frames are like spreadsheets with rows and columns. The rows are the observations (here each row is a student in an intro stats class at Bowling Green State University) and the columns are the variables. Variables are answers to questions like what is your height?, Choose a number between 1 and 10, Give the time you went to bed last night, etc. 
+
+The names of the columns are available with the `names()` function.
+```{r}
+names(df)
+```
+
+All columns are of the same length, but not all students answered all questions.
+
+We specify particular data elements of the matrix using the bracket notation [row, column] where row is the row number and column is the column number. For example here we specify all the data values in the 10th row.
+```{r}
+df[10, ]
+```
+
+Drink preference was one of the questions. The responses are available in the column labeled `Drink` as a vector of character values. So we list all the drink preferences by typing
+```{r}
+df$Drink
+```
+
+Note that some students left that response blank. These are coded in the data frame as `NA`.
+
+The variable type depends on the question asked. For example, answers given to the question of student height result in a numeric variable, answers given to the question about drink preference result in a character variable.
+
+For integer, character, and factor variables we can summarize the values with the `table()` function.
+```{r}
+table(df$Drink)
+```
+
+There are 113 students who chose milk, 178 choose pop, and 355 chose water. 
+
+We use the `plot()` method to make a plot of this table.
+```{r}
+plot(x = df$Drink)
+```
+
+Note that the sum of the responses is `r sum(table(df$Drink))`, which is less than the total number of students (`r nrow(df)`).
+
+Students who left that question blank are ignored. To include the missing values we include the argument `useNA = "ifany"`.
+```{r}
+table(df$Drink,
+      useNA = "ifany")
+```
+
+Suppose we are interested in examining how long students slept. This was not asked directly. We compute it from the `ToSleep` and `WakeUp` times columns. We assign the result of the difference to a column we call `SleepHrs`.
+```{r}
+df$SleepHrs <- df$WakeUp - df$ToSleep
+head(df)
+```
+
+Now we have a new numeric variable in the data frame called `SleepHrs`.
+
+We can't table numeric variables, but the `summary()` method provides a set of summary statistics for the values.
+```{r}
+summary(df$SleepHrs)
+```
+
+The average number of hours slept is 7.4 with a maximum of 12.5 and a minimum of 2.5. There are four students that did not answer either when they went to sleep or when they woke up. 
+
+We use the `hist()` function to construct a histogram of sleep hours.
+```{r}
+hist(x = df$SleepHrs)
+```
+
+The histogram function divides the number of sleep hours into one-hour bins and counts the number of students whose computed number of sleep hours falls into each bin. For example based on when they said they went to sleep and when the said they woke up, about 100 students slept between five and six hours the night before the survey.
+
+Since the gender of each student is reported, we can make comparisons between those who identify as male and those who identify as female. For instance, do men sleep more than women? We can answer this question graphically with box plots.
+```{r}
+plot(x = df$Gender, 
+     y = df$SleepHrs)
+```
+
+Very little difference.
+
+Repeat for hair cut prices.
+```{r}
+plot(x = df$Gender, 
+     y = df$Haircut)
+```
+
+Big difference.
+
+Finally, is the amount of sleep for a student related to bedtime?
+```{r}
+plot(x = df$ToSleep,
+     y = df$SleepHrs)
+```
+
+The `ToSleep` variable is centered on midnight so that -2 means they went to sleep at 10p.
+
+We describe the decreasing relationship with a line through the points. The least-squares line is fit using the `lm()` function and the line is drawn on the existing plot with the `abline()` function applied to the linear regression object `model`.
+```{r}
+model <- lm(SleepHrs ~ ToSleep, 
+            data = df)
+
+plot(x = df$ToSleep,
+     y = df$SleepHrs)
+abline(model)
+```
+
+Records of past tornadoes in the United States
+
+Most of the time we need to import our data into R. If possible, secondary source data should be imported directly from repositories on the Web. When there is no API (application programming interface) to the repository we need to first download the data.
+
+For example, consider the regularly updated reports of tornadoes in the United States. The data repository is the Storm Prediction Center (SPC) https://www.spc.noaa.gov/wcm/index.html#data.
+
+Here we are interested in the file called `1950-2019_actual_tornadoes.csv`. First we download the file from the site with the `download.file()` function specifying the location (`url =`) and a name we want the file to be called on our computer (`destfile =`).
+```{r}
+download.file(url = "http://www.spc.noaa.gov/wcm/data/1950-2019_actual_tornadoes.csv",
+              destfile = "Tornadoes.csv")
+```
+
+A file called `Tornadoes.csv` should now be located in your list of files under the _Files_ tab in the lower-right panel.
+
+Then we read (import) the file into R as a data frame using the `read_csv()` function from the {tidyverse} group of packages. 
+```{r}
+install.packages("tidyverse")
+library(tidyverse)
+
+Torn.df <- read_csv(file = "Tornadoes.csv")
+```
+
+We preview the data frame using the `head()` function.
+```{r}
+head(Torn.df)
+```
+
+Each row is a unique tornado report. Observations for each report include the day and time, the state (`st`), the maximum EF rating (`mag`), the number of injuries (`inj`), the number of fatalities (`fat`), estimated property losses (`loss`), estimated crop losses (`closs`), start and end locations in decimal degrees longitude and latitude, length of the damage path in yards (`len`), width of the damage path in miles (`wid`).
+
+The total number of tornado reports in the data set is returned from the `nrow()` function.
+```{r}
+nrow(Torn.df)
+```
+
+To create a subset of the data frame that contains only tornadoes in years (`yr`) since 2001, we include the logical operator `yr >= 2001` inside the subset operator. The logical operator is placed in front of the comma since we want all _rows_ where the result of the operator returns a value `TRUE`.
+```{r}
+Torn2.df <- Torn.df[Torn.df$yr >= 2001, ]
+```
+
+We see that there are fewer rows (tornado reports) in this new data frame assigned the object name `Torn2.df`.
+
+We subset again, keeping only tornadoes with EF ratings (`mag` variable) greater than zero. Here we _recycle_ the name `Torn2.df`.
+```{r}
+Torn2.df <- Torn.df[Torn.df$mag > 0, ]
+```
+
+Now we compute the correlation between EF rating (`mag`) and path length (`len`) with the `cor()` function. The first argument is the vector of EF ratings and the second argument is the vector of path lengths.
+```{r}
+cor(Torn2.df$mag, Torn2.df$len)
+```
+
+Path length is recorded in miles and path width in yards. To convert them to meters and add the converted values as new columns, type
+```{r}
+Torn2.df$Length <- Torn2.df$len * 1609.34
+Torn2.df$Width <- Torn2.df$wid * .9144
+```
+
+Create side-by-side box plots of path length (in kilometers) by EF rating.
+```{r}
+plot(x = factor(Torn2.df$mag), 
+     y = Torn2.df$Length/1000)
+```
+
+Create a scatter plot with the size of the point proportional to the EF rating.
+```{r}
+plot(x = log(Torn2.df$Width), 
+     y = log(Torn2.df$Length), 
+     cex = Torn2.df$mag)
+```
+
+Records of hurricanes in the United States 
+
+Here we load data directly from the Web by specifying the URL as a character string using the `file =` argument.
+```{r}
+USHur.df <- read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/US.txt")
+```
+
+The `dim()` function returns the size of the data frame defined as the number of rows and the number of columns.
+```{r}
+dim(df)
+```
+
+There are 166 rows and 6 columns in the data frame. Each row is a year and the columns include `Year`, number of hurricanes (`All`), number of major hurricanes (`MUS`), number of Gulf coast hurricanes (`G`), number of Florida hurricanes (`FL`), and number of East coast hurricanes (`E`) in that order. 
+
+To get a glimpse of the data values we list the first six lines of the data frame using the `head()` function.
+```{r}
+head(df)
+```
+
+The distribution of Florida hurricane counts by year is obtained using the `table()` function and specifying the `FL` column with `df$FL`.
+```{r}
+table(df$FL)
+```
+
+There are 93 years without a FL hurricane, 43 years with exactly one hurricane, 24 years with two hurricanes, and so on.
+
+Functions in {base} R packages for working with data frames require understanding them as list objects. This makes the functions harder to learn and remember. Next time will explore a more formalized grammar for data wrangling.
+
+## Your turn
+
+I obtained monthly statewide average rainfall (in inches) back to the year 1895 from http://www.esrl.noaa.gov/psd/data/timeseries/. I copied/pasted the values into a text editor and posted the file on the Web. Read the data into R and answer the questions using R code.
+```{r}
+FLprecip.df <- read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt")
+FLprecip.df
+```
+
+* What was the statewide average rainfall during the 10th month of the 65th year?
+* What was the statewide average rainfall during June of 1900?
+* What year had the wettest March?
+* What month during 1965 was the wettest?
+
+Use the tornado dataset from the Storm Prediction Center and write code to do or answer the following.
+
+* List the names of the columns in the data frame.
+* What is the last year in the data?
+* How many tornadoes had at least one fatality?
+* Create a table of the number of tornadoes by EF rating.
+* Create a table of the number of tornadoes by state.
+* Add a new variable to the data frame called `area` as the product of the path length and path width in units of square meters.
+* Map the locations of all the tornadoes with an EF rating of at least 4.
+
+So far we've worked with data stored as vectors. But we often import data as data frames so we need to know how to manipulate data frames in a logical and friendly way.
