@@ -8,7 +8,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-## Main take aways from the syllabus
+## Main take aways from the Syllabus
 
 Lesson Hours: Mon/Wed 9:05 a.m. - 9:55 a.m., Lab Hours: Fri 9:05 a.m. - 9:55 a.m., Student Hours: Mon/Wed 9:55 a.m. - 10:30 a.m.
 Best way to contact me: Email: <jelsner@fsu.edu>
@@ -23,13 +23,15 @@ There are many online sites dedicated to all aspects of the R programming langua
 
 You should now be set up with R and RStudio. If you are not set up just yet, please stay after class with me and I will help you.
 
-In this lesson I provide a quick review (or introduction) to working with data using functions from the {base} packages R. The {base} R packages are the functions included in your initial installation. They form the scaffolding for working in R but much of what we will do in this class will involve
+In this lesson I provide a review (or an introduction) to working with data using functions from the {base} R packages. The {base} R packages are included in your initial installation. They form the scaffolding for working in R, but much of what we will do in this class will involve functions from other packages.
 
-## Working with base R
+The one exception is that I will introduce functions from the {readr} package (as part of the {tidyverse} set of packages) that simplify importing data into R. These functions are very similar to the corresponding functions in {base} R.
 
-Applied spatial statistics is the analysis and modeling of spatial data. To begin our journey we need to know about data objects in R.
+## Working with data using functions from the {base} R packages
 
-The `c()` function creates a 'vector' data object (vector object). The function combines (concatenates) individual data values, where each data value is separated by a comma, into a vector object with a length equal to the number of data values.
+Applied spatial statistics is the analysis and modeling of spatial data. To begin our journey we need to know a bit about data objects in R.
+
+Perhaps the most important function is one of the simplest. The `c()` function creates a 'vector' data object (vector object). The function combines (concatenates) individual data values, where each data value is separated by a comma, into a vector object with a length equal to the number of data values.
 
 Consider a set of hypothetical annual land falling hurricane counts over a ten-year period.
 
@@ -49,7 +51,7 @@ counts
 
 When printed to the console, the values are prefaced with a `[1]`. This indicates that the object is a vector and the first element in the vector has a value of 2 (The number immediately to the right of `[1]`).
 
-Note: We can assign and print by wrapping the entire line of code in parantheses.
+Note: We can assign and print by wrapping the entire line of code in parentheses.
 ```{r}
 ( counts <- c(2, 3, 0, 3, 1, 0, 0, 1, 2, 1) )
 ```
@@ -242,7 +244,7 @@ The data frame shows up as a table (like a spreadsheet) in the `View()` mode (se
 
 Each data element is in a cell. To retrieve data in a cell, we enter its row and column coordinates in that order in the single square bracket `[]` operator and separated by a column.
 
-Here is the cell value from the first row, second column of mtcars.
+Here is the cell value from the first row, second column of `df`.
 ```{r}
 df[1, 2]
 ```
@@ -297,10 +299,13 @@ The first function prints the first six rows of the data frame and the second li
 
 Consider another built-in data frame called `studentdata` from the {LearnBayes} package. First, install the package with the `install.packages()` function. Put the name of the package {LearnBayes} in quotes (single or double). Then to make the functions available use the `library()` function.
 ```{r}
-install.packages("LearnBayes")
+if(!require(LearnBayes)) install.packages(pkgs = "LearnBayes",
+                                          repos = "http://cran.us.r-project.org")
 
 library(LearnBayes)
 ```
+
+Note: When using RStudio we do not need to set up our CRAN repository because it is automatically taken care of. But this is only for interactive use and not when we use {knitr}. And we don't want to install packages that already exist on our computer so we add the conditional `if()` function that says "only install the package if it is not (`!`) available.
 
 Next, make a copy of the data frame and call it `df`. Then print the first six rows using the `head()` function.
 ```{r}
@@ -423,7 +428,8 @@ A file called `Tornadoes.csv` should now be located in your list of files under 
 
 Then we read (import) the file into R as a data frame using the `read_csv()` function from the {tidyverse} group of packages. 
 ```{r}
-install.packages("tidyverse")
+if(!require(tidyverse)) install.packages(pkgs = "tidyverse", 
+                                         repos = "http://cran.us.r-project.org")
 library(tidyverse)
 
 Torn.df <- read_csv(file = "Tornadoes.csv")
@@ -470,7 +476,7 @@ plot(x = factor(Torn2.df$mag),
      y = Torn2.df$Length/1000)
 ```
 
-Create a scatter plot with the size of the point proportional to the EF rating.
+Create a scatter plot of the logaritm of width versus the logarithm of length and with the size of the point proportional to the EF rating.
 ```{r}
 plot(x = log(Torn2.df$Width), 
      y = log(Torn2.df$Length), 
@@ -507,7 +513,7 @@ Functions in {base} R packages for working with data frames require understandin
 
 ## Your turn
 
-I obtained monthly statewide average rainfall (in inches) back to the year 1895 from http://www.esrl.noaa.gov/psd/data/timeseries/. I copied/pasted the values into a text editor and posted the file on the Web. Read the data into R and answer the questions using R code.
+I obtained monthly statewide average rainfall (in inches) back to the year 1895 from http://www.esrl.noaa.gov/psd/data/timeseries/. I copied/pasted the values into a text editor and posted the file on the Web at location http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt. Read the data into R using the `read_table()` function and answer the questions using R code.
 ```{r}
 FLprecip.df <- read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt")
 FLprecip.df
@@ -517,15 +523,3 @@ FLprecip.df
 * What was the statewide average rainfall during June of 1900?
 * What year had the wettest March?
 * What month during 1965 was the wettest?
-
-Use the tornado dataset from the Storm Prediction Center and write code to do or answer the following.
-
-* List the names of the columns in the data frame.
-* What is the last year in the data?
-* How many tornadoes had at least one fatality?
-* Create a table of the number of tornadoes by EF rating.
-* Create a table of the number of tornadoes by state.
-* Add a new variable to the data frame called `area` as the product of the path length and path width in units of square meters.
-* Map the locations of all the tornadoes with an EF rating of at least 4.
-
-So far we've worked with data stored as vectors. But we often import data as data frames so we need to know how to manipulate data frames in a logical and friendly way.
