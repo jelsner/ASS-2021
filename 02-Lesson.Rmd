@@ -14,21 +14,21 @@ Lesson Hours: Mon/Wed 9:05 a.m. - 9:55 a.m., Lab Hours: Fri 9:05 a.m. - 9:55 a.m
 
 This course is a survey of methods used to describe, analyze, and model _spatial_ data using R. Focus is on applications. Emphasis is given to how spatial statistical methods are related through the concept of spatial autocorrelation.
 
-Presentation of the lessons is done remotely. Lab assignments are done without direct supervision. I might have a chance to do some F2F later in the semester. During each lesson I will work through and explain the R code within an `xx-Lesson.Rmd` file on Zoom. The notes in the lesson files are comprehensive, so you can work through them on your own. The notes are written using the markdown language. Think of this as a master class in spatial data science using R.
+Lessons are presented (and recorded) on Zoom Mondays and Wednesdays. Lab assignments are done on Zoom (no recording) on Fridays without much direct supervision. 
+
+During each lesson I will work through and explain the R code within an `xx-Lesson.Rmd` file. The notes in the files are comprehensive, so you can work through them on your own. The notes are written using the markdown language (I will explain this a bit today). Think of this as a master class in spatial data science using R.
 
 Grades are determined by how well you do on the weekly assignments.
 
-There are many online sites dedicated to all aspects of the R programming language. I gave you a list of some of the ones related to spatial analysis and modeling in Lesson 1.
+There are many online sites dedicated to all aspects of the R programming language. A list of some of the ones related to spatial analysis and modeling are in Lesson 1.
 
-You should now be set up with R and RStudio. If you are not set up yet, please stay after class today and I will help you.
+You should now be set up with R and RStudio. If not, please stay after class today and I will help you.
 
 In this lesson I provide a review (or an introduction) to working with data using functions from the {base} R packages. The {base} R packages are part of the initial installation of R. They form the scaffolding for working in R, but much of what we will do in this class will involve functions from other packages.
 
 The one exception today is that I will introduce functions from the {readr} package (as part of the {tidyverse} set of packages) that simplify importing data into R. These functions are very similar to the corresponding functions in {base} R.
 
 ## Doing data science with R markdown
-
-If our science is to be convincing, the trail from the data we started with to the final output must be available to the public. It is difficult to create a reproducible trail with a spreadsheet. It is easy to make mistakes (e.g., accidentally sorting just a column rather than the entire table).
 
 A scientific paper is advertisement for a claim. But the _proof_ is the procedure that was used to obtain the result. The code is the exact procedure. Code is the recipe for what we did. It is the most efficient way to communicate precisely what was done. Communication to others and to our future self.
 
@@ -50,16 +50,15 @@ To do these things efficiently we write our code _together_ with comments. This 
 
 The resulting file is then converted into a more easily-readable document formatted in HTML, PDF, or Word. The non-code segments of the document are plain text, but they can have simple formatting instructions in them. When we create a _new_ markdown document in R Studio, it contains a sample example.
 
-Markdown treats text surrounded by *asterisks*, **double asterisks**, and `backticks` in special ways.
+Markdown uses certain symbols for emphasis.
 
 - _italics_
-- *also italics*
 - **bold**, and
 - `code font`
 
-Lesson notes are written in text using markdown formatting as needed. Text is interspersed with code. The format for code chunks looks like this:
+Lesson notes are written in text using markdown formatting as needed. Text is interspersed with code. The format for code chunks is
 ```{r}
-
+# lines of code here
 ```
 
 Three back-ticks (on a U.S. keyboard, the character under the escape key) followed by a pair of curly braces containing the name of the language we are using. The back-ticks-and-braces part signal that code is about to begin. We write our code as needed, and then end the chunk with a new line containing three more back-ticks.
@@ -103,7 +102,7 @@ Note: We can assign and print by wrapping the entire line of code in parentheses
 
 We can use the arrow keys on our keyboard to retrieve previous commands. Each command is stored in the history file (click on the _History_ tab in the upper-right panel). The up-arrow key moves backwards through the history file. The left and right arrow keys move the cursor along the line.
 
-We can then apply functions to this vector data object. Examples include:
+We then apply functions to the vector data object. A function has a name and parantheses. Inside the parantheses are the function arguments. Many functions have only a single argument like a data vector. Examples include:
 ```{r}
 sum(counts)
 length(counts)
@@ -111,7 +110,7 @@ sum(counts)/length(counts)
 mean(counts)
 ```
 
-The function `sum()` totals the hurricane counts over all years, `length()` returns the number of elements in the vector. Other functions include, `sort()`, `min()`, `max()`, `range()`, `diff()`, and `cumsum()`. Try these functions on the landfall counts. What does the function `range()` return?  What does the function `diff()` do?
+The function `sum()` totals the hurricane counts over all years, `length()` returns the number of elements in the vector. Other functions include, `sort()`, `min()`, `max()`, `range()`, `diff()`, and `cumsum()`.
 
 The object `counts` is a vector containing the hurricane data. This means that the elements are ordered. There is a first element, a second element, and so on. This is good for data objects for several reasons.
 
@@ -139,6 +138,8 @@ What happens if we apply the `c()` function to these two vectors?  Try it.
 ```{r}
 c(d1, d2)
 ```
+
+We get a vector with elements from both `d1` and `d2`.
 
 If we are interested in each year's count as a difference from the decade mean, we type:
 ```{r}
@@ -227,14 +228,16 @@ To find the maximum number of landfalls in the first decade we type.
 max(d1)
 ```
 
-Which years had the maximum?
+What years had the maximum?
 ```{r}
 d1 == 3
 ```
 
-Notice the double equals signs (`==`).  This is a logical operation that tests each value in `d1` to see if it is equal to 3. The 2nd and 4th values are equal to 3 so `TRUE`s are returned. Think of this as asking R a question. Is the value equal to 3?  R answers all at once with a vector of `TRUE`'s and `FALSE`'s.
+Notice the double equals signs (`==`).  This is a logical operator that tests each value in `d1` to see if it is equal to 3. The 2nd and 4th values are equal to 3 so `TRUE`s are returned. 
 
-Which years had fewer than 2 hurricanes?
+Think of this as asking R a question. Is the value equal to 3?  R answers all at once with a vector of `TRUE`'s and `FALSE`'s.
+
+What years had fewer than 2 hurricanes?
 ```{r}
 d1 < 2
 ```
@@ -283,11 +286,11 @@ To find out what type of object `df` is we use the `class()` function.
 class(df)
 ```
 
-It is of class `data.frame`. Note that the object name shows up in our _Environment_ under _Data_ and it includes a little blue arrow indicating that we can view it by clicking on the row.
+The object `df` is of class `data.frame`. Note that the object name shows up in our _Environment_ under _Data_ and it includes a little blue arrow indicating that we can view it by clicking on the row.
 
 The data frame shows up as a table (like a spreadsheet) in the `View()` mode (see the command in the console below). Caution: This is not advised for large data frames. The top line of the table is called the header. Each line below the header contains a row of data, which begins with the name (or number) of the row followed by the data values. 
 
-Each data element is in a cell. To retrieve data in a cell, we enter its row and column coordinates in that order in the single square bracket `[]` operator and separated by a column.
+Each data element is in a cell. To retrieve a data value from a cell, we enter its row and column coordinates in that order in the single square bracket `[]` operator and separated by a column.
 
 Here is the cell value from the first row, second column of `df`.
 ```{r}
