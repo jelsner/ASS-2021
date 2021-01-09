@@ -10,39 +10,84 @@ editor_options:
 
 ## Main take aways from the Syllabus
 
-Lesson Hours: Mon/Wed 9:05 a.m. - 9:55 a.m., Lab Hours: Fri 9:05 a.m. - 9:55 a.m., Student Hours: Mon/Wed 9:55 a.m. - 10:30 a.m.
-Best way to contact me: Email: <jelsner@fsu.edu>
+Lesson Hours: Mon/Wed 9:05 a.m. - 9:55 a.m., Lab Hours: Fri 9:05 a.m. - 9:55 a.m., Student Hours: Mon/Wed 9:55 a.m. - 10:30 a.m. The best way to contact me is through email: <jelsner@fsu.edu>.
 
-This course surveys the methods used to describe, analyze, and model _spatial_ data. Focus is on applications. Emphasis is given to how spatial statistical methods are related through the concept of spatial autocorrelation.
+This course is a survey of methods used to describe, analyze, and model _spatial_ data using R. Focus is on applications. Emphasis is given to how spatial statistical methods are related through the concept of spatial autocorrelation.
 
-Lessons and lab assignments are available remotely. I might have a chance to do some F2F later in the semester. During each lesson I will work through and explain the R code within an `xx-Lesson.Rmd` file on Zoom. The notes in the lesson files are comprehensive, so you can work through them on your own. The notes are written using the markdown language. Think of this as a master class in spatial data science using R.
+Presentation of the lessons is done remotely. Lab assignments are done without direct supervision. I might have a chance to do some F2F later in the semester. During each lesson I will work through and explain the R code within an `xx-Lesson.Rmd` file on Zoom. The notes in the lesson files are comprehensive, so you can work through them on your own. The notes are written using the markdown language. Think of this as a master class in spatial data science using R.
 
 Grades are determined by how well you do on the weekly assignments.
 
 There are many online sites dedicated to all aspects of the R programming language. I gave you a list of some of the ones related to spatial analysis and modeling in Lesson 1.
 
-You should now be set up with R and RStudio. If you are not set up just yet, please stay after class with me and I will help you.
+You should now be set up with R and RStudio. If you are not set up yet, please stay after class today and I will help you.
 
-In this lesson I provide a review (or an introduction) to working with data using functions from the {base} R packages. The {base} R packages are included in your initial installation. They form the scaffolding for working in R, but much of what we will do in this class will involve functions from other packages.
+In this lesson I provide a review (or an introduction) to working with data using functions from the {base} R packages. The {base} R packages are part of the initial installation of R. They form the scaffolding for working in R, but much of what we will do in this class will involve functions from other packages.
 
-The one exception is that I will introduce functions from the {readr} package (as part of the {tidyverse} set of packages) that simplify importing data into R. These functions are very similar to the corresponding functions in {base} R.
+The one exception today is that I will introduce functions from the {readr} package (as part of the {tidyverse} set of packages) that simplify importing data into R. These functions are very similar to the corresponding functions in {base} R.
+
+## Doing data science with R markdown
+
+If our science is to be convincing, the trail from the data we started with to the final output must be available to the public. It is difficult to create a reproducible trail with a spreadsheet. It is easy to make mistakes (e.g., accidentally sorting just a column rather than the entire table).
+
+A scientific paper is advertisement for a claim. But the _proof_ is the procedure that was used to obtain the result. The code is the exact procedure. Code is the recipe for what we did. It is the most efficient way to communicate precisely what was done. Communication to others and to our future self.
+
+When we use a spreadsheet, it's hard to explain to someone precisely what we did. Click here, then right click here, then choose menu X, etc. The words we use to describe these procedures are not standard.  If you've ever made a map using GIS you know how hard it is to make another (even similar one) with a new set of data. Running code with new data is simple. 
+
+Code is an efficient way to communicate because all important information is given as plain text without ambiguity. Being able to code is a key skill for most technical jobs.
+
+The person most likely to reproduce our work a few months later is us. This is especially true for graphs and figures. These often have a finished quality to them as a result of tweaking and adjustments to the details. This makes it hard to reproduce later. The goal is to do as much of this tweaking as possible with the code we write, rather than in a way that is invisible (retrospectively). Contrast editing an image in Adobe Illustrator.
+
+In data science we go back and forth between:
+
+(1) Writing code: Code to get our data into R, code to look at tables and summary statistics, code to make graphs, code to compute spatial statistics, code to model and plot our results.
+
+(2) Looking at output: Our code is a set of instructions that produces the output we want: a table, a model, or a figure. It is helpful to be able to see that output.
+
+(3) Taking notes: We also write text about what we are doing, why we are doing it, and what our results mean.
+
+To do these things efficiently we write our code _together_ with comments. This is where R markdown comes in (files that end with `.Rmd`). An R markdown file is a plain text document where text (such as notes or discussion) is interspersed with pieces, or chunks, of R code. When we `Knit` this file the R code is executed piece by piece, in sequence, and either supplementing or replacing the chunks of code with output. 
+
+The resulting file is then converted into a more easily-readable document formatted in HTML, PDF, or Word. The non-code segments of the document are plain text, but they can have simple formatting instructions in them. When we create a _new_ markdown document in R Studio, it contains a sample example.
+
+Markdown treats text surrounded by *asterisks*, **double asterisks**, and `backticks` in special ways.
+
+- _italics_
+- *also italics*
+- **bold**, and
+- `code font`
+
+Lesson notes are written in text using markdown formatting as needed. Text is interspersed with code. The format for code chunks looks like this:
+```{r}
+
+```
+
+Three back-ticks (on a U.S. keyboard, the character under the escape key) followed by a pair of curly braces containing the name of the language we are using. The back-ticks-and-braces part signal that code is about to begin. We write our code as needed, and then end the chunk with a new line containing three more back-ticks.
+
+In the markdown file, the lines between the first and second set of back ticks is grayed and a few small icons are noted in the upper-right corner of the grayed area. The green triangle is used to execute the code and either post the results in the console below or in the line below.
+
+When we keep our notes in this way, we are able to see everything together, the code, the output it produces, and our commentary or clarification on it. Also we can turn it into a good-looking document with one click. This is how we will do everything in this course.
+
+For example, select the _Knit_ button above.
+
+Finally, note the _Outline_ button in the upper right corner of the markdown file. We can organize and navigate through the file section by section based on the pound symbol (`#`).
 
 ## Working with data using functions from the {base} R packages
 
-Applied spatial statistics is the analysis and modeling of spatial data. To begin our journey we need to know a bit about data objects in R.
+Applied spatial statistics is the analysis and modeling of spatial data. To begin our journey we need to know somethings about data objects in R.
 
-Perhaps the most important function is one of the simplest. The `c()` function creates a 'vector' data object (vector object). The function combines (concatenates) individual data values, where each data value is separated by a comma, into a vector object with a length equal to the number of data values.
+Perhaps the most important function is also one of the simplest. The `c()` function creates a 'vector' data object (vector object). The function combines (concatenates) individual data values, where each data value is separated by a comma, into a vector object with a length equal to the number of data values.
 
-Consider a set of hypothetical annual land falling hurricane counts over a ten-year period.
+Consider a set of hypothetical annual land falling hurricane counts over a ten-year period. In the first year there were two, the next year there were three, and so on.
 
 2  3  0  3  1  0  0  1  2  1
 
-We save these ten values to our working environment by assigning them to an object that we call `counts`.
+We save these ten values to our working environment by assigning them to an object that we call `counts`. The assignment operator is an equal sign (`<-` or `=`). 
 ```{r}
 counts <- c(2, 3, 0, 3, 1, 0, 0, 1, 2, 1)
 ```
 
-The assignment operator is an equal sign (`<-` or `=`). By clicking on the _Environment_ tab in the upper-right panel we see that the object `counts` with numerical values (`num`) 2 3, etc below word _Values_. We see that the elements are indexed between 1 and 10 (`1:10`).
+By clicking on the _Environment_ tab in the upper-right panel we see that the object `counts` with numerical values (`num`) 2 3, etc below word _Values_. We see that the elements are indexed between 1 and 10 (`1:10`).
 
 We print the values to the console by typing the name of the data object.
 ```{r}
@@ -194,7 +239,7 @@ Which years had fewer than 2 hurricanes?
 d1 < 2
 ```
 
-Now the question is how do you get the vector element corresponding to the `TRUE` values?  That is, which years have 3 landfalls?
+Now the question is how do we get the vector element corresponding to the `TRUE` values?  That is, which years have 3 landfalls?
 ```{r}
 which(d1 == 3)
 ```
@@ -412,7 +457,7 @@ plot(x = df$ToSleep,
 abline(model)
 ```
 
-Records of past tornadoes in the United States
+### Records of past tornadoes in the United States
 
 Most of the time we need to import our data into R. If possible, secondary source data should be imported directly from repositories on the Web. When there is no API (application programming interface) to the repository we need to first download the data.
 
@@ -424,7 +469,7 @@ download.file(url = "http://www.spc.noaa.gov/wcm/data/1950-2019_actual_tornadoes
               destfile = "Tornadoes.csv")
 ```
 
-A file called `Tornadoes.csv` should now be located in your list of files under the _Files_ tab in the lower-right panel.
+A file called `Tornadoes.csv` should now be located in our list of files under the _Files_ tab in the lower-right panel.
 
 Then we read (import) the file into R as a data frame using the `read_csv()` function from the {tidyverse} group of packages. 
 ```{r}
@@ -476,14 +521,7 @@ plot(x = factor(Torn2.df$mag),
      y = Torn2.df$Length/1000)
 ```
 
-Create a scatter plot of the logaritm of width versus the logarithm of length and with the size of the point proportional to the EF rating.
-```{r}
-plot(x = log(Torn2.df$Width), 
-     y = log(Torn2.df$Length), 
-     cex = Torn2.df$mag)
-```
-
-Records of hurricanes in the United States 
+### Records of hurricanes in the United States 
 
 Here we load data directly from the Web by specifying the URL as a character string using the `file =` argument.
 ```{r}
@@ -509,17 +547,4 @@ table(df$FL)
 
 There are 93 years without a FL hurricane, 43 years with exactly one hurricane, 24 years with two hurricanes, and so on.
 
-Functions in {base} R packages for working with data frames require understanding them as list objects. This makes the functions harder to learn and remember. Next time will explore a more formalized grammar for data wrangling.
-
-## Your turn
-
-I obtained monthly statewide average rainfall (in inches) back to the year 1895 from http://www.esrl.noaa.gov/psd/data/timeseries/. I copied/pasted the values into a text editor and posted the file on the Web at location http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt. Read the data into R using the `read_table()` function and answer the questions using R code.
-```{r}
-FLprecip.df <- read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt")
-FLprecip.df
-```
-
-* What was the statewide average rainfall during the 10th month of the 65th year?
-* What was the statewide average rainfall during June of 1900?
-* What year had the wettest March?
-* What month during 1965 was the wettest?
+Working with data frames using functions from the {base} R packages requires that we understand data frames as list objects. This fact makes these functions harder to learn and to remember. In the next lesson we will see a more formalized way to work with data frames.
