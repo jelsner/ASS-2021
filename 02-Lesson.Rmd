@@ -98,7 +98,7 @@ Note: We can assign and print by wrapping the entire line of code in parentheses
 
 We can use the arrow keys on our keyboard to retrieve previous commands. Each command is stored in the history file (click on the _History_ tab in the upper-right panel). The up-arrow key moves backwards through the history file. The left and right arrow keys move the cursor along the line.
 
-We then apply functions to the vector data object. A function has a name and parantheses. Inside the parantheses are the function arguments. Many functions have only a single argument like a data vector. Examples include:
+We then apply functions to the vector data object. A function has a name and parentheses. Inside the parentheses are the function arguments. Many functions have only a single argument like a data vector. Examples include:
 ```{r}
 sum(counts)
 length(counts)
@@ -148,6 +148,7 @@ Suppose we are interested in the variance of the set of landfall counts. The var
 $$
 \hbox{var}(x) = \frac{(x_1 - \bar x)^2 + (x_2 - \bar x)^2 + \cdots + (x_n - \bar x)^2}{n-1} = \frac{1}{n-1}\sum_{i=1}^n (x_i - \bar x)^2
 $$
+
 
 Although the `var()` function computes this, here we see how to do this using simpler functions. The key is to find the squared differences and then sum.
 ```{r}
@@ -448,95 +449,3 @@ plot(x = df$ToSleep,
      y = df$SleepHrs)
 abline(model)
 ```
-
-### Past tornadoes in the United States
-
-Most of the time we need to import our data into R. If possible, secondary source data should be imported directly from repositories on the Web. When there is no API (application programming interface) to the repository we need to first download the data.
-
-For example, consider the regularly updated reports of tornadoes in the United States. The data repository is the Storm Prediction Center (SPC) https://www.spc.noaa.gov/wcm/index.html#data.
-
-Here we are interested in the file called `1950-2019_actual_tornadoes.csv`. First we download the file from the site with the `download.file()` function specifying the location (`url =`) and a name we want the file to be called on our computer (`destfile =`).
-```{r}
-download.file(url = "http://www.spc.noaa.gov/wcm/data/1950-2019_actual_tornadoes.csv",
-              destfile = "Tornadoes.csv")
-```
-
-A file called `Tornadoes.csv` should now be located in our list of files under the _Files_ tab in the lower-right panel.
-
-Then we read (import) the file into R as a data frame using the `read_csv()` function from the {tidyverse} group of packages. 
-```{r}
-if(!require(tidyverse)) install.packages(pkgs = "tidyverse", repos = "http://cran.us.r-project.org")
-
-library(tidyverse)
-
-Torn.df <- read_csv(file = "Tornadoes.csv")
-```
-
-We preview the data frame using the `head()` function.
-```{r}
-head(Torn.df)
-```
-
-Each row is a unique tornado report. Observations for each report include the day and time, the state (`st`), the maximum EF rating (`mag`), the number of injuries (`inj`), the number of fatalities (`fat`), estimated property losses (`loss`), estimated crop losses (`closs`), start and end locations in decimal degrees longitude and latitude, length of the damage path in yards (`len`), width of the damage path in miles (`wid`).
-
-The total number of tornado reports in the data set is returned from the `nrow()` function.
-```{r}
-nrow(Torn.df)
-```
-
-To create a subset of the data frame that contains only tornadoes in years (`yr`) since 2001, we include the logical operator `yr >= 2001` inside the subset operator. The logical operator is placed in front of the comma since we want all _rows_ where the result of the operator returns a value `TRUE`.
-```{r}
-Torn2.df <- Torn.df[Torn.df$yr >= 2001, ]
-```
-
-We see that there are fewer rows (tornado reports) in this new data frame assigned the object name `Torn2.df`.
-
-We subset again, keeping only tornadoes with EF ratings (`mag` variable) greater than zero. Here we _recycle_ the name `Torn2.df`.
-```{r}
-Torn2.df <- Torn.df[Torn.df$mag > 0, ]
-```
-
-Now we compute the correlation between EF rating (`mag`) and path length (`len`) with the `cor()` function. The first argument is the vector of EF ratings and the second argument is the vector of path lengths.
-```{r}
-cor(Torn2.df$mag, Torn2.df$len)
-```
-
-Path length is recorded in miles and path width in yards. To convert them to meters and add the converted values as new columns, type
-```{r}
-Torn2.df$Length <- Torn2.df$len * 1609.34
-Torn2.df$Width <- Torn2.df$wid * .9144
-```
-
-Create side-by-side box plots of path length (in kilometers) by EF rating.
-```{r}
-plot(x = factor(Torn2.df$mag), 
-     y = Torn2.df$Length/1000)
-```
-
-### Past hurricanes in the United States 
-
-Here we load data directly from the Web by specifying the URL as a character string using the `file =` argument.
-```{r}
-USHur.df <- read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/US.txt")
-```
-
-The `dim()` function returns the size of the data frame defined as the number of rows and the number of columns.
-```{r}
-dim(USHur.df)
-```
-
-There are 166 rows and 6 columns in the data frame. Each row is a year and the columns include `Year`, number of hurricanes (`All`), number of major hurricanes (`MUS`), number of Gulf coast hurricanes (`G`), number of Florida hurricanes (`FL`), and number of East coast hurricanes (`E`) in that order. 
-
-To get a glimpse of the data values we list the first six lines of the data frame using the `head()` function.
-```{r}
-head(USHur.df)
-```
-
-The distribution of Florida hurricane counts by year is obtained using the `table()` function and specifying the `FL` column with `df$FL`.
-```{r}
-table(USHur.df$FL)
-```
-
-There are 93 years without a FL hurricane, 43 years with exactly one hurricane, 24 years with two hurricanes, and so on.
-
-Working with data frames using functions from the {base} R packages requires that we understand data frames as list objects. This fact makes these functions harder to learn and to remember. In the next lesson we will see a more formalized way to work with data frames.
