@@ -4,10 +4,11 @@ author: "James B. Elsner"
 date: "January 11, 2021"
 output:
   html_document: null
-  pdf_document: default
 editor_options:
   chunk_output_type: console
 ---
+
+**"The trouble with programmers is that you can never tell what a programmer is doing until it’s too late."** --- Seymour Cray
 
 ## Main take aways from the Syllabus
 
@@ -334,118 +335,4 @@ Instead, to get a glimpse of our data we used the functions `head()`, which prin
 head(mtcars)
 
 str(mtcars)
-```
-
-Consider another built-in data frame called `studentdata` from the {LearnBayes} package. First, install the package with the `install.packages()` function. Put the name of the package {LearnBayes} in quotes (single or double). Then to make the functions available use the `library()` function.
-```{r}
-if(!require(LearnBayes)) install.packages(pkgs = "LearnBayes", repos = "http://cran.us.r-project.org")
-
-library(LearnBayes)
-```
-
-Note: When using RStudio we don't need to set up our CRAN repository. It is done automatically. This is only for interactive use and not when we use the `Knit` button. We don't want to install packages that already exist on our computer so we add the conditional `if()` function that says "only install the package IF it is not (`!`) available.
-
-Next, make a copy of the data frame and call it `df`. Then print the first six rows using the `head()` function.
-```{r}
-df <- studentdata
-head(df)
-```
-
-Data frames are like spreadsheets with rows and columns. The rows are the observations (here each row is a student in an intro stats class at Bowling Green State University) and the columns are the variables. Variables are answers to questions like what is your height?, Choose a number between 1 and 10, Give the time you went to bed last night, etc. 
-
-The names of the columns are available with the `names()` function.
-```{r}
-names(df)
-```
-
-All columns are of the same length, but not all students answered all questions.
-
-We specify particular data elements of the matrix using the bracket notation [row, column] where row is the row number and column is the column number. For example here we specify all the data values in the 10th row.
-```{r}
-df[10, ]
-```
-
-Drink preference was one of the questions. The responses are available in the column labeled `Drink` as a vector of character values. So we list all the drink preferences by typing
-```{r}
-df$Drink
-```
-
-Note that some students left that response blank. These are coded in the data frame as `NA`.
-
-The variable type depends on the question asked. For example, answers given to the question of student height result in a numeric variable, answers given to the question about drink preference result in a character variable.
-
-For integer, character, and factor variables we can summarize the values with the `table()` function.
-```{r}
-table(df$Drink)
-```
-
-There are 113 students who chose milk, 178 choose pop, and 355 chose water. 
-
-We use the `plot()` method to make a quick plot of this table.
-```{r}
-plot(x = df$Drink)
-```
-
-Note that the sum of the responses is `r sum(table(df$Drink))`, which is less than the total number of students (`r nrow(df)`). Note: Here I use inline R code using single back ticks.
-
-Students who left that question blank are ignored. To include the missing values we add the argument `useNA = "ifany"` to the `table()` function.
-```{r}
-table(df$Drink,
-      useNA = "ifany")
-```
-
-Suppose we are interested in examining how long students slept. This was not asked directly. We compute it from the `ToSleep` and `WakeUp` times columns. We assign the result of the difference to a column we call `SleepHrs`.
-```{r}
-df$SleepHrs <- df$WakeUp - df$ToSleep
-head(df)
-```
-
-Now we have a new numeric variable in the data frame called `SleepHrs`.
-
-We can't table numeric variables, but the `summary()` method provides a set of summary statistics for the values.
-```{r}
-summary(df$SleepHrs)
-```
-
-The average number of hours slept is 7.4 with a maximum of 12.5 and a minimum of 2.5. There are four students that did not answer either when they went to sleep or when they woke up. 
-
-We use the `hist()` function to construct a histogram of sleep hours.
-```{r}
-hist(x = df$SleepHrs)
-```
-
-The histogram function divides the number of sleep hours into one-hour bins and counts the number of students whose computed number of sleep hours falls into each bin. For example based on when they said they went to sleep and when the said they woke up, about 100 students slept between five and six hours the night before the survey.
-
-Since the gender of each student is reported, we can make comparisons between those who identify as male and those who identify as female. For instance, do men sleep more than women? We can answer this question graphically with box plots.
-```{r}
-plot(x = df$Gender, 
-     y = df$SleepHrs)
-```
-
-Very little difference.
-
-Repeat for hair cut prices.
-```{r}
-plot(x = df$Gender, 
-     y = df$Haircut)
-```
-
-Big difference.
-
-Finally, is the amount of sleep for a student related to bedtime?
-```{r}
-plot(x = df$ToSleep,
-     y = df$SleepHrs)
-```
-
-The `ToSleep` variable is centered on midnight so that -2 means they went to sleep at 10p.
-
-We describe the decreasing relationship with a line through the points. The least-squares line is fit using the `lm()` function and the line is drawn on the existing plot with the `abline()` function applied to the linear regression object `model`.
-```{r}
-model <- lm(SleepHrs ~ ToSleep, 
-            data = df)
-
-plot(x = df$ToSleep,
-     y = df$SleepHrs)
-abline(model)
 ```
