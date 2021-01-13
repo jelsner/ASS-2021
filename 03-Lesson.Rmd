@@ -8,67 +8,73 @@ editor_options:
   chunk_output_type: console
 ---
 
-## Working with data frames using {base} R
+**"Feeling a little uncomfortable with your skills is a sign of learning, and continuous learning is what the tech industry thrives on!"** --- Vanessa Hurst
 
-Consider the built-in data frame called `studentdata` from the {LearnBayes} package. To get access to this data frame, first install the package with the `install.packages()` function. Put the name of the package {LearnBayes} in quotes (single or double). Then, to make the functions available, use the `library()` function.
+In this lesson I show you how I work with data frames using functions from the {base} R set of packages using examples from my research on tornadoes, hurricanes, and rainfall. I then introduce syntax for working with data using functions from the {tidyverse} set of packages starting with the piping operator.
+
+## Working with data frames using functions from {base} packages
+
+Consider the built-in data frame `studentdata` from the {LearnBayes} package. To get access to this data frame, we first install the package with the `install.packages()` function. We put the name of the package {LearnBayes} in quotes (single or double). Then to make the functions from the package available to our current session we use the `library()` function with the name of the package (unquoted) inside the parentheses.
 ```{r}
 if(!require(LearnBayes)) install.packages(pkgs = "LearnBayes", repos = "http://cran.us.r-project.org")
 
 library(LearnBayes)
 ```
 
-Note: When using RStudio we don't need to set up our CRAN repository. It is done automatically. We can also install packages by clicking on _Packages_ > _Install_ in the lower-right panel. For interactive use and when we use the `Knit` button, we don't want to install packages that already exist on our computer so we add the conditional `if()` function that says "only install the package IF it is not (`!`) available".
+Note: The argument `repos =` in the `install.packages()` function directs where the package can be obtained on CRAN (comprehensive R archive network). The CRAN repository is set automatically when using RStudio and we can install packages by clicking on _Packages_ > _Install_ in the lower-right panel. But for interactive use we need to specify the repository and when we use the `Knit` button we don't want to install packages that already exist on our computer so we add the conditional `if()` function that says "only install the package IF it is not (`!`) available".
 
-Next, make a copy of the data frame by assigning it to the object with name `df`. Finally, print the first six rows using the `head()` function.
+Make a copy of the data frame by assigning it to an object with the name `df` and print the first six rows using the `head()` function.
 ```{r}
 df <- studentdata
 head(df)
 ```
 
-As noted in the last lesson, data frames are like spreadsheets with rows and columns. The rows are the observations (here each row is a student in an intro stats class at Bowling Green State University) and the columns are the variables. Variables are answers to questions like what is your height?, Choose a number between 1 and 10, Give the time you went to bed last night, etc. 
+Data frames are like spreadsheets with rows and columns. The rows are the observations (here each row is a student in an intro stats class at Bowling Green State University) and the columns are the variables. Here the variables are answers to questions like what is your height, choose a number between 1 and 10, what time did you go to bed last night, etc. 
 
-The names of the columns are available using the `names()` function.
+The names of the columns are printed using the `names()` function.
 ```{r}
 names(df)
 ```
 
-All columns are of the same length, but not all students answered all questions.
+All columns are of the same length, but not all students answered all questions so some of the data frame cells contain the missing-value indicator `NA`.
 
-We specify particular data elements of the matrix using the bracket notation [row, column] where row is the row number and column is the column number. For example here we specify all the data values in the 10th row.
+We specify elements (data values) of the data frame using the bracket notation [row, column] where row is the row number and column is the column number like a matrix. For example here we specify all the data values in the 10th row.
 ```{r}
 df[10, ]
 ```
 
-Drink preference was one of the questions. Responses are available in the column labeled `Drink` as a vector of character values. So we list all the drink preferences by typing
+By specifying only the row index and leaving the column index blank we get all data in that row corresponding to all the responses by the 10th student.
+
+Drink preference was one of the questions. Responses across all students are available in the column labeled `Drink` as a vector of character values. We list all the drink preferences by typing
 ```{r}
 df$Drink
 ```
 
-Notice that some students left that response blank. These non responses are coded in the data frame as `NA`.
+Some students left that response blank and therefore the response is coded with the missing-value indicator.
 
 The variable type depends on the question asked. For example, answers given to the question of student height result in a numeric variable, answers given to the question about drink preference result in a character variable.
 
-For integer, character, and factor variables we can summarize the values with the `table()` function.
+For integer, character, and factor variables we summarize the set of responses with the `table()` function.
 ```{r}
 table(df$Drink)
 ```
 
-There are 113 students who chose milk, 178 chose soda, and 355 chose water. 
+There are 113 students who prefer milk, 178 prefer soda, and 355 prefer water. 
 
 We use the `plot()` method to make a draft plot of this table.
 ```{r}
 plot(x = df$Drink)
 ```
 
-Notice that the sum of the responses is `r sum(table(df$Drink))`, which is less than the total number of students (`r nrow(df)`). 
+Notice that the sum of the responses is `r sum(table(df$Drink))`, which is less than the total number of students (`r nrow(df)`).
 
-Students who left that question blank are ignored. To include the missing values we add the argument `useNA = "ifany"` to the `table()` function.
+Students who left that question blank are ignored in the `table()` function. To include the missing values we add the argument `useNA = "ifany"` to the `table()` function.
 ```{r}
 table(df$Drink,
       useNA = "ifany")
 ```
 
-Note: When we want code executed in the text we separate the code using single back ticks. This is useful when we write reports that need updating periodically. We don't need to hard-code values and then search the document for these values to update.
+Note: When we want code executed in the text we separate the code using single back ticks. This is useful when we write reports that need periodic updates. If we hard code the values then we need to search the document for these values during each update.
 
 Suppose we are interested in examining how long students slept. This was not asked directly. We compute it from the `ToSleep` and `WakeUp` times columns. We assign the result of the difference to a column we call `SleepHrs`.
 ```{r}
@@ -78,12 +84,12 @@ head(df)
 
 Now we have a new numeric variable in the data frame called `SleepHrs`.
 
-We can't table numeric variables, but the `summary()` method provides a set of summary statistics for the values.
+We can't table numeric variables, but the `summary()` method prints a set of summary statistics for the set of values.
 ```{r}
 summary(df$SleepHrs)
 ```
 
-The average number of hours slept is 7.4 with a maximum of 12.5 and a minimum of 2.5. There are four students that did not answer either when they went to sleep or when they woke up. 
+The average number of hours slept is 7.4 with a maximum of 12.5 and a minimum of 2.5. There are four students that did not answer either when they went to sleep or when they woke up questions. 
 
 We use the `hist()` function to construct a histogram of sleep hours.
 ```{r}
@@ -92,13 +98,13 @@ hist(x = df$SleepHrs)
 
 The histogram function divides the number of sleep hours into one-hour bins and counts the number of students whose computed number of sleep hours falls into each bin. For example based on when they said they went to sleep and when the said they woke up, about 100 students slept between five and six hours the night before the survey.
 
-Since the gender of each student is reported, we can make comparisons between those who identify as male and those who identify as female. For instance, do men sleep more than women? We can answer this question graphically with box plots.
+Since the gender of each student is reported, we can make comparisons between those who identify as male and those who identify as female. For instance, do men sleep more than women? We can answer this question graphically with box plots using the `plot()` method. We specify the character variable on the horizontal axis (x) to be gender with the `x =` argument and the numeric variable on the vertical axis (y) with the `y =` argument.
 ```{r}
 plot(x = df$Gender, 
      y = df$SleepHrs)
 ```
 
-Very little difference.
+The plot reveals very little difference in the amount of sleep.
 
 Repeat for hair cut prices.
 ```{r}
@@ -108,7 +114,7 @@ plot(x = df$Gender,
 
 Big difference.
 
-Finally, is the amount of sleep for a student related to bedtime?
+Finally, is the amount of sleep for a student related to bedtime? If we use numeric variables on both the x and y axes then we get a scatter plot.
 ```{r}
 plot(x = df$ToSleep,
      y = df$SleepHrs)
@@ -219,12 +225,10 @@ There are 93 years without a FL hurricane, 43 years with exactly one hurricane, 
 
 ### Past rainfall in Florida
 
-Monthly statewide average rainfall (in inches) are available back to the year 1895 from http://www.esrl.noaa.gov/psd/data/timeseries/. I put values into a text editor and then uploaded the file to the Web at location http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt.
+Here is an example of how I get answers to questions using functions from {base} R applied to a data frame. The data are monthly statewide average rainfall (in inches) starting in 1895 from http://www.esrl.noaa.gov/psd/data/timeseries/. I put values into a text editor and then uploaded the file to the Web at location http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt.
 
-To import the data into R we use the `read_table()` function from the {tidyverse} packages. We assign the object the name `FLp.df`.  We type the name of the object to see that it is a tabled data frame (tibble) with 117 rows and 13 columns.
+To import the data into R we use the `read_table()` function from the {tidyverse} packages since this is a space-delimited text file. We assign the object the name `FLp.df`.  We type the name of the object to see that it is a tabled data frame (tibble) with 117 rows and 13 columns.
 ```{r}
-library(tidyverse)
-
 FLp.df <- read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt")
 
 FLp.df
@@ -431,7 +435,7 @@ airquality %>%
   summarize(Tavg = mean(Temp))
 ```
 
-We've seen functions that compute statistics including `sum()`, `sd()`, `min()`, `max()`, `var()`, `range()`, `median()`. Others include
+We've seen functions that compute statistics including `sum()`, `sd()`, `min()`, `max()`, `var()`, `range()`, `median()`. Others include:
 
 Summary function  | Description
 -----------------:|:-----------
@@ -482,7 +486,7 @@ On average ozone concentration is higher on warm days (Temp >= 70 F) days. Said 
 
 The mean is a model for the data. The statistical dependency of the mean implies that a model for ozone concentration will likely be improved by including temperature as an explanatory variable.
 
-In summary, the important {dplyr} verbs are
+In summary, the important verbs are
 
 Verb          | Description
 -------------:|:-----------
@@ -493,13 +497,12 @@ Verb          | Description
 `summarize()` | summarizes values; collapse many values down to a single summary
 `group_by()`  | allows operations to be grouped
 
-The syntax of the verb functions in the {dplyr} package are all the same:
+The six functions form the basis of a grammar for data. We can only alter a data frame by reordering the rows (`arrange()`), picking observations and variables of interest (`filter()` and `select()`), adding new variables that are functions of existing variables (`mutate()`), collapsing many values to a summary (`summarise()`), and conditioning on variables (`group_by()`).
 
-Properties
+The syntax of the functions are all the same:
+
 * The first argument is a data frame. This argument is implicit when using the `%>%` operator.
 * The subsequent arguments describe what to do with the data frame. We refer to columns in the data frame directly (without using `$`).
 * The result is a new data frame
 
-These properties make it easy to chain together many simple lines of code to do something complex.
-
-The five functions form the basis of a grammar for data. At the most basic level, we can only alter a data frame in five useful ways: we can reorder the rows (`arrange()`), pick observations and variables of interest (`filter()` and `select()`), add new variables that are functions of existing variables (`mutate()`), or collapse many values to a summary (`summarise()`).
+These properties make it easy to chain together many simple lines of code to do complex data manipulations and summaries.
