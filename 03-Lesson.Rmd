@@ -3,6 +3,7 @@ title: "Lesson 3"
 author: "James B. Elsner"
 date: "January 13, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -10,7 +11,7 @@ editor_options:
 
 **"Feeling a little uncomfortable with your skills is a sign of learning, and continuous learning is what the tech industry thrives on!"** --- Vanessa Hurst
 
-In this lesson I show you how I work with data frames using functions from the {base} R set of packages using examples from my research on tornadoes, hurricanes, and rainfall. I then introduce syntax for working with data using functions from the {tidyverse} set of packages starting with the piping operator.
+In this lesson I show you how I work with data frames using functions from the {base} R set of packages using examples from my research on tornadoes, hurricanes, and rainfall. I then introduce a syntax for working with data using functions from the {tidyverse} set of packages starting with the piping operator.
 
 ## Working with data frames using functions from {base} packages
 
