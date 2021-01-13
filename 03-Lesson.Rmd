@@ -53,7 +53,7 @@ df$Drink
 
 Some students left that response blank and therefore the response is coded with the missing-value indicator.
 
-The variable type depends on the question asked. For example, answers given to the question of student height result in a numeric variable, answers given to the question about drink preference result in a character variable.
+The variable type depends on the question asked. For example, answers given to the question of student height result in a numeric variable, answers given to the question about drink preference result in a character (or factor) variable.
 
 For integer, character, and factor variables we summarize the set of responses with the `table()` function.
 ```{r}
@@ -161,7 +161,7 @@ We preview the data frame using the `head()` function.
 head(Torn.df)
 ```
 
-Each row is a unique tornado report. Observations for each report include the day and time, the state (`st`), the maximum EF rating (`mag`), the number of injuries (`inj`), the number of fatalities (`fat`), estimated property losses (`loss`), estimated crop losses (`closs`), start and end locations in decimal degrees longitude and latitude, length of the damage path in yards (`len`), width of the damage path in miles (`wid`).
+Each row is a unique tornado report. Observations for each report include the day and time, the state (`st`), the maximum EF rating (`mag`), the number of injuries (`inj`), the number of fatalities (`fat`), estimated property losses (`loss`), estimated crop losses (`closs`), start and end locations in decimal degrees longitude and latitude, length of the damage path in miles (`len`), width of the damage in yards (`wid`).
 
 The total number of tornado reports in the data set is returned from the `nrow()` function.
 ```{r}
@@ -177,7 +177,7 @@ We see that there are fewer rows (tornado reports) in this new data frame assign
 
 We subset again, keeping only tornadoes with EF ratings (`mag` variable) greater than zero. Here we _recycle_ the name `Torn2.df`.
 ```{r}
-Torn2.df <- Torn.df[Torn.df$mag > 0, ]
+Torn2.df <- Torn2.df[Torn2.df$mag > 0, ]
 ```
 
 Now we compute the correlation between EF rating (`mag`) and path length (`len`) with the `cor()` function. The first argument is the vector of EF ratings and the second argument is the vector of path lengths.
