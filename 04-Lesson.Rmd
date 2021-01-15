@@ -1,0 +1,568 @@
+---
+title: "Lesson 4"
+author: "James B. Elsner"
+date: "January 20, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+**"Good coding style is like correct punctuation: you can manage without it, butitsuremakesthingseasiertoread."** --- Hadley Wickham
+
+## Working with data frames using functions from the {tidyverse} set of packages
+
+Tibbles are data frames that make life a little easier. R is an old language, and some things that were useful 10 or 20 years ago now get in your way. To make a data frame a tibble (tabular data frame) use the `as_tibble()` function.
+```{r}
+class(airquality)
+airquality <- as_tibble(airquality)
+class(airquality)
+```
+
+Click on `airquality` in the environment. It is a data frame. We will use the terms 'tibble' and 'data frame' interchangeably (mostly).
+
+Now we are ready to look at some of the commonly used verbs and how to apply them to the data frame `airquality`.
+
+The function `select()` chooses variables by name. For example, choose the month, day, and temperature columns.
+```{r}
+airquality %>%
+  select(Month, Day, Temp)
+```
+
+Suppose we want a new data frame with only the temperature and ozone concentrations.
+```{r}
+df <- airquality %>%
+        select(Temp, Ozone)
+df
+```
+
+We include an assignment operator (`<-`) and an object name (here `df`).
+
+Note: The result of applying a {dplyr} verb is a data frame. From a data frame object to a data frame object.
+
+The function `filter()` chooses observations based on specific values. Suppose we want only the observations where the temperature is at or above 80F.
+```{r}
+airquality %>%
+  filter(Temp >= 80)
+```
+
+The result is a data frame with the same 6 columns but now only 73 observations. Each of the observations has a temperature of at least 80F.
+
+Suppose we want a new data frame keeping only observations where temperature is at least 80F AND winds less than 5 mph.
+```{r}
+df <- airquality %>% 
+  filter(Temp >= 80 & Wind < 5)
+df
+```
+
+The function `arrange()` orders the rows by values given in a particular column.
+```{r}
+airquality %>%
+  arrange(Solar.R)
+```
+
+The ordering is from lowest value of radiation to highest value. Here we see the first 10 rows. Note `Month` and `Day` are no longer chronological.
+
+Repeat but order by the value of air temperature.
+```{r}
+airquality %>%
+  arrange(Temp)
+```
+
+Importantly we can string the functions together. For example select the variables radiation, wind, and temperature then filter by temperatures above 90F and arrange by temperature.
+```{r}
+airquality %>%
+  select(Solar.R, Wind, Temp) %>%
+  filter(Temp > 90) %>%
+  arrange(Temp)
+```
+
+The result is a data frame with three columns and 14 rows arranged by increasing temperatures above 90F. 
+
+The `mutate()` function adds new columns to the data frame. For example, create a new column called `TempC` as the temperature in degrees Celcius. Also create a column called `WindMS` as the wind speed in meters per second.
+```{r}
+airquality %>%
+  mutate(TempC = (Temp - 32) * 5/9,
+         WindMS = Wind * .44704) 
+```
+
+The resulting data frame has 8 columns (two new ones) labeled `TempC` and `WindMS`.
+
+On days when the temperature is below 60 F add a column giving the apparent temperature based on the cooling effect of the wind (wind chill) and then arrange from coldest to warmest apparent temperature.
+```{r}
+airquality %>%
+  filter(Temp < 60) %>%
+  mutate(TempAp = 35.74 + .6215 * Temp - 35.75 * Wind^.16 + .4275 * Temp * Wind^.16) %>%
+  arrange(TempAp)
+```
+
+The `summarize()` function reduces (flattens) the data frame based on a function that computes a statistic. For example, to compute the average wind speed during July type
+```{r}
+airquality %>%
+  filter(Month == 7) %>%
+  summarize(Wavg = mean(Wind))
+
+airquality %>%
+  filter(Month == 6) %>%
+  summarize(Tavg = mean(Temp))
+```
+
+We've seen functions that compute statistics including `sum()`, `sd()`, `min()`, `max()`, `var()`, `range()`, `median()`. Others include:
+
+Summary function  | Description
+-----------------:|:-----------
+`n()`             | Length of the column
+`first()`         | First value of the column
+`last()`          | Last value of the column
+`n_distinct()`    | Number of distinct values
+
+Find the maximum and median wind speed and maximum ozone concentration values during the month of May. Also determine the number of observations during May.
+```{r}
+airquality %>%
+  filter(Month == 5) %>%
+  summarize(Wmax = max(Wind),
+            Wmed = median(Wind),
+            OzoneMax = max(Ozone),
+            NumDays = n())
+```
+
+We get an `NA` for `OzoneMax` because there is at least one missing value. We fix this with the `na.rm = TRUE` argument in the function `max()`.
+```{r}
+airquality %>%
+  filter(Month == 5) %>%
+  summarize(Wmax = max(Wind),
+            Wmed = median(Wind),
+            OzoneMax = max(Ozone, na.rm = TRUE),
+            NumDays = n())
+```
+
+If we want to summarize separately for each month we use the `group_by()` function. We split the data frame by some variable (e.g., `Month`), apply a function to the individual data frames, and then combine the output.
+
+Find the highest ozone concentration by month. Include the number of observations (days) in the month.
+```{r}
+airquality %>%
+  group_by(Month) %>%
+  summarize(OzoneMax =  max(Ozone, na.rm = TRUE),
+            NumDays = n())
+```
+
+Find the average ozone concentration when temperatures are above and below 70 F. Include the number of observations (days) in the two groups.
+```{r}
+airquality %>%
+  group_by(Temp >= 70) %>%
+  summarize(OzoneAvg =  mean(Ozone, na.rm = TRUE),
+            NumDays = n())
+```
+
+On average ozone concentration is higher on warm days (Temp >= 70 F) days. Said another way; mean ozone concentration statistically depends on temperature.
+
+The mean is a model for the data. The statistical dependency of the mean implies that a model for ozone concentration will likely be improved by including temperature as an explanatory variable.
+
+In summary, the important verbs are
+
+Verb          | Description
+-------------:|:-----------
+`select()`    | selects columns; pick variables by their names
+`filter()`    | filters rows; pick observations by their values
+`arrange()`   | re-orders the rows
+`mutate()`    | creates new columns; create new variables with functions of existing variables
+`summarize()` | summarizes values; collapse many values down to a single summary
+`group_by()`  | allows operations to be grouped
+
+The six functions form the basis of a grammar for data. We can only alter a data frame by reordering the rows (`arrange()`), picking observations and variables of interest (`filter()` and `select()`), adding new variables that are functions of existing variables (`mutate()`), collapsing many values to a summary (`summarise()`), and conditioning on variables (`group_by()`).
+
+The syntax of the functions are all the same:
+
+* The first argument is a data frame. This argument is implicit when using the `%>%` operator.
+* The subsequent arguments describe what to do with the data frame. We refer to columns in the data frame directly (without using `$`).
+* The result is a new data frame
+
+These properties make it easy to chain together many simple lines of code to do complex data manipulations and summaries.
+
+Example 1: Florida precipitation
+
+Suppose we are interested in whether it is getting wetter or drier in Florida during spring? One way to examine this question is to divide the years into two groups early and late and compute averages.
+
+What is the average and variance of April rainfall since 1960?
+
+Import the data, select the month of April (`Apr`) and year (`Year`), group by years > 1960, summarize the two groups of April rainfall with the mean and variance.
+```{r}
+read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt") %>%
+  select(Apr, Year) %>%
+  group_by(Year > 1960) %>%
+  summarize(Avg = mean(Apr),
+            Var = var(Apr))
+```
+
+What month during 1965 was the wettest? How wet was it?
+
+Use the `pivot_longer()` function from the {tidyverse} packages to turn the wide data frame into a long data frame.
+```{r}
+FLp.df %>%
+  pivot_longer(cols = -Year)
+```
+
+Putting it together.
+```{r}
+FLp.df %>%
+  pivot_longer(cols = -Year) %>%
+  filter(Year == 1965) %>% 
+  summarize(MostRain = max(value), 
+            WhichMonth = which.max(value))
+```
+
+Example 2: US tornadoes
+
+Import the data.
+```{r}
+Torn.df <- read_csv(file = "Tornadoes.csv")
+Torn.df
+```
+
+Create new columns with the verb function `mutate()`
+
+New columns are created with the `mutate()` function. Here we assign to the object `Torn.df` the original data frame but with three new columns. `Length` as the damage path length in meters and `Width` as the damage path width in meters.
+```{r}
+Torn.df <- Torn.df %>%
+  mutate(Length = len * 1609.34,
+         Width = wid * .9144) %>%
+  glimpse()
+```
+
+The new data frame has the same columns as the original data frame but it now includes the columns `Length`, and `Width`.
+
+Rename a column with `rename()`.
+
+To give a column a new name use the `rename()` function (new name = old name). For example to change the name of the column `yr` to `Year` and `mag` to `EF` type
+```{r}
+Torn.df <- Torn.df %>%
+  rename(Year = yr,
+         EF = mag) %>%
+  glimpse()
+```
+
+The original names of `yr` and `mag` are replaced with `Year` and `EF`.
+
+Select columns with `select()`
+
+The `select()` function chooses specified columns by name to create a new data frame. Here we recycle the `sfdf` name.
+```{r}
+sfdf <- sfdf %>%
+  select(Year, 
+         Month = mo, 
+         ST = st, 
+         EF, 
+         Date, 
+         Length,
+         Width, 
+         Fatalities = fat,
+         Injuries = inj)
+glimpse(sfdf)
+```
+
+Note that we also change the name of the column when we use the `=` sign. For example `Month = mo`. `mo` is the original name of the column but it gets changed to `Month`.  
+
+The `select()` function is useful when there are many variables and we are only interested in a few of them.
+
+We can select columns having common character string names. For example, we select columns containing only variables beginning with the letter `s` use the `starts_with()` function.
+```{r}
+Torn.df %>% 
+  select(starts_with("s"))
+```
+
+Filter rows with `filter()`
+
+The `filter()` function selects a subset of the rows of a data frame. The arguments are filtering (subsetting) expressions evaluated using column names of the data frame. For example, we can select all tornadoes recorded during October of 1980.
+```{r}
+Torn.df %>%
+  filter(Month == 10, 
+         Year == 1980)
+```
+
+`Month` and `Year` are column names in `df` that were created with the `rename()` and `select()` functions above.
+
+Create a new data frame containing only tornadoes originating in Wisconsin.
+```{r}
+TornWI.df <- Torn.df %>%
+  filter(st == "WI")
+```
+
+Arrange rows with `arrange()`
+
+The function `arrange()` works like `filter()` except that instead of subsetting rows, it reorders them. It takes a data frame, and a set of column names (or more complicated expressions) to order by.
+
+Here we use `desc()` together with `arrange()` to order a column by descending order of fatalities (variable name `fat`).
+```{r}
+Torn.df %>%
+  arrange(desc(fat)) %>%
+  glimpse()
+```
+
+The deadliest recorded tornado occurred in 2011, killing 158 people, with many of the deaths occurring in the city of Joplin, MO.
+
+Again, note here the `glimpse()` function has no arguments. It inherits the _arranged_ data frame through the piping operator.
+
+If we provide more than one column name, each additional column is used to break ties in the values of the preceding column.
+```{r}
+Torn.df %>%
+  arrange(desc(fat), desc(inj)) %>%
+  glimpse()
+```
+
+Pull out a single variable with `pull()`
+
+The function `pull()` pulls out a single variable from the data frame.
+```{r}
+Fatalities <- Torn.df %>%
+  pull(fat)
+head(Fatalities)
+```
+
+The result is a vector. This is equivalent to `Fatalities <- Torn.df$fat`.
+
+Summarize values with `summarise()`
+
+The `summarize()` function collapses a data frame to a single row.
+```{r}
+Torn.df %>% 
+  summarize(mL = median(Length),
+            mW = median(Width))
+```
+
+The above functions are similar: The first argument is a data frame. This is implicit when using `%>%`. The subsequent arguments describe what to do with it, and you refer to columns in the data frame directly without using `$`. The result is a new data frame (except when using `pull()`).
+
+Together these properties make it easy to chain together multiple simple steps to achieve a complex result. They functions provide the grammar for a data manipulation language. 
+
+The remainder of the language comes from applying the five functions in various order and on various groups.
+
+Grouped operations
+
+The verb functions are powerful when we combine them with the idea of 'group by', repeating the operation individually on groups of observations within the data frame. 
+
+We use the `group_by()` function to describe how to break a data frame down into groups of rows. We can then use the resulting object in the exactly the same functions as above; they'll automatically work 'by group' when the input is a grouped.
+
+Of the five verbs `summarize()` is easy to understand and quite useful.
+
+For example, here we filter the data frame for years starting with 2007 then group by EF rating before summarizing the path length and path width using the `median()` function.
+```{r}
+Torn.df %>%
+  filter(Year >= 2007) %>%
+  group_by(EF) %>%
+  summarize(Count = n(),
+            mL = median(Length),
+            mW = median(Width))
+```
+
+The output is a table perhaps as part of our exploratory analysis.
+
+We use `summarize()` with aggregate functions, which take a vector of values, and return a single number. Functions in the {base} package like `min()`, `max()`, `mean()`, `sum()`, `sd()`, `median()`, and `IQR()` can be used. The {dplyr} packages has others:
+
+* `n()`: number of observations in the current group.
+* `n_distinct()`: count the number of unique values.
+* `first()`, `last()` and `nth()` - these work similarly to `x[1]`, `x[length(x)]`, and `x[n]` but give you more control of the result if the value isn't present.
+
+For example, we use these to find the number of tornadoes by state and the number of months in which there was at least one tornado.
+```{r}
+Torn.df %>%
+  group_by(st) %>%
+  summarize(months = n_distinct(mo),
+            nT = n())
+```
+
+When we group by multiple variables, each summary peels off one level of the grouping. That makes it easy to progressively roll-up a dataset. As an example: how would we determine the number of tornadoes by day of year?
+
+We first use the function `day()` from the {lubridate} package to extract the day of the month from a `Date` object and add it to our data frame. We then use `group_by()` on the month and day. Finally we summarize by counting the number of cases.
+```{r}
+if(!require(lubridate)) install.packages(pkgs = "lubridate", repos = "http://cran.us.r-project.org")
+library(lubridate)
+
+Torn.df %>%
+  mutate(Day = day(date),
+         Month = as.integer(mo)) %>%
+  group_by(Month, Day) %>%
+  summarize(nT = n())
+```
+
+The result is a data frame with the number of tornadoes by day of the year.
+
+There are functions that combine some of the primitives. For example, we can use `tally()` instead of `summarize(nT = n())` or `count()` instead of both `group_by()` and `summarize()`. For example, the following code does the same thing.
+```{r}
+Torn.df %>%
+  mutate(Day = day(date),
+         Month = as.integer(mo)) %>%
+  count(Month, Day)
+```
+
+What state had the most tornado fatalities?
+```{r}
+Torn.df %>%
+  group_by(st) %>%
+  summarize(nF = sum(fat)) %>%
+  arrange(desc(nF))
+```
+
+## Making graphs with functions from the {ggplot2} package
+
+Here I introduce the grammar for making graphs. Some of this material is taken from [Sharp Sight Labs](http://sharpsightlabs.com/blog/r-package-think-about-visualization/).
+
+The packages {ggplot2} and {dplyr} are part of {tidyverse}, which is a group of packages for data manipulation and visualization. A recent 2016 survey by O'Reilly media showed that {ggplot2} is the most frequently used data visualization tool among employed data scientists. It's popular because it teaches you how to think about visualizing your data. There are a few principles underlying the syntax.
+
+1. Mapping data to aesthetics
+2. Layering
+3. Building plots step by step
+
+We make the functions available to our current working directory by typing
+```{r}
+library(ggplot2)
+```
+
+First principle: Map data to aesthetics
+
+Consider the following vectors of data. Create a data frame `df` using the `data.frame` function.
+```{r}
+foo <- c(-122.419416,-121.886329,-71.05888,-74.005941,-118.243685,-117.161084,-0.127758,-77.036871,
+         116.407395,-122.332071,-87.629798,-79.383184,-97.743061,121.473701,72.877656,2.352222,
+         77.594563,-75.165222,-112.074037,37.6173)
+bar <- c(37.77493,37.338208,42.360083,40.712784,34.052234,32.715738,51.507351,38.907192,39.904211,
+         47.60621,41.878114,43.653226,30.267153,31.230416,19.075984,48.856614,12.971599,39.952584,33.448377,55.755826)
+zaz <- c(6471,4175,3144,2106,1450,1410,842,835,758,727,688,628,626,510,497,449,419,413,325,318)
+df <- data.frame(foo, bar, zaz)
+glimpse(df)
+head(df)
+```
+
+To make a scatter plot specify the data frame as the first argument in the `ggplot()` function and the `aes()` function as the second argument. The arguments of the `aes()` function are the x and y positions as `foo` and `bar`, respectively. The plot is rendered after adding the geometric object `geom_point()` as a layer.
+```{r}
+ggplot(data = df, 
+       mapping = aes(x = foo, y = bar)) +
+  geom_point()
+```
+
+We are mapping data to aesthetic attributes. The _points_ in the scatter plot are geometric objects that we draw. In {ggplot2} lingo, the points are _geoms_. More specifically the points are _point geoms_ that we denote syntactically with the function `geom_point()`.
+
+All geometric objects have aesthetic attributes. Things like:
+
+* x-position
+* y-position
+* color
+* size
+* transparency
+
+When we create a data visualization in {ggplot2}, we are creating a mapping between variables in our data and the aesthetic attributes of the geometric objects in our visualization. When we visualize data, we are mapping between variables in our data frame and the aesthetic attributes of the geometric objects in the plot.
+
+In our scatter plot example, when we create this plot, we're mapping `foo` to the x-position aesthetic and we're mapping `bar` to the y-position aesthetic. This may seem trivial `foo` is the x-axis and `bar` is on the y-axis. We can do that in Excel.
+
+But here there is a deeper structure. Theoretically, geometric objects (i.e., the things we draw in a plot, like points) don't just have attributes like position. They have a color, size, etc. 
+
+For example here we map a new variable to the size aesthetic.
+```{r}
+ggplot(data = df, 
+       mapping = aes(x = foo, y = bar)) +
+  geom_point(aes(size = zaz))
+```
+
+We changed a scatter plot to a bubble chart by mapping a new variable to the size aesthetic. Any visualization we see can be deconstructed into geom specifications and mapping from data to the aesthetic attributes of the geometric objects.
+
+Second principle: Build plots in layers
+
+The principle of layering is important because to create more advanced visualizations, we often need to:
+
+* Plot multiple datasets, or
+* Plot a dataset with additional contextual information contained in a second dataset, or
+* Plot summaries or statistical transformations over the raw data
+
+Let's modify the bubble chart by getting additional data and plotting it as a new layer below the bubbles. First get the data from the {maps} package and store it in a new data frame.
+```{r}
+install.packages("maps")
+library(maps)
+
+df3 <- map_data("world") %>%
+  glimpse()
+```
+
+Plot the new data as a new layer underneath the bubbles.
+```{r}
+ggplot(data = df2, aes(x = foo, y = bar)) +
+  geom_polygon(data = df3, aes(x = long, y = lat, group = group)) +
+  geom_point(aes(size = zaz), color = "red")
+```
+
+This is the bubble chart from earlier in the post with a new layer added. We transformed a bubble chart into a new visualization called a "dot distribution map," which is much more insightful and much more visually interesting.
+
+The bubble chart is a modified scatter plot and the dot distribution map is a modified bubble chart.
+
+We used two of the data visualization principles (mapping & layering) to build this visualization:
+
+* To create the scatter plot, we mapped `foo` to the x-aesthetic and mapped `bar` to the y-aesthetic
+* To create the bubble chart, we mapped a `zaz` to the size-aesthetic
+* To create the dot distribution map, we added a layer of polygon data under the bubbles.
+
+Third principle: Iteration (step by step)
+
+The third principle is about process. The process begins with mapping and layering but ends with iteration when we add layers that modify scales, legends, colors, etc. The syntax of `ggplot` _layerability_ enables and rewards iteration. 
+
+Let's assign to `p1` the output of our plot.
+```{r}
+p1 <- ggplot(data = df2, 
+             mapping = aes(x = foo, y = bar)) +
+        geom_polygon(data = df3, 
+                     mapping = aes(x = long, y = lat, group = group)) +
+        geom_point(aes(size = zaz), color = "red")
+```
+
+```{r}
+p2 <- p1 + xlab("Longitude") + ylab("Latitude")
+p2 <- p2 + scale_size_continuous(name = "Venture Capital Investment\n(USD, Millions)\n")
+p2
+```
+
+The `facet_wrap()` function is a layer to iterate (repeat) the entire plot conditional on another variable. It is like the `group_by()` function in the data grammar.
+
+Example 1: Tornadoes
+
+We plot the number of tornadoes by year for the state of Kansas. Recall, the data are in the data frame `Torn.df`.
+```{r}
+Torn.df %>%
+  filter(st == "KS") %>%
+  group_by(Year) %>%
+  summarize(nT = n()) %>%
+ggplot(mapping = aes(x = Year, y = nT)) +
+  geom_line()
+```
+
+We create a bar chart indicating the number of tornadoes by EF rating since 2007.
+```{r}
+df %>%
+  filter(Year >= 2007, EF != -9) %>%
+  group_by(EF) %>%
+  summarize(Count = n()) %>%
+  ggplot(aes(x = factor(EF), y = Count)) +
+    geom_bar(stat = "identity")
+```
+
+Here the argument `stat = "identity"` indicates the data are already tabulated. That is, by default `geom_bar()` tables the data if it is integer, character, or factor.
+
+Improve the bar chart. Make it presentable for publication.
+```{r}
+df %>%
+  filter(Year >= 2007, EF != -9) %>%
+  group_by(EF) %>%
+  summarize(Count = n()) %>%
+ggplot(aes(x = factor(EF), y = Count, fill = Count)) +
+  geom_bar(stat = "identity") +
+  xlab("EF Rating") + 
+  ylab("Number of Tornadoes") +
+  scale_fill_continuous(low = 'green', high = 'orange') +
+  geom_text(aes(label = Count), vjust = -.5, size = 3) +
+  theme_minimal() +
+  theme(legend.position = 'none') 
+```
+
+Plot a series of bar charts showing the frequency of tornadoes by EF rating for each year since 2005.
+```{r}
+df %>%
+  filter(Year >= 2005, EF != -9) %>%
+ggplot(aes(x = factor(EF))) +
+  geom_bar() +
+  facet_wrap(~ Year)
+```
