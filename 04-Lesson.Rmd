@@ -14,6 +14,8 @@ editor_options:
 
 Tibbles are data frames that make life a little easier. R is an old language, and some things that were useful 10 or 20 years ago now get in your way. To make a data frame a tibble (tabular data frame) use the `as_tibble()` function.
 ```{r}
+library(tidyverse)
+
 class(airquality)
 airquality <- as_tibble(airquality)
 class(airquality)
@@ -187,7 +189,9 @@ What is the average and variance of April rainfall since 1960?
 
 Import the data, select the month of April (`Apr`) and year (`Year`), group by years > 1960, summarize the two groups of April rainfall with the mean and variance.
 ```{r}
-read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt") %>%
+FLp.df <- read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt")
+
+FLp.df %>%
   select(Apr, Year) %>%
   group_by(Year > 1960) %>%
   summarize(Avg = mean(Apr),
@@ -245,19 +249,19 @@ The original names of `yr` and `mag` are replaced with `Year` and `EF`.
 
 Select columns with `select()`
 
-The `select()` function chooses specified columns by name to create a new data frame. Here we recycle the `sfdf` name.
+The `select()` function chooses specified columns by name to create a new data frame. Here we recycle the `Torn.df` name.
 ```{r}
-sfdf <- sfdf %>%
+Torn.df <- Torn.df %>%
   select(Year, 
          Month = mo, 
          ST = st, 
          EF, 
-         Date, 
+         date, 
          Length,
          Width, 
          Fatalities = fat,
          Injuries = inj)
-glimpse(sfdf)
+glimpse(Torn.df)
 ```
 
 Note that we also change the name of the column when we use the `=` sign. For example `Month = mo`. `mo` is the original name of the column but it gets changed to `Month`.  
@@ -284,17 +288,17 @@ Torn.df %>%
 Create a new data frame containing only tornadoes originating in Wisconsin.
 ```{r}
 TornWI.df <- Torn.df %>%
-  filter(st == "WI")
+  filter(ST == "WI")
 ```
 
 Arrange rows with `arrange()`
 
 The function `arrange()` works like `filter()` except that instead of subsetting rows, it reorders them. It takes a data frame, and a set of column names (or more complicated expressions) to order by.
 
-Here we use `desc()` together with `arrange()` to order a column by descending order of fatalities (variable name `fat`).
+Here we use `desc()` together with `arrange()` to order a column by descending order of fatalities (variable name `Fatalities`).
 ```{r}
 Torn.df %>%
-  arrange(desc(fat)) %>%
+  arrange(desc(Fatalities)) %>%
   glimpse()
 ```
 
@@ -305,7 +309,7 @@ Again, note here the `glimpse()` function has no arguments. It inherits the _arr
 If we provide more than one column name, each additional column is used to break ties in the values of the preceding column.
 ```{r}
 Torn.df %>%
-  arrange(desc(fat), desc(inj)) %>%
+  arrange(desc(Fatalities), desc(Injuries)) %>%
   glimpse()
 ```
 
@@ -314,7 +318,7 @@ Pull out a single variable with `pull()`
 The function `pull()` pulls out a single variable from the data frame.
 ```{r}
 Fatalities <- Torn.df %>%
-  pull(fat)
+  pull(Fatalities)
 head(Fatalities)
 ```
 
@@ -364,8 +368,8 @@ We use `summarize()` with aggregate functions, which take a vector of values, an
 For example, we use these to find the number of tornadoes by state and the number of months in which there was at least one tornado.
 ```{r}
 Torn.df %>%
-  group_by(st) %>%
-  summarize(months = n_distinct(mo),
+  group_by(ST) %>%
+  summarize(months = n_distinct(Month),
             nT = n())
 ```
 
@@ -377,8 +381,7 @@ if(!require(lubridate)) install.packages(pkgs = "lubridate", repos = "http://cra
 library(lubridate)
 
 Torn.df %>%
-  mutate(Day = day(date),
-         Month = as.integer(mo)) %>%
+  mutate(Day = day(date)) %>%
   group_by(Month, Day) %>%
   summarize(nT = n())
 ```
@@ -388,24 +391,21 @@ The result is a data frame with the number of tornadoes by day of the year.
 There are functions that combine some of the primitives. For example, we can use `tally()` instead of `summarize(nT = n())` or `count()` instead of both `group_by()` and `summarize()`. For example, the following code does the same thing.
 ```{r}
 Torn.df %>%
-  mutate(Day = day(date),
-         Month = as.integer(mo)) %>%
+  mutate(Day = day(date)) %>%
   count(Month, Day)
 ```
 
 What state had the most tornado fatalities?
 ```{r}
 Torn.df %>%
-  group_by(st) %>%
-  summarize(nF = sum(fat)) %>%
+  group_by(ST) %>%
+  summarize(nF = sum(Fatalities)) %>%
   arrange(desc(nF))
 ```
 
 ## Making graphs with functions from the {ggplot2} package
 
-Here I introduce the grammar for making graphs. Some of this material is taken from [Sharp Sight Labs](http://sharpsightlabs.com/blog/r-package-think-about-visualization/).
-
-The packages {ggplot2} and {dplyr} are part of {tidyverse}, which is a group of packages for data manipulation and visualization. A recent 2016 survey by O'Reilly media showed that {ggplot2} is the most frequently used data visualization tool among employed data scientists. It's popular because it teaches you how to think about visualizing your data. There are a few principles underlying the syntax.
+A recent 2016 survey by O'Reilly media showed that {ggplot2} is the most frequently used data visualization tool among employed data scientists. It's popular because it teaches you how to think about visualizing your data. There are a few principles underlying the syntax.
 
 1. Mapping data to aesthetics
 2. Layering
@@ -473,17 +473,17 @@ The principle of layering is important because to create more advanced visualiza
 
 Let's modify the bubble chart by getting additional data and plotting it as a new layer below the bubbles. First get the data from the {maps} package and store it in a new data frame.
 ```{r}
-install.packages("maps")
+if(!require(maps)) install.packages(pkgs = "maps", repos = "http://cran.us.r-project.org")
 library(maps)
 
-df3 <- map_data("world") %>%
+df2 <- map_data("world") %>%
   glimpse()
 ```
 
 Plot the new data as a new layer underneath the bubbles.
 ```{r}
-ggplot(data = df2, aes(x = foo, y = bar)) +
-  geom_polygon(data = df3, aes(x = long, y = lat, group = group)) +
+ggplot(data = df, aes(x = foo, y = bar)) +
+  geom_polygon(data = df2, aes(x = long, y = lat, group = group)) +
   geom_point(aes(size = zaz), color = "red")
 ```
 
@@ -503,9 +503,9 @@ The third principle is about process. The process begins with mapping and layeri
 
 Let's assign to `p1` the output of our plot.
 ```{r}
-p1 <- ggplot(data = df2, 
+p1 <- ggplot(data = df, 
              mapping = aes(x = foo, y = bar)) +
-        geom_polygon(data = df3, 
+        geom_polygon(data = df2, 
                      mapping = aes(x = long, y = lat, group = group)) +
         geom_point(aes(size = zaz), color = "red")
 ```
@@ -523,46 +523,9 @@ Example 1: Tornadoes
 We plot the number of tornadoes by year for the state of Kansas. Recall, the data are in the data frame `Torn.df`.
 ```{r}
 Torn.df %>%
-  filter(st == "KS") %>%
+  filter(ST == "KS") %>%
   group_by(Year) %>%
   summarize(nT = n()) %>%
 ggplot(mapping = aes(x = Year, y = nT)) +
   geom_line()
-```
-
-We create a bar chart indicating the number of tornadoes by EF rating since 2007.
-```{r}
-df %>%
-  filter(Year >= 2007, EF != -9) %>%
-  group_by(EF) %>%
-  summarize(Count = n()) %>%
-  ggplot(aes(x = factor(EF), y = Count)) +
-    geom_bar(stat = "identity")
-```
-
-Here the argument `stat = "identity"` indicates the data are already tabulated. That is, by default `geom_bar()` tables the data if it is integer, character, or factor.
-
-Improve the bar chart. Make it presentable for publication.
-```{r}
-df %>%
-  filter(Year >= 2007, EF != -9) %>%
-  group_by(EF) %>%
-  summarize(Count = n()) %>%
-ggplot(aes(x = factor(EF), y = Count, fill = Count)) +
-  geom_bar(stat = "identity") +
-  xlab("EF Rating") + 
-  ylab("Number of Tornadoes") +
-  scale_fill_continuous(low = 'green', high = 'orange') +
-  geom_text(aes(label = Count), vjust = -.5, size = 3) +
-  theme_minimal() +
-  theme(legend.position = 'none') 
-```
-
-Plot a series of bar charts showing the frequency of tornadoes by EF rating for each year since 2005.
-```{r}
-df %>%
-  filter(Year >= 2005, EF != -9) %>%
-ggplot(aes(x = factor(EF))) +
-  geom_bar() +
-  facet_wrap(~ Year)
 ```
