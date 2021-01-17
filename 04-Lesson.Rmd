@@ -12,7 +12,7 @@ editor_options:
 
 ## Working with data frames using functions from the {tidyverse} set of packages
 
-Tibbles are data frames that make life a little easier. R is an old language, and some things that were useful 10 or 20 years ago now get in your way. To make a data frame a tibble (tabular data frame) use the `as_tibble()` function.
+Tibbles are data frames that things easier. R is an old language, and some things that were useful 10 or 20 years ago now get in your way. To make a data frame a tibble (tabular data frame) use the `as_tibble()` function.
 ```{r}
 library(tidyverse)
 
@@ -181,7 +181,7 @@ The syntax of the functions are all the same:
 
 These properties make it easy to chain together many simple lines of code to do complex data manipulations and summaries.
 
-Example 1: Florida precipitation
+### Florida precipitation
 
 Suppose we are interested in whether it is getting wetter or drier in Florida during spring? One way to examine this question is to divide the years into two groups early and late and compute averages.
 
@@ -215,7 +215,7 @@ FLp.df %>%
             WhichMonth = which.max(value))
 ```
 
-Example 2: US tornadoes
+### US tornadoes
 
 Import the data.
 ```{r}
@@ -375,7 +375,7 @@ Torn.df %>%
 
 When we group by multiple variables, each summary peels off one level of the grouping. That makes it easy to progressively roll-up a dataset. As an example: how would we determine the number of tornadoes by day of year?
 
-We first use the function `day()` from the {lubridate} package to extract the day of the month from a `Date` object and add it to our data frame. We then use `group_by()` on the month and day. Finally we summarize by counting the number of cases.
+We first use the function `day()` from the {lubridate} package to extract the day of the month from a the column `date` (a vector of class `Date`) and add it to our data frame. We then use `group_by()` on the month and day. Finally we summarize by counting the number of cases.
 ```{r}
 if(!require(lubridate)) install.packages(pkgs = "lubridate", repos = "http://cran.us.r-project.org")
 library(lubridate)
@@ -388,7 +388,9 @@ Torn.df %>%
 
 The result is a data frame with the number of tornadoes by day of the year.
 
-There are functions that combine some of the primitives. For example, we can use `tally()` instead of `summarize(nT = n())` or `count()` instead of both `group_by()` and `summarize()`. For example, the following code does the same thing.
+There are functions that combine some of the primitives. For example, we can use `tally()` instead of `summarize(nT = n())` or `count()` instead of both `group_by()` and `summarize()`.
+
+For example, the following code does the same thing.
 ```{r}
 Torn.df %>%
   mutate(Day = day(date)) %>%
@@ -403,129 +405,77 @@ Torn.df %>%
   arrange(desc(nF))
 ```
 
-## Making graphs with functions from the {ggplot2} package
+### Palmer penguins
 
-A recent 2016 survey by O'Reilly media showed that {ggplot2} is the most frequently used data visualization tool among employed data scientists. It's popular because it teaches you how to think about visualizing your data. There are a few principles underlying the syntax.
+As another example, consider the Palmer penguin data set from https://education.rstudio.com/blog/2020/07/palmerpenguins-cran/. 
 
-1. Mapping data to aesthetics
-2. Layering
-3. Building plots step by step
-
-We make the functions available to our current working directory by typing
+The data set is located on the web and we import it as a data frame using the `read_csv()` function.
 ```{r}
-library(ggplot2)
+loc <- "https://raw.githubusercontent.com/allisonhorst/palmerpenguins/master/inst/extdata/penguins.csv"
+penguins <- read_csv(file = loc)
+penguins
 ```
 
-First principle: Map data to aesthetics
+The data are 344 individual penguins each described by species (Adelie, Chinstrap, Gentoo), where it was found (island name), length of bill (mm), depth of bill (mm), body mass (g), male or female, and year.
 
-Consider the following vectors of data. Create a data frame `df` using the `data.frame` function.
+Each penguin belongs to one of three species. To see how many of the 344 penguins are in each species we use the `table()` function.
 ```{r}
-foo <- c(-122.419416,-121.886329,-71.05888,-74.005941,-118.243685,-117.161084,-0.127758,-77.036871,
-         116.407395,-122.332071,-87.629798,-79.383184,-97.743061,121.473701,72.877656,2.352222,
-         77.594563,-75.165222,-112.074037,37.6173)
-bar <- c(37.77493,37.338208,42.360083,40.712784,34.052234,32.715738,51.507351,38.907192,39.904211,
-         47.60621,41.878114,43.653226,30.267153,31.230416,19.075984,48.856614,12.971599,39.952584,33.448377,55.755826)
-zaz <- c(6471,4175,3144,2106,1450,1410,842,835,758,727,688,628,626,510,497,449,419,413,325,318)
-df <- data.frame(foo, bar, zaz)
-glimpse(df)
-head(df)
+table(penguins$species)
 ```
 
-To make a scatter plot specify the data frame as the first argument in the `ggplot()` function and the `aes()` function as the second argument. The arguments of the `aes()` function are the x and y positions as `foo` and `bar`, respectively. The plot is rendered after adding the geometric object `geom_point()` as a layer.
+There are 152 Adelie, 68 Chinstrap, and 124 Gentoo penguins.
+
+To create a data frame that only includes female penguins we type
 ```{r}
-ggplot(data = df, 
-       mapping = aes(x = foo, y = bar)) +
-  geom_point()
+( df <- penguins %>% 
+          filter(sex == "female") )
+```
+  
+To create a data frame that only includes penguins that are not of species Adalie we type
+```{r}
+( df <- penguins %>% 
+          filter(species != "Adelie") )
 ```
 
-We are mapping data to aesthetic attributes. The _points_ in the scatter plot are geometric objects that we draw. In {ggplot2} lingo, the points are _geoms_. More specifically the points are _point geoms_ that we denote syntactically with the function `geom_point()`.
-
-All geometric objects have aesthetic attributes. Things like:
-
-* x-position
-* y-position
-* color
-* size
-* transparency
-
-When we create a data visualization in {ggplot2}, we are creating a mapping between variables in our data and the aesthetic attributes of the geometric objects in our visualization. When we visualize data, we are mapping between variables in our data frame and the aesthetic attributes of the geometric objects in the plot.
-
-In our scatter plot example, when we create this plot, we're mapping `foo` to the x-position aesthetic and we're mapping `bar` to the y-position aesthetic. This may seem trivial `foo` is the x-axis and `bar` is on the y-axis. We can do that in Excel.
-
-But here there is a deeper structure. Theoretically, geometric objects (i.e., the things we draw in a plot, like points) don't just have attributes like position. They have a color, size, etc. 
-
-For example here we map a new variable to the size aesthetic.
+To create a data frame containing only penguins that weigh more than 6000 grams we type
 ```{r}
-ggplot(data = df, 
-       mapping = aes(x = foo, y = bar)) +
-  geom_point(aes(size = zaz))
+( df <- penguins %>% 
+          filter(body_mass_g > 6000) )
 ```
 
-We changed a scatter plot to a bubble chart by mapping a new variable to the size aesthetic. Any visualization we see can be deconstructed into geom specifications and mapping from data to the aesthetic attributes of the geometric objects.
-
-Second principle: Build plots in layers
-
-The principle of layering is important because to create more advanced visualizations, we often need to:
-
-* Plot multiple datasets, or
-* Plot a dataset with additional contextual information contained in a second dataset, or
-* Plot summaries or statistical transformations over the raw data
-
-Let's modify the bubble chart by getting additional data and plotting it as a new layer below the bubbles. First get the data from the {maps} package and store it in a new data frame.
+To create a data frame with female penguins that have flippers longer than 220 mm we type
 ```{r}
-if(!require(maps)) install.packages(pkgs = "maps", repos = "http://cran.us.r-project.org")
-library(maps)
-
-df2 <- map_data("world") %>%
-  glimpse()
+( df <- penguins %>% 
+          filter(flipper_length_mm > 220 & 
+                 sex == "female") )
 ```
 
-Plot the new data as a new layer underneath the bubbles.
+To create a data frame containing rows where the bill length value is NOT missing.
 ```{r}
-ggplot(data = df, aes(x = foo, y = bar)) +
-  geom_polygon(data = df2, aes(x = long, y = lat, group = group)) +
-  geom_point(aes(size = zaz), color = "red")
+( df <- penguins %>% 
+          filter(!is.na(bill_length_mm)) )
 ```
 
-This is the bubble chart from earlier in the post with a new layer added. We transformed a bubble chart into a new visualization called a "dot distribution map," which is much more insightful and much more visually interesting.
+Note that this filtering will keep rows with other column values missing values but there will be no penguins where the `bill_length` value is `NA`.
 
-The bubble chart is a modified scatter plot and the dot distribution map is a modified bubble chart.
-
-We used two of the data visualization principles (mapping & layering) to build this visualization:
-
-* To create the scatter plot, we mapped `foo` to the x-aesthetic and mapped `bar` to the y-aesthetic
-* To create the bubble chart, we mapped a `zaz` to the size-aesthetic
-* To create the dot distribution map, we added a layer of polygon data under the bubbles.
-
-Third principle: Iteration (step by step)
-
-The third principle is about process. The process begins with mapping and layering but ends with iteration when we add layers that modify scales, legends, colors, etc. The syntax of `ggplot` _layerability_ enables and rewards iteration. 
-
-Let's assign to `p1` the output of our plot.
+Finally, to compute the average bill length for each species.
 ```{r}
-p1 <- ggplot(data = df, 
-             mapping = aes(x = foo, y = bar)) +
-        geom_polygon(data = df2, 
-                     mapping = aes(x = long, y = lat, group = group)) +
-        geom_point(aes(size = zaz), color = "red")
+penguins %>%
+  group_by(species) %>%
+  summarize(AvgBL = mean(bill_length_mm, na.rm = TRUE))
 ```
 
-```{r}
-p2 <- p1 + xlab("Longitude") + ylab("Latitude")
-p2 <- p2 + scale_size_continuous(name = "Venture Capital Investment\n(USD, Millions)\n")
-p2
-```
+Manipulating data is part of the iterative cycle of data science, along with visualizing, and modeling.
 
-The `facet_wrap()` function is a layer to iterate (repeat) the entire plot conditional on another variable. It is like the `group_by()` function in the data grammar.
+The iterative cycle of data science:
 
-Example 1: Tornadoes
+1. Generate questions about our data.
+2. Search for answers by manipulating, visualizing, and modeling the data.
+3. Use what we learn to refine our questions and/or ask new ones.
 
-We plot the number of tornadoes by year for the state of Kansas. Recall, the data are in the data frame `Torn.df`.
-```{r}
-Torn.df %>%
-  filter(ST == "KS") %>%
-  group_by(Year) %>%
-  summarize(nT = n()) %>%
-ggplot(mapping = aes(x = Year, y = nT)) +
-  geom_line()
-```
+We use questions as tools to guide our investigation. When we ask a question, the question focuses our attention on a specific part of our data set and helps us decide what to do.
+
+For additional practice working with data using functions from the {tidyverse} package.
+
+* See http://r4ds.had.co.nz/index.html
+* Cheat sheets http://rstudio.com/cheatsheets
