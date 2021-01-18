@@ -10,9 +10,19 @@ editor_options:
 
 **"Good coding style is like correct punctuation: you can manage without it, butitsuremakesthingseasiertoread."** --- Hadley Wickham
 
+Schedule for posting lessons
+
 ## Working with data frames using functions from the {tidyverse} set of packages
 
-Tibbles are data frames that things easier. R is an old language, and some things that were useful 10 or 20 years ago now get in your way. To make a data frame a tibble (tabular data frame) use the `as_tibble()` function.
+Data wrangling (data munging) is transforming data from one format into another to make interpretation easier.
+
+The {dplyr} package as part of the {tidyverse} set of packages includes functions that wrangle data frames in a friendly and logical way. We were introduced to data frames last week. 
+
+The functions perform operations on data frames and return data frames. Operations include selecting columns, filtering rows, re-ordering rows, adding new columns, and summarizing data.
+
+Tibbles are data frames that make things easier when working with these functions. R is an old language. Some things that were useful 10 or 20 years ago now get in the way. 
+
+To make a data frame a tibble (tabular data frame) use the `as_tibble()` function from the {tidyverse} set of packages. For example, `airquality` is an object containing daily ozone and weather data. The function `class()` tells us that it is a data frame. After applying the function `as_tibble()` and assigning it to an object with the same name, the function `class()` tells us it is also now known as a tabled data frame.
 ```{r}
 library(tidyverse)
 
@@ -23,38 +33,43 @@ class(airquality)
 
 Click on `airquality` in the environment. It is a data frame. We will use the terms 'tibble' and 'data frame' interchangeably (mostly).
 
-Now we are ready to look at some of the commonly used verbs and how to apply them to the data frame `airquality`.
+Now we are ready to look at some of the commonly used functions and how to apply them to the data frame `airquality`.
 
 The function `select()` chooses variables by name. For example, choose the month, day, and temperature columns.
+```{r}
+select(airquality, Month, Day, Temp)
+```
+
+The first argument of each of these function takes a data frame object. So we can use the piping operator `%>%` to make the code more human readable. 
 ```{r}
 airquality %>%
   select(Month, Day, Temp)
 ```
 
-Suppose we want a new data frame with only the temperature and ozone concentrations.
+Note that here the result is printed to the console but it is NOT assigned to an object.
+
+Create a new data frame with only the temperature and ozone concentrations.
 ```{r}
 df <- airquality %>%
         select(Temp, Ozone)
-df
 ```
 
-We include an assignment operator (`<-`) and an object name (here `df`).
+We include an assignment operator (`<-`) and an object name (here `df`). Nothing gets printed to the console but the object `df` shows up in our environment.
 
-Note: The result of applying a {dplyr} verb is a data frame. From a data frame object to a data frame object.
+Note: The result is a data frame. The {tidyverse} way is to go from a data frame object to a data frame object.
 
-The function `filter()` chooses observations based on specific values. Suppose we want only the observations where the temperature is at or above 80F.
+The function `filter()` chooses observations based on specific values. Create a new data frame with only the observations where the temperature is at or above 80F.
 ```{r}
-airquality %>%
-  filter(Temp >= 80)
+( df <- airquality %>%
+          filter(Temp >= 80) )
 ```
 
 The result is a data frame with the same 6 columns but now only 73 observations. Each of the observations has a temperature of at least 80F.
 
-Suppose we want a new data frame keeping only observations where temperature is at least 80F AND winds less than 5 mph.
+Create a new data frame keeping only observations where temperature is at least 80F AND winds less than 5 mph.
 ```{r}
-df <- airquality %>% 
-  filter(Temp >= 80 & Wind < 5)
-df
+( df <- airquality %>% 
+  filter(Temp >= 80 & Wind < 5) )
 ```
 
 The function `arrange()` orders the rows by values given in a particular column.
@@ -63,9 +78,9 @@ airquality %>%
   arrange(Solar.R)
 ```
 
-The ordering is from lowest value of radiation to highest value. Here we see the first 10 rows. Note `Month` and `Day` are no longer chronological.
+The ordering is from lowest value of radiation to highest value. Here we see the first 10 rows. Note the rows are no longer chronological.
 
-Repeat but order by the value of air temperature.
+Repeat, but order by air temperature.
 ```{r}
 airquality %>%
   arrange(Temp)

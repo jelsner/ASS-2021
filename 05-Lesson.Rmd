@@ -10,7 +10,7 @@ editor_options:
 
 # Making graphs with functions from the {ggplot2} package
 
-A recent 2016 survey by O'Reilly media showed that {ggplot2} is the most frequently used data visualization tool among employed data scientists. It's popular because it teaches you how to think about visualizing your data. There are a few principles underlying the syntax.
+The {ggplot2} package is the most frequently used data visualization tool among data scientists. It is used extensively by the New York Times and 538. It's popular because it teaches you how to think about visualizing your data. There are a few principles underlying the syntax.
 
 1. Mapping data to aesthetics
 2. Layering
@@ -18,12 +18,14 @@ A recent 2016 survey by O'Reilly media showed that {ggplot2} is the most frequen
 
 We make the functions available to our current working directory by typing
 ```{r}
+if(!require(ggplot2)) install.packages(pkgs = "ggplot2", repos = "http://cran.us.r-project.org")
+
 library(ggplot2)
 ```
 
 First principle: Map data to aesthetics
 
-Consider the following vectors of data. Create a data frame `df` using the `data.frame` function.
+Consider the following numeric vectors (`foo`, `bar` and `zaz`). Create a data frame `df` using the `data.frame()` function.
 ```{r}
 foo <- c(-122.419416,-121.886329,-71.05888,-74.005941,-118.243685,-117.161084,-0.127758,-77.036871,
          116.407395,-122.332071,-87.629798,-79.383184,-97.743061,121.473701,72.877656,2.352222,
@@ -32,18 +34,24 @@ bar <- c(37.77493,37.338208,42.360083,40.712784,34.052234,32.715738,51.507351,38
          47.60621,41.878114,43.653226,30.267153,31.230416,19.075984,48.856614,12.971599,39.952584,33.448377,55.755826)
 zaz <- c(6471,4175,3144,2106,1450,1410,842,835,758,727,688,628,626,510,497,449,419,413,325,318)
 df <- data.frame(foo, bar, zaz)
-glimpse(df)
+
 head(df)
 ```
 
-To make a scatter plot specify the data frame as the first argument in the `ggplot()` function and the `aes()` function as the second argument. The arguments of the `aes()` function are the x and y positions as `foo` and `bar`, respectively. The plot is rendered after adding the geometric object `geom_point()` as a layer.
+To make a scatter plot using {ggplot2} syntax we use the `ggplot()` function. Note that the package name is {ggplot2} but the function is `ggplot()` (without the 2). 
+
+Inside the `ggplot()` function we specify the data frame with the `data =` argument. We specify what columns from the data frame are to be mapped to 'aesthetics' with the `aes()` function using the `mapping =` argument. Note that the `aes()` function is nested inside the `ggplot()` function. More on this shortly.
+
+For a scatter plot the aesthetics must include the x and y coordinates at a minimum, and for this example they are `foo` and `bar` respectively.
+
+Then to rendered the scatter plot we include the function `geom_point()` as a layer with the `+` symbol. Numeric values specified by the `x =` and `y =` in the `aes()` function are rendered as points in a two-dimensional cartesian plane.
 ```{r}
 ggplot(data = df, 
        mapping = aes(x = foo, y = bar)) +
   geom_point()
 ```
 
-We are mapping data to aesthetic attributes. The _points_ in the scatter plot are geometric objects that we draw. In {ggplot2} lingo, the points are _geoms_. More specifically the points are _point geoms_ that we denote syntactically with the function `geom_point()`.
+We map our data values to aesthetic attributes. The _points_ in the scatter plot are geometric objects that get drawn. In {ggplot2} lingo, the points are _geoms_. More specifically, the points are point _geoms_ that are denoted syntactically with the function `geom_point()`.
 
 All geometric objects have aesthetic attributes. Things like:
 
@@ -53,9 +61,7 @@ All geometric objects have aesthetic attributes. Things like:
 * size
 * transparency
 
-When we create a data visualization in {ggplot2}, we are creating a mapping between variables in our data and the aesthetic attributes of the geometric objects in our visualization. When we visualize data, we are mapping between variables in our data frame and the aesthetic attributes of the geometric objects in the plot.
-
-In our scatter plot example, when we create this plot, we're mapping `foo` to the x-position aesthetic and we're mapping `bar` to the y-position aesthetic. This may seem trivial `foo` is the x-axis and `bar` is on the y-axis. We can do that in Excel.
+When we visualize our data using {ggplot2} syntax, we are creating a mapping between variables in our data frame and the aesthetic attributes of geometric objects. When we create the scatter plot we are mapping `foo` to the x-position aesthetic and we're mapping `bar` to the y-position aesthetic. This may seem trivial `foo` is the x-axis and `bar` is on the y-axis. We can do that in Excel.
 
 But here there is a deeper structure. Theoretically, geometric objects (i.e., the things we draw in a plot, like points) don't just have attributes like position. They have a color, size, etc. 
 
@@ -66,11 +72,11 @@ ggplot(data = df,
   geom_point(aes(size = zaz))
 ```
 
-We changed a scatter plot to a bubble chart by mapping a new variable to the size aesthetic. Any visualization we see can be deconstructed into geom specifications and mapping from data to the aesthetic attributes of the geometric objects.
+We changed a scatter plot to a bubble chart by mapping a new variable to the size aesthetic. Any visualization we see can be deconstructed into _geom_ specifications and mapping from data to the aesthetic attributes of the geometric objects.
 
 Second principle: Build plots in layers
 
-The principle of layering is important because to create more advanced visualizations, we often need to:
+The principle of layering is important. To create great visualizations, we often need to:
 
 * Plot multiple datasets, or
 * Plot a dataset with additional contextual information contained in a second dataset, or
