@@ -8,6 +8,8 @@ editor_options:
   chunk_output_type: console
 ---
 
+**"If you're stuck on a coding issue, sleep on it. That way when you wake up and try to fix it and it's still broken, at least you got some sleep."** --- Kelly Vaughn
+
 # Making graphs with functions from the {ggplot2} package
 
 The {ggplot2} package is the most frequently used visualization tool among data scientists. It is used extensively including the New York Times and 538. It's popular because it is built on the theoretical principles of good data visualization.

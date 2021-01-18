@@ -1,0 +1,404 @@
+---
+title: "Lesson 7"
+author: "James B. Elsner"
+date: "February 1, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+
+## Attribute variables
+
+Recall attributes are the variables (stored as columns) in a spatial data frame.
+
+There is no harm in keeping the geometry column because data operations on `sf` objects only change an object's geometry when appropriate (e.g. by dissolving borders between adjacent polygons following aggregation). This means that the speed of operations with attribute data in `sf` objects is the same as with columns in a data frames.
+
+Subset functions include `[`, `subset()` and `$`. {dplyr} subset functions include `select()`, `filter()`, and `pull()`. Both sets of functions preserve the spatial components of attribute data in `sf` objects.
+
+The `[` operator can subset rows and columns. We use indices to specify the elements we wish to extract from an object, e.g. object[i, j], with i and j typically being numbers representing rows and columns. Leaving i or j empty returns all rows or columns, so `world[1:5, ]` returns the first five rows and all columns. Here are some examples.
+```{r}
+world[c(1, 5, 9), ] # subset rows by position
+world[, 1:3] # subset columns by position
+world[, c("name_long", "lifeExp")] # subset columns by name
+```
+
+Here we use logical vectors for subsetting. First we create a logical vector `sel_area` 
+```{r}
+sel_area <- world$area_km2 < 10000
+head(sel_area)
+summary(sel_area)
+```
+
+And then we select only cases from the `world` simple feature dsta frame where the elements of the `sel_area` vector are `TRUE`.
+```{r}
+small_countries <- world[sel_area, ]
+```
+
+This creates a new simple feature data frame, `small_countries`, containing nations whose surface area is smaller than 10,000 sq km.
+
+The base R function `subset()` provides another way to get the same result.
+```{r}
+small_countries <- subset(world, area_km2 < 10000)
+```
+
+Importantly the {dplyr} verbs can also be used on {sf} objects. The main {dplyr} subsetting functions are `select()` and `filter()`.
+
+But caution! The {dplyr} (and  {raster}) package has a function called `select()`. When using both packages, the function in the most recently attached package will be used, 'masking' the incumbent function. 
+
+This can generate error messages containing text like: unable to find an inherited method for function 'select' for signature "sf". To avoid this error message, and prevent ambiguity, we use the long-form function name, prefixed by the package name and two colons `dplyr::select()`.
+
+The `select()` function selects columns by name or position. For example, we can select only two columns, `name_long` and `pop`, with the following command.
+```{r}
+world1 <- world %>%
+  select(name_long, pop)
+names(world1)
+```
+
+Note that the result is a simple feature data frame with the geometry column.
+
+The `select()` function lets us subset and rename columns at the same time.
+```{r}
+world2 <- select(world, 
+                 name_long, 
+                 population = pop)
+world2 <- world %>%
+  select(name_long,
+         population = pop)
+names(world2)
+```
+
+The `pull()` function will return a single vector.
+```{r}
+population <- world %>%
+  pull(pop)
+head(population)
+```
+
+The `filter()` function is {dplyr}'s equivalent of base R `subset()` function. It keeps only rows matching given criteria, e.g., only countries with a very high average life expectancy.
+```{r}
+world3 <- world %>%
+  filter(lifeExp > 82)
+head(world3)
+```
+
+Aggregation summarizes a data frame by a grouping variable, typically an attribute column. An example of attribute aggregation is calculating the number of people per continent based on country-level data (one row per country). 
+
+The `world` dataset contains the necessary ingredients: the columns `pop` and `continent`, the population and the grouping variable, respectively. The goal is to find the `sum()` of country populations for each continent.
+
+This is done with the `group_by()` and `summarize()` functions from the {dplyr} package. 
+```{r}
+library(dplyr)
+world_agg <- world %>%
+  group_by(continent) %>%
+  summarize(pop = sum(pop, na.rm = TRUE))
+head(world_agg)
+```
+
+This approach gives us control over the new column names. For example to calculate the Earth's population and the number of countries type
+```{r}
+world %>% 
+  summarize(pop = sum(pop, na.rm = TRUE),
+            nC = n())
+```
+
+The two columns in the resulting attribute table are `pop` and `nC`. The functions `sum()` and `n()` were the aggregating functions. 
+
+The result is an `sf` object with a single row representing the world (this works thanks to the geometric operation called 'union').
+
+We can chain together functions to find the world's three most populous continents and the number of countries they contain.
+```{r}
+world %>% 
+  select(pop, continent) %>% 
+  group_by(continent) %>% 
+  summarize(pop = sum(pop, na.rm = TRUE), 
+            nC = n()) %>% 
+  top_n(n = 3, wt = pop) %>%
+  st_set_geometry(value = NULL) 
+```
+
+Combining data from different sources based on a shared 'key' variable is common. The {dplyr} package has multiple join functions including `left_join()` and `inner_join()`. Names follow conventions used in the SQL database language.
+
+Here we see how to join non-spatial datasets to `sf` objects. Join functions work the same on `data.frames` and `sf` objects. The most common type of attribute join on spatial data takes an `sf` object as the first argument and adds columns to it from a `data.frame` specified as the second argument.
+
+For example, we combine data on coffee production with the world dataset. The coffee data is in a data frame called `coffee_data` from the {spData} package (see `?coffee_data` for details). It has 3 columns: `name_long` names major coffee-producing nations and `coffee_production_2016` and `coffee_production_2017` contain estimated values for coffee production in units of 60-kg bags in each year. 
+
+The `left_join()` function, which preserves the first dataset, merges `world` with `coffee_data`.
+```{r}
+world_coffee <- left_join(world, 
+                          coffee_data)
+class(world_coffee)
+```
+
+Because the input data frames share a variable (`name_long`) the join works without using the `by =` argument (see `?left_join` for details). The result is an `sf` object identical to the original world object but with two new variables (with column indices 11 and 12) on coffee production.
+```{r}
+names(world_coffee)
+```
+
+For joining to work, a 'key' variable must be supplied in both datasets.
+
+Another feature of `left_join()` is that the results have the same number of rows as the first dataset. Although there are only 47 rows of data in `coffee_data`, all 177 the country records in `world` are kept intact in `world_coffee` (and `world_coffee2`). Rows in the first dataset with no match are assigned `NA` values for the new coffee production variables. 
+
+If we want to keep only countries that have a match in the key variable then we use `inner_join()`.
+```{r}
+world_coffee_inner <- inner_join(world, 
+                                 coffee_data)
+nrow(world_coffee_inner)
+```
+
+Note that the result of `inner_join()` has only 45 rows compared with 47 in coffee_data. What happened to the other two rows? We can identify the rows that did not match using the `setdiff()` function.
+```{r}
+setdiff(coffee_data$name_long, world$name_long)
+```
+
+`Others` accounts for one row not present in the `world_coffee` dataset and  name of the Democratic Republic of the Congo accounts for the other. The name has been abbreviated, causing the join to miss it. 
+
+Here we use the `str_subset()` function (string matching) from the {stringr} package to confirm what 'Congo, Dem. Rep.' of should be.
+```{r}
+library(stringr)
+str_subset(world$name_long, "Dem*.+Congo")
+```
+
+To fix this issue, we will create a new version of `coffee_data` and update the name. Note: `grepl()` returns a logical vector for names that contain 'Congo'.
+```{r}
+coffee_data$name_long[grepl("Congo", coffee_data$name_long)] <- str_subset(world$name_long, "Dem*.+Congo")
+world_coffee_match <- inner_join(world, coffee_data)
+nrow(world_coffee_match)
+```
+
+It is also possible to join in the other direction: starting with a regular data frame and adding variables from a simple features object. 
+
+Often, we would like to create a new column based on already existing columns. For example, we want to calculate population density for each country. For this we need to divide a population column, here `pop`, by an area column, here `area_km2` with unit area in square kilometers. 
+
+We use one of the verbs - `mutate()` or `transmute()`. `mutate()` adds new columns in the `sf` object (the last one is reserved for the geometry).
+```{r}
+world %>% 
+  mutate(pop_dens = pop / area_km2)
+```
+
+The difference between `mutate()` and `transmute()` is that the latter skips all other existing columns (except for the sticky geometry column):
+
+More information: https://geocompr.robinlovelace.net/attr.html
+
+## Areal weighted interpolation
+
+Areal weighted interpolation estimates the value of some attribute from a set of polygons to an overlapping but incongruent set of target polygons. For example, suppose we want demographic information given at the Census tract level to be estimated within the tornado damage path.
+
+Obviously tornado damage paths do not align with census tract boundaries, so areal interpolation is used to produce population estimates at the tornado level.
+
+Two function prefixes are available in the {areal} package that allow users to take advantage of RStudio's auto complete.
+
+* `ar_` - data and functions that are used for multiple interpolation methods
+* `aw_` - functions that are used specifically for areal weighted interpolation
+
+```{r}
+library(areal)
+```
+
+The package contains four overlapping data sets.
+```{r, eval=FALSE}
+data(package = "areal")
+```
+
+* `ar_stl_race` (2017 ACS demographic counts at the census tract level; n = 106)
+* `ar_stl_asthma` (2017 asthma rates at the census tract level; n = 106)
+* `ar_stl_wards` (the 2010 political subdivisions in St. Louis; n = 28).
+* `ar_stl_wardsClipped` Clipped (the 2010 political subdivisions in St. Louis clipped to the Mississippi River shoreline; n = 28).
+
+Functions in the {areal} package assume that data are simple feature data frames. 
+
+A projected coordinate reference system is recommend. All data must be projected using the same system. Unnecessary columns should be removed prior to projection.
+
+Areal weighted interpolation makes a single (significant) assumption about the data. Populations are evenly distributed within the source data. 
+
+Imagine a census tract with 3,000 residents. Areal weighted interpolation assumes that these 3,000 residents are evenly spread through out the tract. 
+
+This assumption is not likely to be valid in general (e.g., tracts with large parks or dense housing developments alongside commercial buildings).
+
+The interpolation is done with the `aw_interpolate()` function.
+
+### Example 1: Population given at tract level interpolated to the ward level
+
+The number of people within each Census tract is known. But suppose we want the number of people in each ward. Wards are overlapping but incongruent polygons relative to the tracts.
+
+The simple feature data frame `ar_stl_wards` contains a vector of unique ward numbers (`WARD`) and a list of unique `POLYGON` geometry features.
+```{r}
+glimpse(ar_stl_wards)
+```
+
+The simple feature data frame `ar_stl_race` contains a vector of unique idenfiers (`GEOID`), a vector of total population `TOTAL_E`, and a list of unique `POLYGON` geometry features. 
+```{r}
+glimpse(ar_stl_race)
+```
+
+Analogy: The cookie cutters are the simple feature polygons defining the boundaries we want values interpolated to. This is defined as the target object which is the first argument in the `aw_interpolate()` function. We need to identify each cookie cutter with a unique target id (`tid`).
+
+The dough is the underlying simple feature variable that we want interpolated. It is defined in a source simple feature data frame (`source =`). Each feature must have a unique id (`sid`). The variable to be interpolated is specified in the `extensive =` argument.
+
+Here the cookie cutters are the ward `POLYGON`s and the tract-level population (`TOTAL_E`) is the dough.
+
+Finally, to ensure that all individuals within each tract are allocated out to wards we use `weight = "sum"`.
+```{r}
+aw_interpolate(ar_stl_wards, 
+               tid = WARD, 
+               source = ar_stl_race, 
+               sid = "GEOID",
+               extensive = "TOTAL_E",
+               weight = "sum",
+               output = "sf")
+```
+
+The function is capable of interpolating extensive and intensive variables.
+
+Intensive variable: Variable that is independent of the spatial units (e.g., population density, percentages); variable that has been normalized in some fashion.
+
+Extensive variable: Data dependent on the spatial units (e.g., population totals).
+
+If the variable is intensive then use `intensive = ` instead of `extensive = ` to specify the variable to be interpolated.
+
+Options are documented in both the function documentation (use `?aw_interpolate`) as well as in a dedicated vignette.
+
+
+### Example 2: Estimate total residential population under each tornado path during 2014
+
+Here we are interested in the total (residential) population under each tornado occurring in Florida during 2014. We begin by creating a polygon geometry for each tornado record.
+
+Import the data. There are two files each with the exact set of tornadoes but with different geometries. The `..-aspath.zip` has `LINE` geometry indicating the straight line track. 
+```{r}
+sfdfL <- st_read(dsn = "1950-2018-torn-aspath") %>%
+  filter(yr == 2014, st == "FL")
+```
+
+Next we project the geographic coordinate reference system to a specific Lambert conic conformal projection. The spatial units are set to meters.
+```{r}
+sfdfL <- st_transform(sfdfL, 
+                      crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=m")
+```
+
+Next we add a buffer to the geometries to represent the tornado path ('footprint'). The width of the buffer is 1/2 the width given in the attribute table in the column `wid`. First we create new variables giving the width (and length) in units of meters.
+```{r}
+sfdfL <- sfdfL %>%
+  mutate(Width = wid * .9144,
+         Length = len * 1609.34)
+sfdfB <- st_buffer(sfdfL, 
+                   dist = sfdfL$Width/2,
+                   endCapStyle = 'ROUND')
+```
+
+Next, get the population data from the U.S. Census Bureau. First get an API key from http://api.census.gov/data/key_signup.html
+
+Here I've already done this and put the relevant data on my website. The functions are from Kyle Walker's {tidycensus} package. Here is how I did it. You will need to request and get a U.S. Census API. https://www.census.gov/developers/
+```{r, eval=FALSE}
+library(tidycensus)
+census_api_key("YOUR API KEY GOES HERE", 
+               install = TRUE)
+```
+
+The 2014 population data are available using the `get_acs()` function from the {tidycensus} package. Here tract-level total population for the country (`B01003_001`). If we want tracts or smaller then we need to specify by state with `state = `.
+```{r, eval=FALSE}
+tractPop <- get_acs(geography = "tract",
+                    year = 2014,
+                    variables = "B01003_001",
+                    state = "FL",
+                    geometry = TRUE)
+tractPop <- st_transform(tractPop, 
+                         crs = st_crs(sfdfB))
+st_write(tractPop, 
+         dsn = "tractPop.shp")
+```
+
+Here we start with the Census data that was written out using the code above and placed on my website as a shapefile (`tractPop`).
+```{r}
+download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/tractPop.zip",
+              destfile = "temporary.zip")
+unzip("temporary.zip")
+tractPop <- st_read(dsn = "tractPop") 
+head(tractPop)
+```
+
+Here the cookie cutters are the damage path POLYGONS and the tract-level population estimate is the dough.
+
+Here we want `weight = "total"` so that the proportion of the tract area that is covered by the tornado path is used to weight the population of the tract. To simply preview the weights we use the `aw_preview_weights()` function as follows. The first argument is the cookie cutter simple feature data frame name, the second argument (`tid`) is the unique row identifier in the cookie cutter data frame. The `source =` argument names the simple feature data frame from which the cuts are made (here `tractPop`). The `sid =` argument is the unique row identifier in the source data frame. The final argument is the type of interpolation (either `intensive` or `extensive` in quotes).
+```{r}
+aw_preview_weights(sfdfB, 
+                   tid = om, 
+                   source = tractPop, 
+                   sid = GEOID, 
+                   type = "extensive")
+```
+
+The first tornado in `sfdfB` simple features data frame covers .035% (`extensiveTotal` column) of the tract with GEOID 12003040102.
+
+To perform the interpolation we remove the `type =` argument and replace it with the `extensive =` argument and where the value of the argument is the name of the variable we want to interpolated. Here that variable is the population estimate at the tract level with name `estimate`. We put the column name in quotes. We specify `weight = "total"` since we want the interpolation to have the same units as the extensive variable (here population) and we specify the `output =` to be a simple feature.
+```{r}
+out.sf <- aw_interpolate(sfdfB, 
+                         tid = om, 
+                         source = tractPop, 
+                         sid = GEOID, 
+                         extensive = "estimate",
+                         weight = "total", 
+                         output = "sf")
+```
+
+The simple feature data frame (`out.sf`) contains all the same variables as `sfdfB` with a new column `estimate` giving the estimated population under the path of each tornado in Florida during 2014.
+```{r}
+head(out.sf)
+```
+
+## Spatial aggregation
+
+https://www.jla-data.net/eng/spatial-aggregation/
+
+Example: State (U.S.) boundaries as simple feature data frames
+
+Consider the U.S. state of Kansas. A boundary file containing the borders as a polygon is available in the {USAboundaries} package. The package contains historical and contemporary boundaries with the data provided by the U.S. Census Bureau.
+
+Individual states are extracted using the `us_states()` function.
+```{r}
+library(USAboundaries)
+library(sf)
+KS <- us_states(states = "Kansas")
+class(KS)
+plot(KS$geometry)
+```
+
+We transform the CRS to a Web Mercator using the EPSG 3857 code.
+```{r}
+KS <- st_transform(KS, crs = 3857)
+```
+
+Suppose we want to subset geographically rather than based on some value in a column of the data frame. For example here we subset the tornado initial locations by the boundaries defined by Kansas. We first import the initial genesis locations  and transform the native CRS to EPSG 3857.
+```{r}
+Alltors <- st_read(dsn = "1950-2018-torn-initpoint", 
+                   layer = "1950-2018-torn-initpoint") %>%
+  st_transform(crs = 3857)
+```
+
+We then use the `st_intersection()` function to determine the subset of all tornadoes that intersect the Kansas polygon. The first argument is the simple feature data frame that we want subsetted and the second defines the geometry over which the subsetting occurs.
+```{r}
+KStors <- st_intersection(Alltors, 
+                          KS$geometry)
+plot(KS$geometry)
+plot(KStors$geometry, add = TRUE)
+```
+
+Suppose we want to determine the distance between the geographic center of the state and the centroid of all the tornadoes?
+
+We start by computing the centroids for the state polygon and for the combined set of all Kansas tornadoes.
+```{r}
+KSgeocenter <- st_centroid(KS)
+KStorcenter <- st_centroid(st_combine(KStors))
+```
+
+Finally we make a map and then compute the distance in meters using the `st_distance()` function.
+```{r}
+plot(KS$geometry)
+plot(KSgeocenter$geometry, add = TRUE, col = "blue")
+plot(KStorcenter, add = TRUE, col = "red")
+st_distance(KSgeocenter, KStorcenter)
+```
+
+### Example: economic impact of a tornado
+
+See `tidycensus.Rmd`
