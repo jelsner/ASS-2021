@@ -370,6 +370,10 @@ KS <- st_transform(KS, crs = 3857)
 
 Suppose we want to subset geographically rather than based on some value in a column of the data frame. For example here we subset the tornado initial locations by the boundaries defined by Kansas. We first import the initial genesis locations  and transform the native CRS to EPSG 3857.
 ```{r}
+download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-initpoint.zip",
+              destfile = "1950-2018-torn-initpoint.zip")
+unzip("1950-2018-torn-initpoint.zip")
+
 Alltors <- st_read(dsn = "1950-2018-torn-initpoint", 
                    layer = "1950-2018-torn-initpoint") %>%
   st_transform(crs = 3857)
