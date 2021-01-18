@@ -10,7 +10,7 @@ editor_options:
 
 # Making graphs with functions from the {ggplot2} package
 
-The {ggplot2} package is the most frequently used data visualization tool among data scientists. It is used extensively by the New York Times and 538. It's popular because it teaches you how to think about visualizing your data. There are a few principles underlying the syntax.
+The {ggplot2} package is the most frequently used visualization tool among data scientists. It is used extensively including the New York Times and 538. It's popular because it is built on the theoretical principles of good data visualization.
 
 1. Mapping data to aesthetics
 2. Layering
@@ -30,21 +30,25 @@ Consider the following numeric vectors (`foo`, `bar` and `zaz`). Create a data f
 foo <- c(-122.419416,-121.886329,-71.05888,-74.005941,-118.243685,-117.161084,-0.127758,-77.036871,
          116.407395,-122.332071,-87.629798,-79.383184,-97.743061,121.473701,72.877656,2.352222,
          77.594563,-75.165222,-112.074037,37.6173)
+
 bar <- c(37.77493,37.338208,42.360083,40.712784,34.052234,32.715738,51.507351,38.907192,39.904211,
-         47.60621,41.878114,43.653226,30.267153,31.230416,19.075984,48.856614,12.971599,39.952584,33.448377,55.755826)
+         47.60621,41.878114,43.653226,30.267153,31.230416,19.075984,48.856614,12.971599,39.952584,
+         33.448377,55.755826)
+
 zaz <- c(6471,4175,3144,2106,1450,1410,842,835,758,727,688,628,626,510,497,449,419,413,325,318)
+
 df <- data.frame(foo, bar, zaz)
 
 head(df)
 ```
 
-To make a scatter plot using {ggplot2} syntax we use the `ggplot()` function. Note that the package name is {ggplot2} but the function is `ggplot()` (without the 2). 
+To make a scatter plot using {ggplot2} syntax, we use the `ggplot()` function. Note that the package name is {ggplot2} but the function is `ggplot()` (without the 2). 
 
 Inside the `ggplot()` function we specify the data frame with the `data =` argument. We specify what columns from the data frame are to be mapped to 'aesthetics' with the `aes()` function using the `mapping =` argument. Note that the `aes()` function is nested inside the `ggplot()` function. More on this shortly.
 
 For a scatter plot the aesthetics must include the x and y coordinates at a minimum, and for this example they are `foo` and `bar` respectively.
 
-Then to rendered the scatter plot we include the function `geom_point()` as a layer with the `+` symbol. Numeric values specified by the `x =` and `y =` in the `aes()` function are rendered as points in a two-dimensional cartesian plane.
+Then, to render the scatter plot, we include the function `geom_point()` as a layer with the `+` symbol. Numeric values are specified using the arguments `x =` and `y =` in the `aes()` function and are rendered as points in a two-dimensional cartesian plane.
 ```{r}
 ggplot(data = df, 
        mapping = aes(x = foo, y = bar)) +
@@ -53,7 +57,7 @@ ggplot(data = df,
 
 We map our data values to aesthetic attributes. The _points_ in the scatter plot are geometric objects that get drawn. In {ggplot2} lingo, the points are _geoms_. More specifically, the points are point _geoms_ that are denoted syntactically with the function `geom_point()`.
 
-All geometric objects have aesthetic attributes. Things like:
+All geometric objects have aesthetic attributes (aesthetics):
 
 * x-position
 * y-position
@@ -61,7 +65,7 @@ All geometric objects have aesthetic attributes. Things like:
 * size
 * transparency
 
-When we visualize our data using {ggplot2} syntax, we are creating a mapping between variables in our data frame and the aesthetic attributes of geometric objects. When we create the scatter plot we are mapping `foo` to the x-position aesthetic and we're mapping `bar` to the y-position aesthetic. This may seem trivial `foo` is the x-axis and `bar` is on the y-axis. We can do that in Excel.
+When we visualize data using {ggplot2} syntax, we are creating a mapping between variables in our data frame and the aesthetic attributes of geometric objects. In the scatter plot above we mapped `foo` to the x-position aesthetic and we mapped `bar` to the y-position aesthetic. This may seem trivial `foo` is the x-axis and `bar` is on the y-axis. We can do that in Excel.
 
 But here there is a deeper structure. Theoretically, geometric objects (i.e., the things we draw in a plot, like points) don't just have attributes like position. They have a color, size, etc. 
 
@@ -76,7 +80,7 @@ We changed a scatter plot to a bubble chart by mapping a new variable to the siz
 
 Second principle: Build plots in layers
 
-The principle of layering is important. To create great visualizations, we often need to:
+The principle of layering is important. To create good visualizations we often need to:
 
 * Plot multiple datasets, or
 * Plot a dataset with additional contextual information contained in a second dataset, or
@@ -86,6 +90,8 @@ Let's modify the bubble chart by getting additional data and plotting it as a ne
 ```{r}
 if(!require(maps)) install.packages(pkgs = "maps", repos = "http://cran.us.r-project.org")
 library(maps)
+
+library(tidyverse)
 
 df2 <- map_data("world") %>%
   glimpse()
@@ -134,7 +140,8 @@ Example 1: Tornadoes
 We plot the number of tornadoes by year for the state of Kansas. Recall, the data are in the file `Tornadoes.csv`.
 ```{r}
 Torn.df <- read_csv(file = "Tornadoes.csv") %>%
-  rename(Year = yr,
+  mutate(Year = yr,
+         Month = as.integer(mo),
          EF = mag)
 
 Torn.df %>%
@@ -155,9 +162,9 @@ Torn.df %>%
     geom_bar(stat = "identity")
 ```
 
-Here the argument `stat = "identity"` indicates the data are already tabulated. That is, by default `geom_bar()` tables the data if it is integer, character, or factor.
+Here the argument `stat = "identity"` indicates the data are already tabulated. That is, by default `geom_bar()` tables the data if it is integer, character, or factor (like the function `table()`).
 
-Improve the bar chart. Make it presentable for publication.
+Improve the bar chart to make it presentable for publication.
 ```{r}
 Torn.df %>%
   filter(Year >= 2007, EF != -9) %>%
@@ -228,8 +235,6 @@ We now have a data frame with two columns: `Year` and `AvgT` (annual average dai
 
 We now use the grammar of graphs to make a plot. We specify the x aesthetic as `Year` and the y aesthetic as the `AvgT`. We include a point layer and a line layer.
 ```{r}
-library(ggplot2)
-
 ggplot(df, aes(x = Year, y = AvgT)) +
   geom_point(size = 3) +
   geom_line() +
@@ -309,7 +314,7 @@ gLVG <- ggplot(LVG.df, aes(x = TmaxF)) +
   theme_minimal() +
   theme(legend.position = "none")
 
-install.packages("patchwork")
+#install.packages("patchwork")
 library(patchwork)
 
 gTLH / gLVG
@@ -317,18 +322,15 @@ gTLH / gLVG
 
 Bar plot of the number of tornadoes by month and by state. The code uses the {geofacet} package [@Hafen2020].
 ```{r}
-Torn.sf <- read_sf(dsn = "data/1950-2018-torn-initpoint")
-
 library(geofacet)
 library(scales)
 
-Torn.sf %>% 
-  as.data.frame() %>%
-  group_by(mo, st) %>%
+Torn.df %>% 
+  group_by(Month, st) %>%
   summarise(nT = n()) %>%
-  mutate(month = factor(month.name[mo], levels = month.name)) %>%
-#  filter(st != "DC") %>%
-ggplot(aes(as.factor(mo), nT)) +
+  mutate(month = factor(month.name[Month], levels = month.name)) %>%
+  filter(!st %in% c("DC", "PR", "VI")) %>%
+ggplot(aes(as.factor(Month), nT)) +
   geom_col(fill = "gray70") +
   facet_geo(~ st, grid = "us_state_grid3", scales = "free_y") +
   scale_x_discrete(breaks = 1:12, labels = c("J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D")) +
