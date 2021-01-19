@@ -10,19 +10,17 @@ editor_options:
 
 **"Good coding style is like correct punctuation: you can manage without it, butitsuremakesthingseasiertoread."** --- Hadley Wickham
 
-Schedule for posting lessons
+Schedule for posting lessons/assignments
 
 ## Working with data frames using functions from the {tidyverse} set of packages
 
-Data wrangling (data munging) is transforming data from one format into another to make interpretation easier.
+Data wrangling (data munging) is the process of transforming data from one format into another making it easier to summarize the information. 
 
-The {dplyr} package as part of the {tidyverse} set of packages includes functions that wrangle data frames in a friendly and logical way. We were introduced to data frames last week. 
+The {dplyr} package (part of the {tidyverse} set of packages) includes functions that wrangle data frames in an easy-to-remember and logical way. The functions perform operations on data frames and return data frames. Operations include selecting columns, filtering rows, re-ordering rows, adding new columns, and summarizing data. Recall that a data frame is an R object for storing data as observations and variables.
 
-The functions perform operations on data frames and return data frames. Operations include selecting columns, filtering rows, re-ordering rows, adding new columns, and summarizing data.
+A tibble (tabular data frame) is a type of data frame that make things easier when we use these functions. R is an old language. Some things that were useful 10 or 20 years ago get in the way now. 
 
-Tibbles are data frames that make things easier when working with these functions. R is an old language. Some things that were useful 10 or 20 years ago now get in the way. 
-
-To make a data frame a tibble (tabular data frame) use the `as_tibble()` function from the {tidyverse} set of packages. For example, `airquality` is an object containing daily ozone and weather data. The function `class()` tells us that it is a data frame. After applying the function `as_tibble()` and assigning it to an object with the same name, the function `class()` tells us it is also now known as a tabled data frame.
+To make a data frame a tibble use the `as_tibble()` function from the {tidyverse} set of packages. For example, `airquality` is an data frame object containing daily ozone and weather data. The function `class()` tells us that it is a data frame. After applying the function `as_tibble()` and assigning it to an object with the same name, the function `class()` tells us it is also now known as a tabled data frame.
 ```{r}
 library(tidyverse)
 
@@ -33,22 +31,24 @@ class(airquality)
 
 Click on `airquality` in the environment. It is a data frame. We will use the terms 'tibble' and 'data frame' interchangeably (mostly).
 
-Now we are ready to look at some of the commonly used functions and how to apply them to the data frame `airquality`.
+Let's look at some of the {dplyr} functions to see how they operate on the data frame `airquality`.
 
 The function `select()` chooses variables by name. For example, choose the month, day, and temperature columns.
 ```{r}
 select(airquality, Month, Day, Temp)
 ```
 
-The first argument of each of these function takes a data frame object. So we can use the piping operator `%>%` to make the code more human readable. 
+The first argument takes a data frame object (here `airquality`). So we can use the piping operator `%>%` to make the code easier to read. In this case the first argument is obtained from the name of the object in front of (before) the pipe. We read the pipe using the word _THEN_. 
 ```{r}
 airquality %>%
   select(Month, Day, Temp)
 ```
 
-Note that here the result is printed to the console but it is NOT assigned to an object.
+The literal translations is "Take the `airquality` data frame then select the columns with names `Month`, `Day` and `Temp`.
 
-Create a new data frame with only the temperature and ozone concentrations.
+Note here that the result is printed to the console but it is not assigned to an object.
+
+If we want to assign the result to an object we need the assignment operator `<-`. To create a new data frame with only the temperature and ozone concentrations.
 ```{r}
 df <- airquality %>%
         select(Temp, Ozone)
@@ -56,7 +56,7 @@ df <- airquality %>%
 
 We include an assignment operator (`<-`) and an object name (here `df`). Nothing gets printed to the console but the object `df` shows up in our environment.
 
-Note: The result is a data frame. The {tidyverse} way is to go from a data frame object to a data frame object.
+Note: The result is a data frame. The {tidyverse} syntax is to go from a data frame object to a data frame object.
 
 The function `filter()` chooses observations based on specific values. Create a new data frame with only the observations where the temperature is at or above 80F.
 ```{r}
@@ -66,19 +66,21 @@ The function `filter()` chooses observations based on specific values. Create a 
 
 The result is a data frame with the same 6 columns but now only 73 observations. Each of the observations has a temperature of at least 80F.
 
-Create a new data frame keeping only observations where temperature is at least 80F AND winds less than 5 mph.
+Note: Here I use a set of parentheses around the entire code chunk to assign and to print the result (or a summary of the result).
+
+Create a new data frame keeping only observations (rows) where the temperature is at least 80F and the wind is less than 5 mph.
 ```{r}
 ( df <- airquality %>% 
   filter(Temp >= 80 & Wind < 5) )
 ```
 
-The function `arrange()` orders the rows by values given in a particular column.
+The function `arrange()` orders the rows by values given in the column that is named.
 ```{r}
 airquality %>%
   arrange(Solar.R)
 ```
 
-The ordering is from lowest value of radiation to highest value. Here we see the first 10 rows. Note the rows are no longer chronological.
+Ordering is from the lowest value of radiation to the highest value. Here we see the first 10 rows. Note the rows are no longer chronological.
 
 Repeat, but order by air temperature.
 ```{r}
@@ -126,12 +128,11 @@ airquality %>%
 
 We've seen functions that compute statistics including `sum()`, `sd()`, `min()`, `max()`, `var()`, `range()`, `median()`. Others include:
 
-Summary function  | Description
------------------:|:-----------
-`n()`             | Length of the column
-`first()`         | First value of the column
-`last()`          | Last value of the column
-`n_distinct()`    | Number of distinct values
+Summary function: Description
+`n()`: Length of the column
+`first()`: First value of the column
+`last()`: Last value of the column
+`n_distinct()`: Number of distinct values
 
 Find the maximum and median wind speed and maximum ozone concentration values during the month of May. Also determine the number of observations during May.
 ```{r}
@@ -177,14 +178,13 @@ The mean is a model for the data. The statistical dependency of the mean implies
 
 In summary, the important verbs are
 
-Verb          | Description
--------------:|:-----------
-`select()`    | selects columns; pick variables by their names
-`filter()`    | filters rows; pick observations by their values
-`arrange()`   | re-orders the rows
-`mutate()`    | creates new columns; create new variables with functions of existing variables
-`summarize()` | summarizes values; collapse many values down to a single summary
-`group_by()`  | allows operations to be grouped
+Verb: Description
+`select()`: selects columns; pick variables by their names
+`filter()`: filters rows; pick observations by their values
+`arrange()`: re-orders the rows
+`mutate()`: creates new columns; create new variables with functions of existing variables
+`summarize()`: summarizes values; collapse many values down to a single summary statistic
+`group_by()`: allows operations to be grouped by variables
 
 The six functions form the basis of a grammar for data. We can only alter a data frame by reordering the rows (`arrange()`), picking observations and variables of interest (`filter()` and `select()`), adding new variables that are functions of existing variables (`mutate()`), collapsing many values to a summary (`summarise()`), and conditioning on variables (`group_by()`).
 
@@ -196,39 +196,7 @@ The syntax of the functions are all the same:
 
 These properties make it easy to chain together many simple lines of code to do complex data manipulations and summaries.
 
-### Florida precipitation
-
-Suppose we are interested in whether it is getting wetter or drier in Florida during spring? One way to examine this question is to divide the years into two groups early and late and compute averages.
-
-What is the average and variance of April rainfall since 1960?
-
-Import the data, select the month of April (`Apr`) and year (`Year`), group by years > 1960, summarize the two groups of April rainfall with the mean and variance.
-```{r}
-FLp.df <- read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt")
-
-FLp.df %>%
-  select(Apr, Year) %>%
-  group_by(Year > 1960) %>%
-  summarize(Avg = mean(Apr),
-            Var = var(Apr))
-```
-
-What month during 1965 was the wettest? How wet was it?
-
-Use the `pivot_longer()` function from the {tidyverse} packages to turn the wide data frame into a long data frame.
-```{r}
-FLp.df %>%
-  pivot_longer(cols = -Year)
-```
-
-Putting it together.
-```{r}
-FLp.df %>%
-  pivot_longer(cols = -Year) %>%
-  filter(Year == 1965) %>% 
-  summarize(MostRain = max(value), 
-            WhichMonth = which.max(value))
-```
+Let's look at some examples from my research.
 
 ### US tornadoes
 
@@ -238,7 +206,7 @@ Torn.df <- read_csv(file = "Tornadoes.csv")
 Torn.df
 ```
 
-Create new columns with the verb function `mutate()`
+The path length is in miles and the path width is in yards. We create new columns for length and width in metric units.
 
 New columns are created with the `mutate()` function. Here we assign to the object `Torn.df` the original data frame but with three new columns. `Length` as the damage path length in meters and `Width` as the damage path width in meters.
 ```{r}
@@ -250,7 +218,7 @@ Torn.df <- Torn.df %>%
 
 The new data frame has the same columns as the original data frame but it now includes the columns `Length`, and `Width`.
 
-Rename a column with `rename()`.
+The year is abbreviated and lower case and the EF damage rating is given by `mag`. Lets rename these columns.
 
 To give a column a new name use the `rename()` function (new name = old name). For example to change the name of the column `yr` to `Year` and `mag` to `EF` type
 ```{r}
@@ -262,7 +230,7 @@ Torn.df <- Torn.df %>%
 
 The original names of `yr` and `mag` are replaced with `Year` and `EF`.
 
-Select columns with `select()`
+Next let's keep only columns of interest.
 
 The `select()` function chooses specified columns by name to create a new data frame. Here we recycle the `Torn.df` name.
 ```{r}
@@ -281,15 +249,13 @@ glimpse(Torn.df)
 
 Note that we also change the name of the column when we use the `=` sign. For example `Month = mo`. `mo` is the original name of the column but it gets changed to `Month`.  
 
-The `select()` function is useful when there are many variables and we are only interested in a few of them.
-
 We can select columns having common character string names. For example, we select columns containing only variables beginning with the letter `s` use the `starts_with()` function.
 ```{r}
 Torn.df %>% 
   select(starts_with("s"))
 ```
 
-Filter rows with `filter()`
+Let's say we are interested in only the tornadoes that occurred during October of 1980.
 
 The `filter()` function selects a subset of the rows of a data frame. The arguments are filtering (subsetting) expressions evaluated using column names of the data frame. For example, we can select all tornadoes recorded during October of 1980.
 ```{r}
@@ -298,15 +264,13 @@ Torn.df %>%
          Year == 1980)
 ```
 
-`Month` and `Year` are column names in `df` that were created with the `rename()` and `select()` functions above.
-
-Create a new data frame containing only tornadoes originating in Wisconsin.
+Or lets create a new data frame containing only tornadoes originating in Wisconsin.
 ```{r}
 TornWI.df <- Torn.df %>%
   filter(ST == "WI")
 ```
 
-Arrange rows with `arrange()`
+What tornado was the deadliest?
 
 The function `arrange()` works like `filter()` except that instead of subsetting rows, it reorders them. It takes a data frame, and a set of column names (or more complicated expressions) to order by.
 
@@ -339,7 +303,7 @@ head(Fatalities)
 
 The result is a vector. This is equivalent to `Fatalities <- Torn.df$fat`.
 
-Summarize values with `summarise()`
+What is the median path length and path width?
 
 The `summarize()` function collapses a data frame to a single row.
 ```{r}
@@ -358,11 +322,11 @@ Grouped operations
 
 The verb functions are powerful when we combine them with the idea of 'group by', repeating the operation individually on groups of observations within the data frame. 
 
-We use the `group_by()` function to describe how to break a data frame down into groups of rows. We can then use the resulting object in the exactly the same functions as above; they'll automatically work 'by group' when the input is a grouped.
+We use the `group_by()` function to describe how to break a data frame down into groups of rows. We can then use the resulting object in the same functions as above; they'll automatically work 'by group' when the input is a grouped.
 
-Of the five verbs `summarize()` is easy to understand and quite useful.
+For example, what is the median path length and path width grouped by EF rating since 2007?
 
-For example, here we filter the data frame for years starting with 2007 then group by EF rating before summarizing the path length and path width using the `median()` function.
+Here we filter the data frame for years starting with 2007 then group by EF rating before summarizing the path length and path width using the `median()` function.
 ```{r}
 Torn.df %>%
   filter(Year >= 2007) %>%
@@ -418,6 +382,48 @@ Torn.df %>%
   group_by(ST) %>%
   summarize(nF = sum(Fatalities)) %>%
   arrange(desc(nF))
+```
+
+### Florida precipitation
+
+Suppose we are interested in whether it is getting wetter or drier in Florida during spring? One way to examine this question is to divide the years into two groups early and late and compute averages.
+
+What is the average and variance of April rainfall since 1960?
+
+Start by importing the data.
+```{r}
+FLp.df <- read_table(file = "http://myweb.fsu.edu/jelsner/temp/data/FLprecip.txt")
+FLp.df
+```
+
+The first column are the years and the next 12 columns contain monthly averaged rainfall in inches.
+
+Then select the values from the month of April (`Apr`) and year (`Year`), group by years > 1960, and finally, summarize the two groups of April rainfall with the mean and variance.
+```{r}
+FLp.df %>%
+  select(Apr, Year) %>%
+  group_by(Year > 1960) %>%
+  summarize(Avg = mean(Apr),
+            Var = var(Apr))
+```
+
+What month during 1965 was the wettest? How wet was it?
+
+We use the `pivot_longer()` function from the {tidyverse} packages to turn the wide data frame into a long data frame. We want all the values but those in the first column (`Year`) to be in a single column (by default labeled `value`).
+```{r}
+FLp.df %>%
+  pivot_longer(cols = -Year)
+```
+
+The result is a new data frame (not assigned an object name) with three columns. The first column labeled `Year` contains a list of years but year is repeated for each month. The second column labeled `name` contains the month abbreviations (which are the column names in the original wide data frame). The third column labeled `value` contains the corresponding monthly averaged rainfall.
+
+Now we can filter on `Year` and summarize.
+```{r}
+FLp.df %>%
+  pivot_longer(cols = -Year) %>%
+  filter(Year == 1965) %>% 
+  summarize(MostRain = max(value), 
+            WhichMonth = which.max(value))
 ```
 
 ### Palmer penguins
@@ -480,6 +486,8 @@ penguins %>%
   summarize(AvgBL = mean(bill_length_mm, na.rm = TRUE))
 ```
 
+### Summary
+
 Manipulating data is part of the iterative cycle of data science, along with visualizing, and modeling.
 
 The iterative cycle of data science:
@@ -490,7 +498,7 @@ The iterative cycle of data science:
 
 We use questions as tools to guide our investigation. When we ask a question, the question focuses our attention on a specific part of our data set and helps us decide what to do.
 
-For additional practice working with data using functions from the {tidyverse} package.
+For additional practice working with data using functions from the {tidyverse} set of packages.
 
 * See http://r4ds.had.co.nz/index.html
 * Cheat sheets http://rstudio.com/cheatsheets
