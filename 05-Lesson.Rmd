@@ -344,10 +344,21 @@ us_states %>%
             rP = range(total_pop_15))
 ```
 
-Thus we use a logarithmic scales.
-
-
+Let's start with a simple scatter plot using logarithmic scales. The variable `AREA` has units so we convert it to a numeric with the `as.numeric()` function. We use the {scales} package
 ```{r}
+library(scales)
+
+ggplot(data = us_states,
+       mapping = aes(x = as.numeric(AREA),
+                     y = total_pop_15)) +
+  geom_point() +
+  scale_x_log10(labels = comma) +
+  scale_y_log10(labels = comma)
+```
+
+
+
+
 ggplot(data = us_states,
        mapping = aes(x = as.numeric(AREA),
                      y = total_pop_15)) +
