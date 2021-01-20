@@ -12,7 +12,7 @@ editor_options:
 
 # Making graphs with functions from the {ggplot2} package
 
-The {ggplot2} package is the most frequently used visualization tool among data scientists. It is used extensively including the New York Times and 538. It's popular because it is built on the theoretical principles of good data visualization.
+The {ggplot2} package is the most frequently used visualization tool among data scientists. It is used extensively including the New York Times and 538. It's popular because it is built on principles of good data visualization.
 
 1. Mapping data to aesthetics
 2. Layering
@@ -101,7 +101,8 @@ df2 <- map_data("world") %>%
 
 Plot the new data as a new layer underneath the bubbles.
 ```{r}
-ggplot(data = df, aes(x = foo, y = bar)) +
+ggplot(data = df, 
+       aes(x = foo, y = bar)) +
   geom_polygon(data = df2, aes(x = long, y = lat, group = group)) +
   geom_point(aes(size = zaz), color = "red")
 ```
@@ -137,7 +138,7 @@ p2
 
 The `facet_wrap()` function is a layer to iterate (repeat) the entire plot conditional on another variable. It is like the `group_by()` function in the data grammar.
 
-Example 1: Tornadoes
+## Example 1: US tornadoes
 
 We plot the number of tornadoes by year for the state of Kansas. Recall, the data are in the file `Tornadoes.csv`.
 ```{r}
@@ -160,7 +161,7 @@ Torn.df %>%
   filter(Year >= 2007, EF != -9) %>%
   group_by(EF) %>%
   summarize(Count = n()) %>%
-  ggplot(aes(x = factor(EF), y = Count)) +
+  ggplot(mapping = aes(x = factor(EF), y = Count)) +
     geom_bar(stat = "identity")
 ```
 
@@ -172,7 +173,7 @@ Torn.df %>%
   filter(Year >= 2007, EF != -9) %>%
   group_by(EF) %>%
   summarize(Count = n()) %>%
-ggplot(aes(x = factor(EF), y = Count, fill = Count)) +
+ggplot(mapping = aes(x = factor(EF), y = Count, fill = Count)) +
   geom_bar(stat = "identity") +
   xlab("EF Rating") + 
   ylab("Number of Tornadoes") +
@@ -186,19 +187,19 @@ Plot a series of bar charts showing the frequency of tornadoes by EF rating for 
 ```{r}
 Torn.df %>%
   filter(Year >= 2005, EF != -9) %>%
-ggplot(aes(x = factor(EF))) +
+ggplot(mapping = aes(x = factor(EF))) +
   geom_bar() +
   facet_wrap(~ Year)
 ```
 
-Example 2: Hot days in the city
+## Example 2: Hot days in Tallahassee and Las Vegas
 
 The data are from the National Climatic Data Center (NCDC). They are [daily data](http://www.ncdc.noaa.gov/cdo-web/datasets) from the National Weather Service Forecast Office in Tallahassee. The observing site is the Tallahassee International Airport (previously the Tallahassee Municipal Airport and Tallahassee Regional Airport). 
 
 Import the data.
 ```{r}
-( TLH.df <- read_csv(file = "http://myweb.fsu.edu/jelsner/temp/data/TLH_DailySummary.csv",
-                     na = "-9999") )
+TLH.df <- read_csv(file = "http://myweb.fsu.edu/jelsner/temp/data/TLH_DailySummary.csv",
+                     na = "-9999")
 ```
 
 The warning concerns the column labeled `TOBS`. By default the column type is logical but there are cases when the values are numbers. This can be ignored safely.
@@ -237,7 +238,8 @@ We now have a data frame with two columns: `Year` and `AvgT` (annual average dai
 
 We now use the grammar of graphs to make a plot. We specify the x aesthetic as `Year` and the y aesthetic as the `AvgT`. We include a point layer and a line layer.
 ```{r}
-ggplot(df, aes(x = Year, y = AvgT)) +
+ggplot(data = df, 
+       mapping = aes(x = Year, y = AvgT)) +
   geom_point(size = 3) +
   geom_line() +
   ylab("Average Annual Temperature in Tallahassee, FL (F)")
@@ -252,7 +254,7 @@ TLH.df %>%
   filter(Year < 2014) %>%
   group_by(Year) %>%
   summarize(AvgT = mean(TmaxF)) %>%
-ggplot(aes(x = Year, y = AvgT)) +
+ggplot(mapping = aes(x = Year, y = AvgT)) +
   geom_point(size = 3) +
   geom_line() +
   ylab("Average Annual Temperature in Tallahassee, FL (F)") +
@@ -269,7 +271,7 @@ TLH.df %>%
   filter(Year < 2014) %>%
   group_by(Year) %>%
   summarize(N100 = sum(TmaxF >= 100, na.rm = TRUE)) %>%
-ggplot(aes(x = Year, y = N100, fill = N100)) + 
+ggplot(mapping = aes(x = Year, y = N100, fill = N100)) + 
   geom_bar(stat = 'identity') + 
   scale_fill_continuous(low = 'orange', high = 'red') +
   geom_text(aes(label = N100), vjust = 1.5, size = 3) +
@@ -281,7 +283,8 @@ ggplot(aes(x = Year, y = N100, fill = N100)) +
 
 Histogram of daily high temperature.
 ```{r}
-gTLH <- ggplot(TLH.df, aes(x = TmaxF)) + 
+gTLH <- ggplot(data = TLH.df, 
+               mapping = aes(x = TmaxF)) + 
   geom_histogram(binwidth = 1, aes(fill = ..count..)) +
   scale_fill_continuous(low = 'green', high = 'blue') +
   scale_x_continuous(limits = c(30, 120)) +
@@ -306,7 +309,8 @@ LVG.df <- LVG.df %>%
                         format = "%Y%m%d")) %>%
   select(Date, TmaxF, TminF)
 
-gLVG <- ggplot(LVG.df, aes(x = TmaxF)) + 
+gLVG <- ggplot(data = LVG.df, 
+               mapping = aes(x = TmaxF)) + 
   geom_histogram(binwidth = 1, aes(fill = ..count..)) +
   scale_fill_continuous(low = 'green', high = 'blue') +
   scale_x_continuous(limits = c(30, 120)) +
@@ -322,31 +326,52 @@ library(patchwork)
 gTLH / gLVG
 ```
 
-Bar plot of the number of tornadoes by month and by state. The code uses the {geofacet} package [@Hafen2020].
-```{r}
-library(geofacet)
-library(scales)
+## Example 3: US population and area by state
 
-Torn.df %>% 
-  group_by(Month, st) %>%
-  summarise(nT = n()) %>%
-  mutate(month = factor(month.name[Month], levels = month.name)) %>%
-  filter(!st %in% c("DC", "PR", "VI")) %>%
-ggplot(aes(as.factor(Month), nT)) +
-  geom_col(fill = "gray70") +
-  facet_geo(~ st, grid = "us_state_grid3", scales = "free_y") +
-  scale_x_discrete(breaks = 1:12, labels = c("J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D")) +
-  scale_y_continuous(breaks = function(x) unique(floor(pretty(seq(0, (max(x) + 1) * 1.1))))) +
-  labs(title = "Relative peakedness of the tornado season in the Plains",
-       caption = "SPC data from 1950-2018") +
-  xlab("") + ylab("") +
-  theme_minimal() +
-  theme(strip.text.x = element_text(size = 6),
-        axis.text.x = element_text(size = 6),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+The object `us_states` from the {spData} package is a data frame from the U.S. Census Bureau. The variables include the name, region, area, and population.
+```{r}
+library(spData)
+
+class(us_states)
 ```
 
-USGS water data: https://waterdata.usgs.gov/blog/dataretrieval/
+This is a simple feature data frame. A data frame that has spatial information stored in the column labeled `geometry`. More about this next lesson.
+
+For now, suppose we want to plot area versus population for each state including state names on the plot. We note large differences between the minimum and maximum values for both variables.
+```{r}
+us_states %>%
+  summarize(rA = range(AREA),
+            rP = range(total_pop_15))
+```
+
+Thus we use a logarithmic scales.
+
+
+```{r}
+ggplot(data = us_states,
+       mapping = aes(x = as.numeric(AREA),
+                     y = total_pop_15)) +
+  geom_point() +
+  geom_text(aes(label = NAME)) +
+  scale_x_log10(labels = comma) +
+  scale_y_log10(labels = comma)
+
+library(ggrepel)
+
+ggplot(data = us_states,
+       mapping = aes(x = as.numeric(AREA),
+                     y = total_pop_15)) +
+  geom_point() +
+  geom_text_repel(aes(label = NAME)) +
+  scale_x_log10() +
+  scale_y_log10()
+```
+
+```{r}
+ggplot(us_states) + geom_sf()
+```
+
+## More resources and additional examples 
 
 * https://exts.ggplot2.tidyverse.org/
 * Cheat sheets: https://rstudio.com/resources/cheatsheets/

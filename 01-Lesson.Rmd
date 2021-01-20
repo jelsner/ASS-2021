@@ -225,6 +225,8 @@ Climate datasets:
 
 https://cran.r-project.org/web/packages/climate/vignettes/getstarted.html
 https://www.ncdc.noaa.gov/teleconnections/enso/indicators/soi/data.csv
+USGS water data: https://waterdata.usgs.gov/blog/dataretrieval/
+
 
 Reference books
 
