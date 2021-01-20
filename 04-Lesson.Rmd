@@ -10,7 +10,7 @@ editor_options:
 
 **"Good coding style is like correct punctuation: you can manage without it, butitsuremakesthingseasiertoread."** --- Hadley Wickham
 
-Schedule for posting lessons/assignments
+To help you better manage this course: I will try to post an "early draft" of the lesson notes on GitHub (https://github.com/jelsner/ASS-2021). The final versions, which will be available about 30 minutes before class time, will be posted on GitHub and on Canvas. I will try to have drafts of the next two lessons posted on GitHub sometime during the weekend before. You can check out all the lessons (compiled into Chapters using bookdown) from last Springs ASS course here https://github.com/jelsner/Applied_Spatial_Statistics. Also, if you need more time with a particular assignment, don't hesitate to contact me.
 
 ## Working with data frames using functions from the {tidyverse} set of packages
 
@@ -29,9 +29,7 @@ airquality <- as_tibble(airquality)
 class(airquality)
 ```
 
-Click on `airquality` in the environment. It is a data frame. We will use the terms 'tibble' and 'data frame' interchangeably (mostly).
-
-Let's look at some of the {dplyr} functions to see how they operate on the data frame `airquality`.
+Click on `airquality` in the environment. It is a data frame. Now let's see how the {dplyr} functions operate to wrangle the data frame `airquality`.
 
 The function `select()` chooses variables by name. For example, choose the month, day, and temperature columns.
 ```{r}
@@ -98,7 +96,7 @@ airquality %>%
 
 The result is a data frame with three columns and 14 rows arranged by increasing temperatures above 90F. 
 
-The `mutate()` function adds new columns to the data frame. For example, create a new column called `TempC` as the temperature in degrees Celcius. Also create a column called `WindMS` as the wind speed in meters per second.
+The `mutate()` function adds new columns to the data frame. For example, create a new column called `TempC` as the temperature in degrees Celsius. Also create a column called `WindMS` as the wind speed in meters per second.
 ```{r}
 airquality %>%
   mutate(TempC = (Temp - 32) * 5/9,
@@ -176,7 +174,7 @@ On average ozone concentration is higher on warm days (Temp >= 70 F) days. Said 
 
 The mean is a model for the data. The statistical dependency of the mean implies that a model for ozone concentration will likely be improved by including temperature as an explanatory variable.
 
-In summary, the important verbs are
+In summary, the verbs are
 
 Verb: Description
 `select()`: selects columns; pick variables by their names
@@ -188,15 +186,13 @@ Verb: Description
 
 The six functions form the basis of a grammar for data. We can only alter a data frame by reordering the rows (`arrange()`), picking observations and variables of interest (`filter()` and `select()`), adding new variables that are functions of existing variables (`mutate()`), collapsing many values to a summary (`summarise()`), and conditioning on variables (`group_by()`).
 
-The syntax of the functions are all the same:
+The syntax of these functions all have the same three properties:
 
-* The first argument is a data frame. This argument is implicit when using the `%>%` operator.
-* The subsequent arguments describe what to do with the data frame. We refer to columns in the data frame directly (without using `$`).
+* The first argument is a data frame. The data frame is not named when using the `%>%` operator.
+* The subsequent arguments describe what to do with the data frame. Columns in the data frame are named without using `$` or quotes.
 * The result is a new data frame
 
-These properties make it easy to chain together many simple lines of code to do complex data manipulations and summaries.
-
-Let's look at some examples from my research.
+The properties make it easy to chain together many simple lines of code to do complex data manipulations and summaries. Let's look at some examples from my research.
 
 ### US tornadoes
 

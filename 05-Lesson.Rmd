@@ -346,6 +346,8 @@ ggplot(aes(as.factor(Month), nT)) +
         panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 ```
 
+USGS water data: https://waterdata.usgs.gov/blog/dataretrieval/
+
 * https://exts.ggplot2.tidyverse.org/
 * Cheat sheets: https://rstudio.com/resources/cheatsheets/
 * More examples: https://geocompr.robinlovelace.net/ {spData} package.
