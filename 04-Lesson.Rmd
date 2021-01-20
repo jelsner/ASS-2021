@@ -89,8 +89,8 @@ airquality %>%
 Importantly we can string the functions together. For example select the variables radiation, wind, and temperature then filter by temperatures above 90F and arrange by temperature.
 ```{r}
 airquality %>%
-  select(Solar.R, Wind, Temp) %>%
-  filter(Temp > 90) %>%
+  select(Solar.R, Wind, Temp) %>% 
+  filter(Temp > 90) %>%  
   arrange(Temp)
 ```
 
