@@ -344,7 +344,18 @@ us_states %>%
             rP = range(total_pop_15))
 ```
 
-Let's start with a simple scatter plot using logarithmic scales. The variable `AREA` has units so we convert it to a numeric with the `as.numeric()` function. We use the {scales} package
+Let's start with a simple scatter plot using logarithmic scales. The variable `AREA` has units so we convert it to a numeric with the `as.numeric()` function. 
+
+```{r}
+ggplot(data = us_states,
+       mapping = aes(x = as.numeric(AREA),
+                     y = total_pop_15)) +
+  geom_point() +
+  scale_x_log10() +
+  scale_y_log10()
+```
+
+Next we use the {scales} package so the tic labels can be expressed in whole numbers with commas.
 ```{r}
 library(scales)
 
@@ -356,30 +367,36 @@ ggplot(data = us_states,
   scale_y_log10(labels = comma)
 ```
 
+Next we add text labels.
 
-
-
+```{r}
 ggplot(data = us_states,
        mapping = aes(x = as.numeric(AREA),
                      y = total_pop_15)) +
   geom_point() +
-  geom_text(aes(label = NAME)) +
+  geom_label(aes(label = NAME)) +
   scale_x_log10(labels = comma) +
   scale_y_log10(labels = comma)
+```
 
+The labels are centered on top of the points. To fix this we use functions from the {grepel} package.
+```{r}
 library(ggrepel)
 
 ggplot(data = us_states,
        mapping = aes(x = as.numeric(AREA),
                      y = total_pop_15)) +
   geom_point() +
-  geom_text_repel(aes(label = NAME)) +
-  scale_x_log10() +
-  scale_y_log10()
+  geom_label_repel(aes(label = NAME)) +
+  scale_x_log10(labels = comma) +
+  scale_y_log10(labels = comma)
 ```
 
+Finally, since the data object is a simple feature data frame we can make a map.
 ```{r}
-ggplot(us_states) + geom_sf()
+ggplot(us_states) + 
+  geom_sf(aes(fill = total_pop_15)) +
+  scale_fill_continuous(labels = comma)
 ```
 
 ## More resources and additional examples 
