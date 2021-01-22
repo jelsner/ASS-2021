@@ -27,6 +27,6 @@ The object `us_states` from the {spData} package is a data frame (simple feature
 
 a.  Create a new data frame containing only the population columns. (5)
 b.  Create a new data frame containing only states from the South region. (5)
-c.  Create a new data frame containing only states from the West region with a 2015 population of more than 6 million people.
+c.  Create a new data frame containing only states from the West region with a 2015 population of more than 6 million people. (5)
 d.  What was the total population of the Midwest region in 2010 and 2015? (10)
 e.  How many states are in each region and what is the *average* statewide 2015 population in each region? (10) Hint: Use the `group_by()` function.
