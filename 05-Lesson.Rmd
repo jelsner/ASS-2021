@@ -176,7 +176,7 @@ Torn.df %>%
 
 Here the argument `stat = "identity"` indicates the data are already tabulated. That is, by default `geom_bar()` tables the data if it is integer, character, or factor (like the function `table()`).
 
-Improve the bar chart to make it presentable for publication.
+Improve the bar chart to make it ready for publication.
 
 ```{r}
 Torn.df %>%
