@@ -14,11 +14,12 @@ editor_options:
 
 The {ggplot2} package is the most frequently used visualization tool among data scientists. It is used extensively including the New York Times and 538. It's popular because it is built on principles of good data visualization.
 
-1. Mapping data to aesthetics
-2. Layering
-3. Building plots step by step
+1.  Mapping data to aesthetics
+2.  Layering
+3.  Building plots step by step
 
 We make the functions available to our current working directory by typing
+
 ```{r}
 if(!require(ggplot2)) install.packages(pkgs = "ggplot2", repos = "http://cran.us.r-project.org")
 
@@ -28,6 +29,7 @@ library(ggplot2)
 First principle: Map data to aesthetics
 
 Consider the following numeric vectors (`foo`, `bar` and `zaz`). Create a data frame `df` using the `data.frame()` function.
+
 ```{r}
 foo <- c(-122.419416,-121.886329,-71.05888,-74.005941,-118.243685,-117.161084,-0.127758,-77.036871,
          116.407395,-122.332071,-87.629798,-79.383184,-97.743061,121.473701,72.877656,2.352222,
@@ -44,51 +46,54 @@ df <- data.frame(foo, bar, zaz)
 head(df)
 ```
 
-To make a scatter plot using {ggplot2} syntax, we use the `ggplot()` function. Note that the package name is {ggplot2} but the function is `ggplot()` (without the 2). 
+To make a scatter plot using {ggplot2} syntax, we use the `ggplot()` function. Note that the package name is {ggplot2} but the function is `ggplot()` (without the 2).
 
 Inside the `ggplot()` function we specify the data frame with the `data =` argument. We specify what columns from the data frame are to be mapped to 'aesthetics' with the `aes()` function using the `mapping =` argument. Note that the `aes()` function is nested inside the `ggplot()` function. More on this shortly.
 
 For a scatter plot the aesthetics must include the x and y coordinates at a minimum, and for this example they are `foo` and `bar` respectively.
 
 Then, to render the scatter plot, we include the function `geom_point()` as a layer with the `+` symbol. Numeric values are specified using the arguments `x =` and `y =` in the `aes()` function and are rendered as points in a two-dimensional cartesian plane.
+
 ```{r}
 ggplot(data = df, 
        mapping = aes(x = foo, y = bar)) +
   geom_point()
 ```
 
-We map our data values to aesthetic attributes. The _points_ in the scatter plot are geometric objects that get drawn. In {ggplot2} lingo, the points are _geoms_. More specifically, the points are point _geoms_ that are denoted syntactically with the function `geom_point()`.
+We map our data values to aesthetic attributes. The *points* in the scatter plot are geometric objects that get drawn. In {ggplot2} lingo, the points are *geoms*. More specifically, the points are point *geoms* that are denoted syntactically with the function `geom_point()`.
 
 All geometric objects have aesthetic attributes (aesthetics):
 
-* x-position
-* y-position
-* color
-* size
-* transparency
+-   x-position
+-   y-position
+-   color
+-   size
+-   transparency
 
 When we visualize data using {ggplot2} syntax, we are creating a mapping between variables in our data frame and the aesthetic attributes of geometric objects. In the scatter plot above we mapped `foo` to the x-position aesthetic and we mapped `bar` to the y-position aesthetic. This may seem trivial `foo` is the x-axis and `bar` is on the y-axis. We can do that in Excel.
 
-But here there is a deeper structure. Theoretically, geometric objects (i.e., the things we draw in a plot, like points) don't just have attributes like position. They have a color, size, etc. 
+But here there is a deeper structure. Theoretically, geometric objects (i.e., the things we draw in a plot, like points) don't just have attributes like position. They have a color, size, etc.
 
 For example here we map a new variable to the size aesthetic.
+
 ```{r}
 ggplot(data = df, 
        mapping = aes(x = foo, y = bar)) +
   geom_point(aes(size = zaz))
 ```
 
-We changed a scatter plot to a bubble chart by mapping a new variable to the size aesthetic. Any visualization we see can be deconstructed into _geom_ specifications and mapping from data to the aesthetic attributes of the geometric objects.
+We changed a scatter plot to a bubble chart by mapping a new variable to the size aesthetic. Any visualization we see can be deconstructed into *geom* specifications and mapping from data to the aesthetic attributes of the geometric objects.
 
 Second principle: Build plots in layers
 
 The principle of layering is important. To create good visualizations we often need to:
 
-* Plot multiple datasets, or
-* Plot a dataset with additional contextual information contained in a second dataset, or
-* Plot summaries or statistical transformations over the raw data
+-   Plot multiple datasets, or
+-   Plot a dataset with additional contextual information contained in a second dataset, or
+-   Plot summaries or statistical transformations over the raw data
 
 Let's modify the bubble chart by getting additional data and plotting it as a new layer below the bubbles. First get the data from the {maps} package and store it in a new data frame.
+
 ```{r}
 if(!require(maps)) install.packages(pkgs = "maps", repos = "http://cran.us.r-project.org")
 library(maps)
@@ -100,6 +105,7 @@ df2 <- map_data("world") %>%
 ```
 
 Plot the new data as a new layer underneath the bubbles.
+
 ```{r}
 ggplot(data = df, 
        aes(x = foo, y = bar)) +
@@ -113,15 +119,16 @@ The bubble chart is a modified scatter plot and the dot distribution map is a mo
 
 We used two of the data visualization principles (mapping & layering) to build this visualization:
 
-* To create the scatter plot, we mapped `foo` to the x-aesthetic and mapped `bar` to the y-aesthetic
-* To create the bubble chart, we mapped a `zaz` to the size-aesthetic
-* To create the dot distribution map, we added a layer of polygon data under the bubbles.
+-   To create the scatter plot, we mapped `foo` to the x-aesthetic and mapped `bar` to the y-aesthetic
+-   To create the bubble chart, we mapped a `zaz` to the size-aesthetic
+-   To create the dot distribution map, we added a layer of polygon data under the bubbles.
 
 Third principle: Iteration (step by step)
 
-The third principle is about process. The process begins with mapping and layering but ends with iteration when we add layers that modify scales, legends, colors, etc. The syntax of `ggplot` _layerability_ enables and rewards iteration. 
+The third principle is about process. The process begins with mapping and layering but ends with iteration when we add layers that modify scales, legends, colors, etc. The syntax of `ggplot` *layerability* enables and rewards iteration.
 
 Let's assign to `p1` the output of our plot.
+
 ```{r}
 p1 <- ggplot(data = df, 
              mapping = aes(x = foo, y = bar)) +
@@ -141,6 +148,7 @@ The `facet_wrap()` function is a layer to iterate (repeat) the entire plot condi
 ## Example 1: US tornadoes
 
 We plot the number of tornadoes by year for the state of Kansas. Recall, the data are in the file `Tornadoes.csv`.
+
 ```{r}
 Torn.df <- read_csv(file = "Tornadoes.csv") %>%
   mutate(Year = yr,
@@ -156,6 +164,7 @@ ggplot(mapping = aes(x = Year, y = nT)) +
 ```
 
 We create a bar chart indicating the number of tornadoes by EF rating since 2007.
+
 ```{r}
 Torn.df %>%
   filter(Year >= 2007, EF != -9) %>%
@@ -168,6 +177,7 @@ Torn.df %>%
 Here the argument `stat = "identity"` indicates the data are already tabulated. That is, by default `geom_bar()` tables the data if it is integer, character, or factor (like the function `table()`).
 
 Improve the bar chart to make it presentable for publication.
+
 ```{r}
 Torn.df %>%
   filter(Year >= 2007, EF != -9) %>%
@@ -184,6 +194,7 @@ ggplot(mapping = aes(x = factor(EF), y = Count, fill = Count)) +
 ```
 
 Plot a series of bar charts showing the frequency of tornadoes by EF rating for each year since 2005.
+
 ```{r}
 Torn.df %>%
   filter(Year >= 2005, EF != -9) %>%
@@ -194,9 +205,10 @@ ggplot(mapping = aes(x = factor(EF))) +
 
 ## Example 2: Hot days in Tallahassee and Las Vegas
 
-The data are from the National Climatic Data Center (NCDC). They are [daily data](http://www.ncdc.noaa.gov/cdo-web/datasets) from the National Weather Service Forecast Office in Tallahassee. The observing site is the Tallahassee International Airport (previously the Tallahassee Municipal Airport and Tallahassee Regional Airport). 
+The data are from the National Climatic Data Center (NCDC). They are [daily data](http://www.ncdc.noaa.gov/cdo-web/datasets) from the National Weather Service Forecast Office in Tallahassee. The observing site is the Tallahassee International Airport (previously the Tallahassee Municipal Airport and Tallahassee Regional Airport).
 
 Import the data.
+
 ```{r}
 TLH.df <- read_csv(file = "http://myweb.fsu.edu/jelsner/temp/data/TLH_DailySummary.csv",
                      na = "-9999")
@@ -207,6 +219,7 @@ The warning concerns the column labeled `TOBS`. By default the column type is lo
 The variable of interest is the daily high temperature in the column labeled `TMAX`. The values are in tens of degrees C so the value of 128 is 12.8 C.
 
 Mutate to add new columns giving the temperatures (daily maximum and daily minimum) in degrees F (original measuring unit) and the dates in calendar days. Select only the date and maximum and minimum temperature columns.
+
 ```{r}
 TLH.df <- TLH.df %>%
   mutate(TmaxF = round(9/5 * TMAX/10 + 32),
@@ -219,11 +232,12 @@ glimpse()
 
 Note we again use the `as.Date()` function ({base} see `?as.Date`). The format in the data file is a concatenation of a four-digit year, a two-digit month, and a two-digit day. Thus the format argument is `format = "%Y%m%d"`).
 
-Q: Is it getting hotter in Tallahassee? 
+Q: Is it getting hotter in Tallahassee?
 
-Let's compute the annual average high temperature and create a time series graph. 
+Let's compute the annual average high temperature and create a time series graph.
 
-We use the `year()` function from the {lubridate} package to get a column called `Year`, the `group_by()` function to group by `Year`, and  the `summarize()` function from the {dplyr} package to get the average daily maximum temperature for each year.
+We use the `year()` function from the {lubridate} package to get a column called `Year`, the `group_by()` function to group by `Year`, and the `summarize()` function from the {dplyr} package to get the average daily maximum temperature for each year.
+
 ```{r}
 library(lubridate)
 
@@ -237,6 +251,7 @@ glimpse()
 We now have a data frame with two columns: `Year` and `AvgT` (annual average daily high temperature in degrees F).
 
 We now use the grammar of graphs to make a plot. We specify the x aesthetic as `Year` and the y aesthetic as the `AvgT`. We include a point layer and a line layer.
+
 ```{r}
 ggplot(data = df, 
        mapping = aes(x = Year, y = AvgT)) +
@@ -245,9 +260,10 @@ ggplot(data = df,
   ylab("Average Annual Temperature in Tallahassee, FL (F)")
 ```
 
-Q: What's wrong? 
+Q: What's wrong?
 
 Fix and add a trend line layer. Here we go directly to the graph without saving the resulting data frame. That is, we pipe `%>%` the resulting data frame after applying the {dplyr} verbs to the `ggplot()` function. The object in the first argument of the `ggplot()` function is the result (data frame) from the code above.
+
 ```{r}
 TLH.df %>%
   mutate(Year = year(Date)) %>%
@@ -265,6 +281,7 @@ ggplot(mapping = aes(x = Year, y = AvgT)) +
 Q: Is the frequency of extremely hot days increasing over time? Let's consider a daily high temperature of 100 F and above as extremely hot.
 
 Here we count the number of days at or above 100F using the `summarize()` function together with the `sum()` function on the logical operator `>=`. If a day is missing a high temperature, we remove it with the `na.rm = TRUE` argument in the `sum()` function.
+
 ```{r}
 TLH.df %>%
   mutate(Year = year(Date)) %>%
@@ -282,6 +299,7 @@ ggplot(mapping = aes(x = Year, y = N100, fill = N100)) +
 ```
 
 Histogram of daily high temperature.
+
 ```{r}
 gTLH <- ggplot(data = TLH.df, 
                mapping = aes(x = TmaxF)) + 
@@ -298,6 +316,7 @@ gTLH <- ggplot(data = TLH.df,
 Q: The most common high temperatures are in the low 90s, but there are relatively few 100+ days. Why?
 
 Compare with Las Vegas, Nevada.
+
 ```{r}
 LVG.df <- read_csv(file = "http://myweb.fsu.edu/jelsner/temp/data/LV_DailySummary.csv",
                      na = "-9999")
@@ -329,6 +348,7 @@ gTLH / gLVG
 ## Example 3: US population and area by state
 
 The object `us_states` from the {spData} package is a data frame from the U.S. Census Bureau. The variables include the state `GEOID` and `NAME`, the `REGION` (`South`, `West`, etc), `AREA` (in square km), and total population in 2010 (`total_pop_10`) and in 2015 (`total_pop_15`).
+
 ```{r}
 library(spData)
 
@@ -337,20 +357,22 @@ str(us_states)
 
 This is an object with two classes: simple feature and data frame. It is a data frame that has spatial information stored in the column labeled `geometry`. More about this next lesson.
 
-Note also that the variable `AREA` is numeric with units (km^2). Thus in order to perform some operations we need to specify units. For example, if we want to filter by area keeping only states with an area greater than 500,000 square km we need to use `set_units()` from the {units} package.
+Note also that the variable `AREA` is numeric with units (km\^2). Thus in order to perform some operations we need to specify units. For example, if we want to filter by area keeping only states with an area greater than 500,000 square km we need to use `set_units()` from the {units} package.
+
 ```{r}
 us_states %>% 
   filter(AREA > units::set_units(500000, km^2))
 ```
 
 For now, suppose we want to plot area versus population for each state including state names on the plot. We note large differences between the minimum and maximum values for both variables.
+
 ```{r}
 us_states %>%
   summarize(rA = range(AREA),
             rP = range(total_pop_15))
 ```
 
-Let's start with a simple scatter plot using logarithmic scales. The variable `AREA` has units so we convert it to a numeric with the `as.numeric()` function. 
+Let's start with a simple scatter plot using logarithmic scales. The variable `AREA` has units so we convert it to a numeric with the `as.numeric()` function.
 
 ```{r}
 ggplot(data = us_states,
@@ -362,6 +384,7 @@ ggplot(data = us_states,
 ```
 
 Next we use the {scales} package so the tic labels can be expressed in whole numbers with commas.
+
 ```{r}
 library(scales)
 
@@ -386,6 +409,7 @@ ggplot(data = us_states,
 ```
 
 The labels are centered on top of the points. To fix this we use functions from the {grepel} package.
+
 ```{r}
 library(ggrepel)
 
@@ -399,14 +423,15 @@ ggplot(data = us_states,
 ```
 
 Finally, since the data object is a simple feature data frame we can make a map.
+
 ```{r}
 ggplot(us_states) + 
   geom_sf(aes(fill = total_pop_15)) +
   scale_fill_continuous(labels = comma)
 ```
 
-## More resources and additional examples 
+## More resources and additional examples
 
-* https://exts.ggplot2.tidyverse.org/
-* Cheat sheets: https://rstudio.com/resources/cheatsheets/
-* More examples: https://geocompr.robinlovelace.net/ {spData} package.
+-   <https://exts.ggplot2.tidyverse.org/>
+-   Cheat sheets: <https://rstudio.com/resources/cheatsheets/>
+-   More examples: <https://geocompr.robinlovelace.net/> {spData} package.
