@@ -328,14 +328,20 @@ gTLH / gLVG
 
 ## Example 3: US population and area by state
 
-The object `us_states` from the {spData} package is a data frame from the U.S. Census Bureau. The variables include the name, region, area, and population.
+The object `us_states` from the {spData} package is a data frame from the U.S. Census Bureau. The variables include the state `GEOID` and `NAME`, the `REGION` (`South`, `West`, etc), `AREA` (in square km), and total population in 2010 (`total_pop_10`) and in 2015 (`total_pop_15`).
 ```{r}
 library(spData)
 
-class(us_states)
+str(us_states)
 ```
 
-This is a simple feature data frame. A data frame that has spatial information stored in the column labeled `geometry`. More about this next lesson.
+This is an object with two classes: simple feature and data frame. It is a data frame that has spatial information stored in the column labeled `geometry`. More about this next lesson.
+
+Note also that the variable `AREA` is numeric with units (km^2). Thus in order to perform some operations we need to specify units. For example, if we want to filter by area keeping only states with an area greater than 500,000 square km we need to use `set_units()` from the {units} package.
+```{r}
+us_states %>% 
+  filter(AREA > units::set_units(500000, km^2))
+```
 
 For now, suppose we want to plot area versus population for each state including state names on the plot. We note large differences between the minimum and maximum values for both variables.
 ```{r}
