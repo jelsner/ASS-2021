@@ -78,7 +78,7 @@ For example here we map a new variable to the size aesthetic.
 ```{r}
 ggplot(data = df, 
        mapping = aes(x = foo, y = bar)) +
-  geom_point(aes(size = zaz))
+  geom_point(mapping = aes(size = zaz))
 ```
 
 We changed a scatter plot to a bubble chart by mapping a new variable to the size aesthetic. Any visualization we see can be deconstructed into *geom* specifications and mapping from data to the aesthetic attributes of the geometric objects.
@@ -106,8 +106,9 @@ Plot the new data as a new layer underneath the bubbles.
 ```{r}
 ggplot(data = df, 
        aes(x = foo, y = bar)) +
-  geom_polygon(data = df2, aes(x = long, y = lat, group = group)) +
-  geom_point(aes(size = zaz), color = "red")
+  geom_polygon(data = df2, 
+               mapping = aes(x = long, y = lat, group = group)) +
+  geom_point(mapping = aes(size = zaz), color = "red")
 ```
 
 This is the same bubble chart but now with a new layer added. We transformed a bubble chart into a new visualization called a "dot distribution map," which is more insightful and visually interesting.
@@ -191,7 +192,8 @@ read_csv(file = "Tornadoes.csv") %>%
   group_by(Year) %>%
   summarize(nT = n()) %>%
 ggplot(mapping = aes(x = Year, y = nT)) +
-  geom_line()
+  geom_line() +
+  geom_point()
 ```
 
 Recall that the `group_by()` function allows us to repeat an operation depending on the value (or level) of some variable. For example to count the number of tornadoes by EF damage rating since 2007 and ignoring missing ratings
@@ -335,7 +337,7 @@ ggplot(mapping = aes(x = Year, y = N100, fill = N100)) +
 
 How does a histogram of daily high temperatures look?
 ```{r}
-gTLH <- ggplot(data = TLH.df, 
+( gTLH <- ggplot(data = TLH.df, 
                mapping = aes(x = TmaxF)) + 
   geom_histogram(binwidth = 1, aes(fill = ..count..)) +
   scale_fill_continuous(low = 'green', high = 'blue') +
@@ -344,7 +346,7 @@ gTLH <- ggplot(data = TLH.df,
   ylab("Number of Days") + 
   xlab(expression(paste("Daily High Temperature in Tallahassee, FL (", {}^o, " F)"))) +
   theme_minimal() +
-  theme(legend.position = "none")
+  theme(legend.position = "none") )
 ```
 
 Q: The most common high temperatures are in the low 90s, but there are relatively few 100+ days. Why?
@@ -459,6 +461,6 @@ ggplot(us_states) +
 
 ## More resources and additional examples
 
--   <https://exts.ggplot2.tidyverse.org/>
+-   ggplot extensions <https://exts.ggplot2.tidyverse.org/>
 -   Cheat sheets: <https://rstudio.com/resources/cheatsheets/>
 -   More examples: <https://geocompr.robinlovelace.net/> {spData} package.
