@@ -3,6 +3,7 @@ title: "Lesson 6"
 author: "James B. Elsner"
 date: "January 27, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -34,7 +35,7 @@ Functions in the {sf} package work with all common vector geometry types: points
 
 The {sf} package incorporates the three main packages of the spatial R ecosystem: {sp} for the class system, {rgdal} for reading and writing data, and {rgeos} for spatial operations done with GEOS.
 
-Simple features are data frames with a spatial column. The spatial column is usually called `geometry` (or `geom`). The geometry column is referenced like a regular column. For example, `world$geom` refers to the spatial column of the `world` simple feature data frame.
+Simple features are data frames with a spatial column. The spatial column is usually called `geometry` (or `geom`). The geometry column is referenced like a regular column.
 
 The difference is that the geometry column is a 'list column' of class `sfc` (simple feature column). The `sfc` is composed of objects of class `sfg` (simple feature geometries).
 
@@ -247,6 +248,8 @@ Thus `sf` objects take advantage of R's data analysis capabilities to be used on
 
 For example, we get information about the size and breadth of the `world` simple feature data frame from the {spData} package using `dim()`, `nrow()`, etc.
 ```{r}
+library(spData)
+
 dim(world)
 nrow(world)
 ncol(world)
@@ -306,19 +309,16 @@ In this case the `geometry` column is
 
 The object `us_states` from the {spData} package is a simple feature data frame from the U.S. Census Bureau. The variables include the name, region, area, and population.
 
-Recall from Assignment 2 that simple feature data frames can be treated as regular data frames. But the geometry is "sticky".
-
-For example when we create a new data frame containing only the population information the geometry column is included in the new data frame.
+Simple feature data frames can be treated as regular data frames. But the geometry is "sticky". For example when we create a new data frame containing only the population information the geometry column is included in the new data frame.
 ```{r}
 library(tidyverse)
-library(spData)
 
 df1 <- us_states %>% 
   select(starts_with("total")) 
 head(df1)
 ```
 
-The resulting data frame has the two population columns but also the column labeled `geometry`.
+The resulting data frame has the two population columns but also a column labeled `geometry`.
 
 When we use the `summarize()` function, a union of the geometries across rows is made.
 ```{r}
@@ -338,13 +338,12 @@ plot(df2)
 -   `sf` functions are combined using `%>%` operator and they work well with the {tidyverse} packages
 -   `sf` function names are consistent and intuitive (all begin with `st_`)
 
-These advantages have prompted the development of spatial packages (including {tmap}, {mapview}. and {tidycensus}) to add support for simple feature objects. However, it will take years for some packages to transition and some will sunset.
+These advantages have let to the development of spatial packages (including {tmap}, {mapview}. and {tidycensus}) to add support for simple feature objects. However, it will take years for some packages to transition.
 
-In our current work flow we can take advantage of simple features because it is easy to convert between the two classes. Consider the `world` S3 spatial data frame from the {spData} package. We convert it to a S4 spatial data frame with the `as()` method.
+Currently we can take advantage of simple features because it is easy to convert between the two classes. Consider the `world` S3 spatial data frame from the {spData} package. We convert it to a S4 spatial data frame with the `as()` method.
 ```{r}
-library(sf)
 library(sp)
-library(spData)
+
 world.sp <- as(world, 
                Class = "Spatial")
 ```
@@ -384,13 +383,15 @@ This indicates that geographic unit of analysis is counties.
 
 Before performing geo-computations, we should set the coordinate reference system including the spatial units. Here we transform the geographic coordinate reference system to a specific Lambert conic conformal (planar) projection with units of kilometers.
 ```{r}
-sfdf2 <- st_transform(sfdf, 
-                      crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=km")
+sfdf <- st_transform(sfdf, 
+                     crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=km")
 ```
+
+Note that we recycled the name `sfdf`.
 
 Then to obtain the bounding box of the geometries we use the `st_bbox()` function.
 ```{r}
-( box <- st_bbox(sfdf2) )
+( box <- st_bbox(sfdf) )
 ```
 
 It returns an object of class `bbox`, which is a numeric vector of length four, with elements labeled `xmin`, `ymin`, `xmax`, and `ymax`.
@@ -420,7 +421,7 @@ st_geometry(centers.sfdf)
 
 The data frame portion of the simple feature data frame contains the exact same set and values of the attributes.
 ```{r}
-plot(centers.sfdf)
+plot(centers.sfdf$geometry)
 ```
 
 To get the centroid for the state we first create a new simple feature as a union of all counties.
@@ -477,12 +478,12 @@ plot(st_buffer(state.sf, dist = 100))
 plot(state.sf, add = TRUE)
 ```
 
-Length of boundary lines for U.S. states (new code)
+Length of boundary lines for U.S. states. Transform the CRS. Note that the geometry is multi-polygons. Convert the polygons to multi-linestrings, then use `st_length()` to get the total length of the lines.
 ```{r}
-library(USAboundaries)
-states <- us_states() %>%
+states <- us_states %>%
   st_transform(crs = 2163) # US National Atlas Equal Area 
-st_length(states)
+st_geometry(states) 
+
 states2 <- st_cast(states, to = "MULTILINESTRING")
 st_length(states2)
 ```
