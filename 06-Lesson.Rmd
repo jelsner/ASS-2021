@@ -41,24 +41,22 @@ The difference is that the geometry column is a 'list column' of class `sfc` (si
 
 ![Simple Feature Anatomy](figures/sf_anatomy.png)
 
-Here we see:
+-   green box is a simple feature: a single record, or `data.frame` row, consisting of attributes and geometry
+-   blue box is a single simple feature geometry (an object of class `sfg`)
+-   red box a simple feature list-column (an object of class `sfc`, which is a column in the `data.frame`)
+-   the geometries are given in well-known text (WKT) format
 
--   in green a simple feature: a single record, or `data.frame` row, consisting of attributes and geometry
--   in blue a single simple feature geometry (an object of class `sfg`)
--   in red a simple feature list-column (an object of class `sfc`, which is a column in the `data.frame`)
--   the geometries are represented as well-known text (WKT)
-
-Geometries are the building blocks of simple features. Well-known binary (WKB) and well-known text (WKT) are the way simple feature geometries are coded. WKB representations are hexadecimal strings readable by computers. This is why GIS and spatial databases use WKB to transfer and store geometry objects. WKT is a human-readable text description of simple features. The two formats are exchangeable.
+Geometries are the building blocks of simple features. Well-known text (WKT) is the way simple feature geometries are coded. Well-known binary (WKB) representations are hexadecimal strings readable by computers. GIS and spatial databases use WKB to transfer and store geometry objects. WKT is a human-readable text description of simple features. The two formats are exchangeable.
 
 See: https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry
 
-A point is a coordinate in 2D, 3D or 4D space (see `vignette("sf1")` for more information) such as:
+In WKT format a point is a coordinate in 2D, 3D or 4D space (see `vignette("sf1")` for more information) such as:
 
 -   `POINT (5 2)`
 
 The first number is the x coordinate and the second number is the y coordinate.
 
-A linestring is a sequence of points with a straight line connecting the points, for example:
+A line string is a sequence of points with a straight line connecting the points, for example:
 
 -   `LINESTRING (1 5, 4 4, 4 1, 2 2, 3 2)`
 
@@ -80,7 +78,7 @@ Simple features allow multiple geometries (hence the term 'geometry collection')
 -   Multistring - `MULTILINESTRING ((1 5, 4 4, 4 1, 2 2, 3 2), (1 2, 2 4))`
 -   Multipolygon - `MULTIPOLYGON (((1 5, 2 2, 4 1, 4 4, 1 5), (0 2, 1 2, 1 3, 0 3, 0 2)))`
 
-Q: What is the difference (syntax wise) between a polygon with a hole and a multipolygon?
+Q: What is the difference (syntax wise) between a polygon with a hole and a multi-polygon?
 
 A collection of these is made:
 
@@ -88,7 +86,7 @@ A collection of these is made:
 
 Simple feature geometry (`sfg`)
 
-The `sfg` class represents the simple feature geometry types: point, linestring, polygon (and their 'multi' equivalents, such as multipoints) or geometry collection.
+The `sfg` class represents the simple feature geometry types: point, line string, polygon (and their 'multi' equivalents, such as multi points) or geometry collection.
 
 Usually we don't need to create geometries. They are part of the data we import. However, there are a set of functions to create simple feature geometry objects (`sfg`) from scratch, if needed. The names of these functions are simple and consistent, as they all start with the `st_` prefix and end with the name of the geometry type in lowercase letters:
 
@@ -103,8 +101,8 @@ Usually we don't need to create geometries. They are part of the data we import.
 An `sfg` object can be created from three data types:
 
 -   A numeric vector - a single point
--   A matrix - a set of points, where each row contains a point - a multipoint or linestring
--   A list - any other set, e.g. a multilinestring or geometry collection
+-   A matrix - a set of points, where each row contains a point - a multi-point or line string
+-   A list - any other set, e.g. a multi-line string or geometry collection
 
 To create point objects, we use the `st_point()` function from the {sp} package applied to a numeric vector.
 ```{r}
@@ -263,37 +261,45 @@ world_df <- st_set_geometry(world, NULL)
 class(world_df)
 ```
 
-### Example: Temperatures at FSU and the airport.
+### Example: Temperatures at FSU and at the airport.
 
 Suppose we measure a temperature of 10C at FSU at 9a on January 27, 2021. Thus, we have a specific point in space (the coordinates), the name of the location (FSU), a temperature value and the date of the measurement. Other attributes might include a urbanity category (campus or city), or a remark if the measurement was made with an automatic station.
 
-For example:
+Start by creating to `sfg` (simple feature geometry) point objects.
 ```{r}
-# sfg objects
 FSU.point <- st_point(c(-84.29849, 30.44188))
 TLH.point <- st_point(c(-84.34505, 30.39541))
-# sfc object
+```
+
+Then combine the point objects into a `sfc` (simple feature column) object.
+```{r}
 our.geometry <- st_sfc(FSU.point, TLH.point, 
                        crs = 4326)
-# data.frame object
+```
+
+Then create a data frame of attributes.
+```{r}
 our.attributes <- data.frame(name = c("FSU", "Airport"),
                              temperature = c(10, 5),
                              date = c(as.Date("2021-01-27"), as.Date("2021-01-27")),
                              category = c("campus", "airport"),
                              automatic = c(TRUE, FALSE))
-# sf object
-sf.points <- st_sf(our.attributes, 
-                   geometry = our.geometry)
+```
+
+Finally create a simple feature data frame.
+```{r}
+sfdf <- st_sf(our.attributes, 
+              geometry = our.geometry)
 ```
 
 The example illustrates the components of `sf` objects. First, coordinates define the geometry of the simple feature geometry (`sfg`). Second, we can combine the geometries into a simple feature geometry column (`sfc`) which also stores the CRS. Third, we store the attribute information on the geometries in a `data.frame`. Fourth, the `st_sf()` function combines the attribute table and the `sfc` object in an `sf` object.
 
 ```{r}
-sf.points
-class(sf.points)
+sfdf
+class(sfdf)
 ```
 
-We create a `data.frame` with a geometry list-column but that is not of class `sf` using the `as.data.frame()` function.
+Given a simple feature data frame we create a regular data frame with a geometry list-column but that is not of class `sf` using the `as.data.frame()` function.
 ```{r}
 df <- as.data.frame(sf.points)
 class(df)
@@ -359,9 +365,9 @@ We can create basic maps from simple feature data frames with the base `plot()` 
 
 ## Geo-computation on simple features
 
-Geo-computations on simple features are done with routines in the geometry engine-open source (GEOS) library.
+Geo-computations on simple features are done with routines in the geometry engine-open source (GEOS) library that functions in the {sf} package make use of.
 
-The file `police.zip` on my website contains shapefiles in a folder called `police`. The variables include police expenditures (POLICE), crime (CRIME), income (INC), unemployment (UNEMP) and other socio-economic variables for counties in Mississippi.
+As an example, consider the file `police.zip` on my website contains shapefiles in a folder called `police`. The variables include police expenditures (POLICE), crime (CRIME), income (INC), unemployment (UNEMP) and other socio-economic variables for counties in Mississippi.
 
 We download the data as a zipped file, unzip it, import it with the `st_read()` function from the {sf} package and then assign a geographic coordinate reference system (CRS) to it using the EPSG number 4326.
 ```{r}
@@ -374,14 +380,15 @@ sfdf <- st_read(dsn = "police",
 st_crs(sfdf) <- 4326
 ```
 
-As a quick check on the data we just imported we use `plot()` method on the geometry column.
+As a quick check on the data we just imported, we use `ggplot()` method and the `geom_sf()` layer.
 ```{r}
-plot(sfdf$geometry)
+ggplot(data = sfdf) +
+  geom_sf()
 ```
 
 This indicates that geographic unit of analysis is counties.
 
-Before performing geo-computations, we should set the coordinate reference system including the spatial units. Here we transform the geographic coordinate reference system to a specific Lambert conic conformal (planar) projection with units of kilometers.
+Before performing geo-computations, we need to set the coordinate reference system including the spatial units. Here we transform the geographic coordinate reference system to a specific Lambert conic conformal (planar) projection with units of kilometers.
 ```{r}
 sfdf <- st_transform(sfdf, 
                      crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=km")
@@ -396,11 +403,13 @@ Then to obtain the bounding box of the geometries we use the `st_bbox()` functio
 
 It returns an object of class `bbox`, which is a numeric vector of length four, with elements labeled `xmin`, `ymin`, `xmax`, and `ymax`.
 
-The function `st_as_sfc()` has methods for class `bbox` to generate a polygon around the four bounding box points. Here we apply this function then visualize it using the `plot()` method.
+The function `st_as_sfc()` has methods for class `bbox` to generate a polygon around the four bounding box points. Here we apply this function then visualize it.
 ```{r}
 box.sf <- st_as_sfc(box)
-plot(box.sf)
-plot(sfdf$geometry, add = TRUE)
+
+ggplot(data = box.sf) + 
+  geom_sf() +
+  geom_sf(data = sfdf)
 ```
 
 The `st_centroid()` function computes the geometric center of the spatial objects. By default it does this for all geometries (recall that with the S4 objects we needed `byid = TRUE`).
@@ -419,12 +428,13 @@ st_geometry(sfdf)
 st_geometry(centers.sfdf)
 ```
 
-The data frame portion of the simple feature data frame contains the exact same set and values of the attributes.
+The data frame portion of the simple feature data frame contains the same set and values of the attributes.
 ```{r}
-plot(centers.sfdf$geometry)
+ggplot(data = centers.sfdf) +
+  geom_sf()
 ```
 
-To get the centroid for the state we first create a new simple feature as a union of all counties.
+To get the centroid for the state we first create a new simple feature as a union of all the counties.
 ```{r}
 state.sf <- st_union(sfdf)
 class(state.sf)
@@ -435,8 +445,10 @@ The individual county geometries are joined and a single-geometry `sfc` object i
 Now we compute the centroid for the state.
 ```{r}
 center.sf <- st_centroid(state.sf)
-plot(sfdf$geometry)
-plot(center.sf, col = "red", add = TRUE)
+
+ggplot(data = sfdf) +
+  geom_sf() +
+  geom_sf(data = center.sf, col = "red")
 ```
 
 There is no weighting by attribute value.
@@ -451,11 +463,11 @@ Which county contains the geographic center of the state? Here we use the geomet
 We add the `sparse = FALSE` argument so the result is a matrix containing TRUEs and FALSEs. Since there are 82 counties and one centroid the matrix has 82 rows and 1 column. All matrix entries are `FALSE` except one.
 
 To see the result we first plot the county geometries, then add the county geometry for the center county and fill it red. Note that we use the matrix to subset this county. Finally we add the location of the state centroid to the plot.
-
 ```{r}
-plot(sfdf$geometry)
-plot(sfdf$geometry[mat[, 1]], add = TRUE, col = "red")
-plot(center.sf, add = TRUE, pch = 9)
+ggplot(data = sfdf) +
+  geom_sf() +
+  geom_sf(data = sfdf[mat[, 1],], col = "red") +
+  geom_sf(data = center.sf)
 ```
 
 The function `st_area()` returns a vector of the geographical area (in sq. units) of the spatial object.
@@ -474,16 +486,20 @@ st_area(centers.sfdf)
 
 Compute a 100 km buffer around the state and show the result with a plot.
 ```{r}
-plot(st_buffer(state.sf, dist = 100))
-plot(state.sf, add = TRUE)
+buffer.sf <- st_buffer(state.sf, dist = 100)
+
+ggplot(data = buffer.sf) +
+  geom_sf() +
+  geom_sf(data = state.sf)
 ```
 
-Length of boundary lines for U.S. states. Transform the CRS. Note that the geometry is multi-polygons. Convert the polygons to multi-linestrings, then use `st_length()` to get the total length of the lines.
+Length of boundary lines for U.S. states. Transform the CRS to 2163 (US National Atlas Equal Area). Note that the geometry is multi-polygons. Convert the polygons to multi-linestrings, then use `st_length()` to get the total length of the lines.
 ```{r}
 states <- us_states %>%
-  st_transform(crs = 2163) # US National Atlas Equal Area 
+  st_transform(crs = 2163)
 st_geometry(states) 
 
-states2 <- st_cast(states, to = "MULTILINESTRING")
+states2 <- states %>%
+  st_cast(to = "MULTILINESTRING")
 st_length(states2)
 ```

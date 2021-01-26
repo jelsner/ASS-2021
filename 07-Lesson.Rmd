@@ -8,17 +8,20 @@ editor_options:
   chunk_output_type: console
 ---
 
+# Working with spatial data continued
 
 ## Attribute variables
 
 Recall attributes are the variables (stored as columns) in a spatial data frame.
 
-There is no harm in keeping the geometry column because data operations on `sf` objects only change an object's geometry when appropriate (e.g. by dissolving borders between adjacent polygons following aggregation). This means that the speed of operations with attribute data in `sf` objects is the same as with columns in a data frames.
+There is no harm in keeping the geometry column because an operation on a `sf` object only changes the geometry when appropriate (e.g. by dissolving borders between adjacent polygons following aggregation). This means that the speed of operations with attribute data in `sf` objects is the same as with columns in a data frames.
 
 Subset functions include `[`, `subset()` and `$`. {dplyr} subset functions include `select()`, `filter()`, and `pull()`. Both sets of functions preserve the spatial components of attribute data in `sf` objects.
 
-The `[` operator can subset rows and columns. We use indices to specify the elements we wish to extract from an object, e.g. object[i, j], with i and j typically being numbers representing rows and columns. Leaving i or j empty returns all rows or columns, so `world[1:5, ]` returns the first five rows and all columns. Here are some examples.
+The `[` operator can subset rows and columns. We use indexes to specify the elements we wish to extract from an object, e.g. object[i, j], with i and j typically being numbers representing rows and columns. Leaving i or j empty returns all rows or columns, so `world[1:5, ]` returns the first five rows and all columns. Here are some examples.
 ```{r}
+library(spData)
+
 world[c(1, 5, 9), ] # subset rows by position
 world[, 1:3] # subset columns by position
 world[, c("name_long", "lifeExp")] # subset columns by name
@@ -181,210 +184,163 @@ The difference between `mutate()` and `transmute()` is that the latter skips all
 
 More information: https://geocompr.robinlovelace.net/attr.html
 
-## Areal weighted interpolation
+## Areal-weighted interpolation
 
-Areal weighted interpolation estimates the value of some attribute from a set of polygons to an overlapping but incongruent set of target polygons. For example, suppose we want demographic information given at the Census tract level to be estimated within the tornado damage path.
+Areal weighted interpolation estimates the value of some variable from a set of polygons to an overlapping but incongruent set of target polygons. For example, suppose we want demographic information given at the Census tract level to be estimated within the tornado damage path. Damage paths do not align with census tract boundaries so areal weighted interpolation is needed to get demographic estimates at the tornado level.
 
-Obviously tornado damage paths do not align with census tract boundaries, so areal interpolation is used to produce population estimates at the tornado level.
+The function `st_interpolate_aw()` from the {sf} package performs areal-weighted interpolation of polygon data. As an example, consider the number of births by county in North Carolina in 1974.
 
-Two function prefixes are available in the {areal} package that allow users to take advantage of RStudio's auto complete.
-
-* `ar_` - data and functions that are used for multiple interpolation methods
-* `aw_` - functions that are used specifically for areal weighted interpolation
-
+The data are available as a shapefile as part of the {sf} package system file. We use the `st_read()` function together with the `system.file()` function to import the data to our current session. We then plot the geometry.
 ```{r}
-library(areal)
+nc <- st_read(system.file("shape/nc.shp", 
+                          package = "sf"))
+plot(nc$geometry)
 ```
 
-The package contains four overlapping data sets.
-```{r, eval=FALSE}
-data(package = "areal")
+Next we construct a 20 by 10 grid of polygons that overlaps the state using the `st_make_grid()` function. The function takes the bounding box from the `nc` simple feature data frame and constructs a two-dimension grid using the dimensions specified with the `n =` argument.
+```{r}
+g <- st_make_grid(nc, n = c(20, 10))
+
+plot(g)
+plot(nc$geometry, add = TRUE)
 ```
 
-* `ar_stl_race` (2017 ACS demographic counts at the census tract level; n = 106)
-* `ar_stl_asthma` (2017 asthma rates at the census tract level; n = 106)
-* `ar_stl_wards` (the 2010 political subdivisions in St. Louis; n = 28).
-* `ar_stl_wardsClipped` Clipped (the 2010 political subdivisions in St. Louis clipped to the Mississippi River shoreline; n = 28).
+The result is a set of overlapping but incongruent set of polygons.
 
-Functions in the {areal} package assume that data are simple feature data frames. 
-
-A projected coordinate reference system is recommend. All data must be projected using the same system. Unnecessary columns should be removed prior to projection.
-
-Areal weighted interpolation makes a single (significant) assumption about the data. Populations are evenly distributed within the source data. 
-
-Imagine a census tract with 3,000 residents. Areal weighted interpolation assumes that these 3,000 residents are evenly spread through out the tract. 
-
-This assumption is not likely to be valid in general (e.g., tracts with large parks or dense housing developments alongside commercial buildings).
-
-The interpolation is done with the `aw_interpolate()` function.
-
-### Example 1: Population given at tract level interpolated to the ward level
-
-The number of people within each Census tract is known. But suppose we want the number of people in each ward. Wards are overlapping but incongruent polygons relative to the tracts.
-
-The simple feature data frame `ar_stl_wards` contains a vector of unique ward numbers (`WARD`) and a list of unique `POLYGON` geometry features.
+Then we use the `st_interpolate_aw()` function with the first argument a simple feature data frame for which we want to aggregate a particular variable and the argument `to =` set to the set of overlapping polygons. The argument `extensive =` if `FALSE` (default) assumes the variable is spatially intensive (like population density) and the mean is preserved. 
 ```{r}
-glimpse(ar_stl_wards)
+a1 <- st_interpolate_aw(nc["BIR74"], 
+                        to = g,
+                        extensive = FALSE)
 ```
 
-The simple feature data frame `ar_stl_race` contains a vector of unique idenfiers (`GEOID`), a vector of total population `TOTAL_E`, and a list of unique `POLYGON` geometry features. 
+The result is a simple feature data frame with the same geometry as grid and a single variable (`BIR74`).
+
+We note that the average number of births across the state at the county level matches (roughly) the average number of births across the grid of polygons, but the sums do not match.
 ```{r}
-glimpse(ar_stl_race)
+mean(a1$BIR74) / mean(nc$BIR74)
+
+sum(a1$BIR74) / sum(nc$BIR74)
 ```
 
-Analogy: The cookie cutters are the simple feature polygons defining the boundaries we want values interpolated to. This is defined as the target object which is the first argument in the `aw_interpolate()` function. We need to identify each cookie cutter with a unique target id (`tid`).
+An *intensive* variable is independent of the spatial units (e.g., population density, percentages); a variable that has been normalized in some fashion. An *extensive* variable depends on the spatial unit (e.g., population totals). Assuming a uniform population density, the number of people will depend on the size of the spatial area.
 
-The dough is the underlying simple feature variable that we want interpolated. It is defined in a source simple feature data frame (`source =`). Each feature must have a unique id (`sid`). The variable to be interpolated is specified in the `extensive =` argument.
-
-Here the cookie cutters are the ward `POLYGON`s and the tract-level population (`TOTAL_E`) is the dough.
-
-Finally, to ensure that all individuals within each tract are allocated out to wards we use `weight = "sum"`.
+Since the number of births in each county is an extensive variable, we toggle the `extensive =` argument to `TRUE`.
 ```{r}
-aw_interpolate(ar_stl_wards, 
-               tid = WARD, 
-               source = ar_stl_race, 
-               sid = "GEOID",
-               extensive = "TOTAL_E",
-               weight = "sum",
-               output = "sf")
+a2 <- st_interpolate_aw(nc["BIR74"], 
+                       to = g, 
+                       extensive = TRUE)
 ```
 
-The function is capable of interpolating extensive and intensive variables.
-
-Intensive variable: Variable that is independent of the spatial units (e.g., population density, percentages); variable that has been normalized in some fashion.
-
-Extensive variable: Data dependent on the spatial units (e.g., population totals).
-
-If the variable is intensive then use `intensive = ` instead of `extensive = ` to specify the variable to be interpolated.
-
-Options are documented in both the function documentation (use `?aw_interpolate`) as well as in a dedicated vignette.
-
-
-### Example 2: Estimate total residential population under each tornado path during 2014
-
-Here we are interested in the total (residential) population under each tornado occurring in Florida during 2014. We begin by creating a polygon geometry for each tornado record.
-
-Import the data. There are two files each with the exact set of tornadoes but with different geometries. The `..-aspath.zip` has `LINE` geometry indicating the straight line track. 
+In this case we preserve the total number of births across the domain. We verify this 'mass preservation' property (pycnophylactic property).
 ```{r}
-sfdfL <- st_read(dsn = "1950-2018-torn-aspath") %>%
-  filter(yr == 2014, st == "FL")
+sum(a2$BIR74) / sum(nc$BIR74)
 ```
 
-Next we project the geographic coordinate reference system to a specific Lambert conic conformal projection. The spatial units are set to meters.
+Here we create a plot of both interplations.
 ```{r}
-sfdfL <- st_transform(sfdfL, 
-                      crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=m")
+a1$intensive <- a1$BIR74
+a1$extensive <- a2$BIR74
+plot(a1[c("intensive", "extensive")], 
+     key.pos = 4)
 ```
 
-Next we add a buffer to the geometries to represent the tornado path ('footprint'). The width of the buffer is 1/2 the width given in the attribute table in the column `wid`. First we create new variables giving the width (and length) in units of meters.
+### Example: Tornadoes: people and property
+
+Here we are interested in the number of housing units affected by tornadoes occurring in Florida 2014-2018. We begin by creating a polygon geometry for each tornado record.
 ```{r}
-sfdfL <- sfdfL %>%
+download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-aspath.zip",
+              destfile = "1950-2018-torn-aspath.zip")
+unzip("1950-2018-torn-aspath.zip")
+```
+
+Import the data, transform the native CRS to 3857 (pseudo-Mercator), and filter.
+```{r}
+Torn.sf <- st_read(dsn = "1950-2018-torn-aspath", 
+                   layer = "1950-2018-torn-aspath") %>%
+  st_transform(crs = 3857)
+
+FL_Torn.sf <- Torn.sf %>%
+  filter(yr >= 2014, st == "FL")
+```
+
+Next we add a buffer to the geometries to represent the tornado path ('footprint'). The width of the buffer is 1/2 the width given by the variable labeled `wid`. First we create new variables giving the width (and length) in units of meters and then use the `st_buffer()` function.
+```{r}
+FL_Torn.sf <- FL_Torn.sf %>%
   mutate(Width = wid * .9144,
          Length = len * 1609.34)
-sfdfB <- st_buffer(sfdfL, 
-                   dist = sfdfL$Width/2,
-                   endCapStyle = 'ROUND')
+FL_Torn.sf <- st_buffer(FL_Torn.sf, 
+                        dist = sfdfL$Width/2)
 ```
 
-Next, get the population data from the U.S. Census Bureau. First get an API key from http://api.census.gov/data/key_signup.html
+Then we get the census data using the `get_acs()` function from the {tidycensus} package. The package is an interface to the decennial US Census and American Community Survey APIs and the US Census Bureau's geographic boundary files. Functions return Census and ACS data as simple feature data frames for all Census geographies.
+```{r}
+if(!require(tidycensus)) install.packages(pkgs = "tidycensus", repos = "http://cran.us.r-project.org")
 
-Here I've already done this and put the relevant data on my website. The functions are from Kyle Walker's {tidycensus} package. Here is how I did it. You will need to request and get a U.S. Census API. https://www.census.gov/developers/
-```{r, eval=FALSE}
 library(tidycensus)
-census_api_key("YOUR API KEY GOES HERE", 
-               install = TRUE)
 ```
 
-The 2014 population data are available using the `get_acs()` function from the {tidycensus} package. Here tract-level total population for the country (`B01003_001`). If we want tracts or smaller then we need to specify by state with `state = `.
-```{r, eval=FALSE}
-tractPop <- get_acs(geography = "tract",
-                    year = 2014,
-                    variables = "B01003_001",
-                    state = "FL",
-                    geometry = TRUE)
-tractPop <- st_transform(tractPop, 
-                         crs = st_crs(sfdfB))
-st_write(tractPop, 
-         dsn = "tractPop.shp")
-```
-
-Here we start with the Census data that was written out using the code above and placed on my website as a shapefile (`tractPop`).
+The geometry is the tract level and the variable is the unweighted sample housing units (B00002_001). We transform the CRS to that of the tornadoes.
 ```{r}
-download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/tractPop.zip",
-              destfile = "temporary.zip")
-unzip("temporary.zip")
-tractPop <- st_read(dsn = "tractPop") 
-head(tractPop)
+Census.sf <- get_acs(geography = "tract", 
+                     variables = "B00002_001",
+                     state = "FL",
+                     year = 2018,
+                     geometry = TRUE) %>%
+  st_transform(crs = st_crs(FL_Torn.sf))
 ```
 
-Here the cookie cutters are the damage path POLYGONS and the tract-level population estimate is the dough.
-
-Here we want `weight = "total"` so that the proportion of the tract area that is covered by the tornado path is used to weight the population of the tract. To simply preview the weights we use the `aw_preview_weights()` function as follows. The first argument is the cookie cutter simple feature data frame name, the second argument (`tid`) is the unique row identifier in the cookie cutter data frame. The `source =` argument names the simple feature data frame from which the cuts are made (here `tractPop`). The `sid =` argument is the unique row identifier in the source data frame. The final argument is the type of interpolation (either `intensive` or `extensive` in quotes).
+Finally we use the `st_interpolate_aw()` function
 ```{r}
-aw_preview_weights(sfdfB, 
-                   tid = om, 
-                   source = tractPop, 
-                   sid = GEOID, 
-                   type = "extensive")
+awi.sf <- st_interpolate_aw(Census.sf["estimate"],
+                            to = FL_Torn.sf, 
+                            extensive = TRUE)
+head(awi.sf)
+range(awi.sf$estimate, 
+      na.rm = TRUE)
 ```
 
-The first tornado in `sfdfB` simple features data frame covers .035% (`extensiveTotal` column) of the tract with GEOID 12003040102.
+## Geographic subsetting
 
-To perform the interpolation we remove the `type =` argument and replace it with the `extensive =` argument and where the value of the argument is the name of the variable we want to interpolated. Here that variable is the population estimate at the tract level with name `estimate`. We put the column name in quotes. We specify `weight = "total"` since we want the interpolation to have the same units as the extensive variable (here population) and we specify the `output =` to be a simple feature.
-```{r}
-out.sf <- aw_interpolate(sfdfB, 
-                         tid = om, 
-                         source = tractPop, 
-                         sid = GEOID, 
-                         extensive = "estimate",
-                         weight = "total", 
-                         output = "sf")
-```
+The {USAboundaries} package contains historical and contemporary boundaries for the United States with the data provided by the U.S. Census Bureau.
 
-The simple feature data frame (`out.sf`) contains all the same variables as `sfdfB` with a new column `estimate` giving the estimated population under the path of each tornado in Florida during 2014.
-```{r}
-head(out.sf)
-```
-
-## Spatial aggregation
-
-https://www.jla-data.net/eng/spatial-aggregation/
-
-Example: State (U.S.) boundaries as simple feature data frames
-
-Consider the U.S. state of Kansas. A boundary file containing the borders as a polygon is available in the {USAboundaries} package. The package contains historical and contemporary boundaries with the data provided by the U.S. Census Bureau.
-
-Individual states are extracted using the `us_states()` function.
+Individual states are extracted using the `us_states()` function. CAUTION: the function has the same name as the object `us_states` from the {spData} package.
 ```{r}
 library(USAboundaries)
-library(sf)
-KS <- us_states(states = "Kansas")
-class(KS)
-plot(KS$geometry)
+
+KS.sf <- us_states(states = "Kansas")
+class(KS.sf)
+plot(KS.sf$geometry)
 ```
 
 We transform the CRS to a Web Mercator using the EPSG 3857 code.
 ```{r}
-KS <- st_transform(KS, crs = 3857)
-```
-
-Suppose we want to subset geographically rather than based on some value in a column of the data frame. For example here we subset the tornado initial locations by the boundaries defined by Kansas. We first import the initial genesis locations  and transform the native CRS to EPSG 3857.
-```{r}
-download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-initpoint.zip",
-              destfile = "1950-2018-torn-initpoint.zip")
-unzip("1950-2018-torn-initpoint.zip")
-
-Alltors <- st_read(dsn = "1950-2018-torn-initpoint", 
-                   layer = "1950-2018-torn-initpoint") %>%
+KS.sf <- KS.sf %>%
   st_transform(crs = 3857)
 ```
 
-We then use the `st_intersection()` function to determine the subset of all tornadoes that intersect the Kansas polygon. The first argument is the simple feature data frame that we want subsetted and the second defines the geometry over which the subsetting occurs.
+Suppose we want to subset geographically rather than based on some value in a column of the data frame. For example here we subset the tornado tracks by the boundaries defined by Kansas.
+
+We use the `st_intersection()` function to determine the set of all tornadoes that intersect the Kansas polygon. The first argument is the simple feature data frame that we want to subset and the second defines the geometry over which the subset occurs.
 ```{r}
-KStors <- st_intersection(Alltors, 
-                          KS$geometry)
-plot(KS$geometry)
-plot(KStors$geometry, add = TRUE)
+KS_Torn.sf <- st_intersection(Torn.sf, 
+                              KS.sf$geometry)
+
+plot(KS.sf$geometry)
+plot(KS_Torn.sf$geometry, add = TRUE)
+```
+
+Note that no tornado track lies outside the state border. Line strings that lie outside the border are clipped at the border.
+
+If we want the entire tornado track for all tornadoes that passed into (or through) the state, then we first use the geometric binary predict function `st_intersects()`. By specifying `sparse = FALSE` a matrix with a single column of TRUEs and FALSEs is returned, which is subsequently used to subset the tornado data frame.
+```{r}
+Intersects <- st_intersects(Torn.sf,
+                            KS.sf$geometry,
+                            sparse = FALSE)
+KS_Torn2.sf <- Torn.sf[Intersects, ]
+
+plot(KS.sf$geometry)
+plot(KS_Torn2.sf$geometry, add = TRUE)
 ```
 
 Suppose we want to determine the distance between the geographic center of the state and the centroid of all the tornadoes?
@@ -403,6 +359,4 @@ plot(KStorcenter, add = TRUE, col = "red")
 st_distance(KSgeocenter, KStorcenter)
 ```
 
-### Example: economic impact of a tornado
-
-See `tidycensus.Rmd`
+More examples: https://www.jla-data.net/eng/spatial-aggregation/

@@ -709,60 +709,6 @@ spplot(spdfP,
        at = rng)
 ```
 
-Better.
-
-We reuse this code making small modifications to create a thematic map showing percentage of the population that is unemployed.
-```{r}
-range(spdfP$UNEMP)
-rng <- seq(4, 18, 2)
-cls <- brewer.pal(7, "Blues")
-spplot(spdfP, 
-       zcol = "UNEMP", 
-       col.regions = cls, 
-       at = rng,
-       colorkey = list(space = "bottom"), 
-       sub = "Unemployment (%)")
-```
-
-Note that the color key is blaced on the bottom.
-
-We add a north arrow by first determining the bounding box of the plot and then creating a list that specifies the scale and location of the arrow. This list gets passed to the `spplot()` function through the `sp.layout =` argument. Here we start by reprojecting the spatial data frame.
-```{r}
-spdfP <- spTransform(spdfP, 
-                     CRS = CRS("+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=km"))
-bbox(spdfP)
-l1 <- list("SpatialPolygonsRescale", 
-           layout.north.arrow(), 
-           offset = c(-125, 4200), 
-           scale = 40)
-spplot(spdfP, 
-       zcol = "UNEMP", 
-       col.regions = cls, 
-       at = rng,
-       sp.layout = list(l1),
-       colorkey = list(space = "bottom"), 
-       sub = "Unemployment (%)")
-```
- 
-Similarly, we add a scale bar.
-```{r}
-l3 <- list("SpatialPolygonsRescale", 
-          layout.scale.bar(), 
-          offset = c(-125, 3734), 
-	        scale = 50, fill = c("transparent","black"))
-l4 <- list("sp.text", c(-125, 3724), "0")
-l5 <- list("sp.text", c(-75, 3724), "50 km")
-spplot(spdfP, 
-       zcol = "UNEMP", 
-       col.regions = cls, 
-       at = rng,
-  sp.layout = list(l1, l3, l4, l5), 
-  colorkey = list(space = "bottom"), 
-  sub = "Unemployment (%)")
-```
-
-This takes a lot of trial and error.
-
 ## Space-time data
 
 See stars.Rmd in space-time projects.
@@ -772,6 +718,71 @@ See stars.Rmd in space-time projects.
 See https://github.com/luukvdmeer/sfnetworks
 
 ## Notes on coordinate reference systems
+
+See also https://gist.github.com/DavZim
+```{r}
+library(tidyverse)
+library(sf)
+library(spData)
+library(gganimate)
+data(world)
+
+# see also: https://proj.org/operations/projections/index.html
+projs <- list(
+  "Mercator" = "+proj=merc",
+  "WGS 84" = "+proj=longlat",
+  "Robinson" = "+proj=robin",
+  "Compact Miller" = "+proj=comill",
+  "Eckert I" = "+proj=eck1",
+  "Eckert II" = "+proj=eck2",
+  "Eckert III" = "+proj=eck3",
+  "Eckert IV" = "+proj=eck4",
+  "Mollweide" = "+proj=moll", 
+  "Azimuth Equidistant" = "+proj=aeqd",
+  "Lambert Equal Area" = "+proj=laea",
+  "Adams World in a Square 2" = "+proj=adams_ws2",
+  "Sinusoidal (Sanson-Flamsteed)" = "+proj=sinu",
+  "Interrupted Goode Homolosine" = "+proj=igh"
+)
+
+dd <- map_dfr(projs, function(p) {
+  d <- world %>% 
+    select(iso_a2, name_long, continent, geom) %>% 
+    mutate(projection = p, L1 = 1:n()) %>% 
+    st_transform(p)
+  
+  dd <- left_join(
+    st_coordinates(d) %>% as_tibble(), 
+    d %>% as_tibble() %>% select(-geom), 
+    by = "L1"
+  )
+  
+  res <- dd %>% 
+    select(x = X, y = Y, everything()) %>% 
+    mutate(id = paste0(L1, L2, L3)) %>% 
+    mutate(x_orig = x, y_orig = y,
+           x = (x - min(x)) / (max(x) - min(x)),
+           y = (y - min(y)) / (max(y) - min(y)))
+  
+  res
+}) %>% 
+  mutate(projection = factor(projection, levels = unlist(projs)))
+
+anim <- ggplot(dd, aes(x = x, y = y, group = id)) + 
+  geom_polygon(fill = "black") +
+  transition_states(projection) +
+  ease_aes("cubic-in-out") +
+  labs(title = "The World in '{names(projs)[projs == closest_state]}' Projektion",
+       subtitle = "Projection: '{closest_state}'") +
+  theme_minimal() +
+  theme(axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(), 
+        panel.grid=element_blank(),
+        plot.background=element_rect(fill = "white"))
+
+anim_save("images/projections.gif", anim, res = 200, width = 1000, height = 1000)
+```
 
 CRS provide a standardized way of describing locations. Many different CRS are used to describe geographic data. The CRS that is chosen depends on when the data was collected, the geographic extent of the data, the purpose of the data, etc.
 
