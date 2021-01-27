@@ -3,7 +3,6 @@ title: "Lesson 6"
 author: "James B. Elsner"
 date: "January 27, 2021"
 output:
-  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -21,7 +20,7 @@ The _raster data model_ (raster data) represents continuous fields (like elevati
 
 The choice of data model depends on application: Vector data tends to dominate the social sciences because human settlements and boundaries have discrete borders. Raster data (e.g., remotely sensed imagery) tends to dominate the environmental sciences because environmental conditions are typically continuous. Geographers, ecologists, demographers use vector and raster data. 
 
-In this class we use functions from the {sf} package to work with vector data and functions in the {raster} packages to work with raster data sets. We will also look at functions from the {stars} package that work with both vector and raster data models.
+In this class we use functions from the {sf} package to work with vector data and functions in the {raster} packages to work with raster data sets. We will also look at functions from the brand new {stars} package that work with both vector and raster data models.
 
 R's spatial ecosystem continues to evolve. Most changes build on what has already been done. Occasionally there is a significant change that builds from scratch. The introduction of the {sf} package in about 2018 (Edzer Pebesma) is a significant change.
 
@@ -413,7 +412,7 @@ ggplot(data = box.sf) +
   geom_sf(data = sfdf)
 ```
 
-The `st_centroid()` function computes the geometric center of the spatial objects. By default it does this for all geometries (recall that with the S4 objects we needed `byid = TRUE`).
+The `st_centroid()` function computes the geometric center of the spatial objects. By default it does this for all geometries.
 ```{r}
 centers.sfdf <- st_centroid(sfdf)
 ```
