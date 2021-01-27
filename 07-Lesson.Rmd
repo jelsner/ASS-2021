@@ -332,7 +332,7 @@ plot(KS_Torn.sf$geometry, add = TRUE)
 
 Note that no tornado track lies outside the state border. Line strings that lie outside the border are clipped at the border.
 
-If we want the entire tornado track for all tornadoes that passed into (or through) the state, then we first use the geometric binary predict function `st_intersects()`. By specifying `sparse = FALSE` a matrix with a single column of TRUEs and FALSEs is returned, which is subsequently used to subset the tornado data frame.
+If we want the entire tornado track for all tornadoes that passed into (or through) the state, then we first use the geometric binary predict function `st_intersects()`. By specifying `sparse = FALSE` a matrix with a single column of `TRUE`s and `FALSE`s is returned, which is subsequently used to subset the tornado data frame.
 ```{r}
 Intersects <- st_intersects(Torn.sf,
                             KS.sf$geometry,
