@@ -10,6 +10,8 @@ editor_options:
 
 # Working with spatial data continued
 
+[Code bug bingo](https://twitter.com/cogscimom/status/1354508785365078016/photo/1)
+
 ## Attribute variables
 
 Recall attributes are the variables (stored as columns) in a spatial data frame.
