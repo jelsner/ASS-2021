@@ -388,91 +388,50 @@ ggplot(data = sfdf) +
 
 This indicates that geographic unit of analysis is counties.
 
-Before performing geo-computations, we need to set the coordinate reference system including the spatial units. Here we transform the geographic coordinate reference system to a specific Lambert conic conformal (planar) projection with units of kilometers.
+We first transform the geographic coordinate reference system to a specific Lambert conic conformal (planar) projection with units of kilometers.
 ```{r}
-sfdf <- st_transform(sfdf, 
-                     crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=km")
-```
+library(tidyverse)
 
-Note that we recycled the name `sfdf`.
-
-Then to obtain the bounding box of the geometries we use the `st_bbox()` function.
-```{r}
-( box <- st_bbox(sfdf) )
-```
-
-It returns an object of class `bbox`, which is a numeric vector of length four, with elements labeled `xmin`, `ymin`, `xmax`, and `ymax`.
-
-The function `st_as_sfc()` has methods for class `bbox` to generate a polygon around the four bounding box points. Here we apply this function then visualize it.
-```{r}
-box.sf <- st_as_sfc(box)
-
-ggplot(data = box.sf) + 
-  geom_sf() +
-  geom_sf(data = sfdf)
+sfdf <- sfdf %>%
+    st_transform(crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=km")
 ```
 
 The `st_centroid()` function computes the geometric center of the spatial objects. By default it does this for all geometries.
 ```{r}
-centers.sfdf <- st_centroid(sfdf)
+countyCenters.sf <- sfdf %>%
+    st_centroid()
 ```
 
 The warning is to let you know that the attributes represent a geometry (e.g., areal aggregate) that might be misleading when representing the new geometry.
 
-The object returned is of the same class as `sfdf` (`sf` and `data.frame`). But the geometry is changed from `POLYGON` to `POINT`.
-```{r}
-class(sfdf)
-class(centers.sfdf)
-      
-st_geometry(sfdf)
-st_geometry(centers.sfdf)
-```
-
-The data frame portion of the simple feature data frame contains the same set and values of the attributes.
-```{r}
-ggplot(data = centers.sfdf) +
-  geom_sf()
-```
-
 To get the centroid for the state we first create a new simple feature as a union of all the counties.
 ```{r}
-state.sf <- st_union(sfdf)
-class(state.sf)
+stateCenter.sf <- sfdf %>%
+  st_union() %>%
+  st_centroid()
 ```
-
-The individual county geometries are joined and a single-geometry `sfc` object is returned. There is no attribute information associated with the new geometry.
-
-Now we compute the centroid for the state.
-```{r}
-center.sf <- st_centroid(state.sf)
-
-ggplot(data = sfdf) +
-  geom_sf() +
-  geom_sf(data = center.sf, col = "red")
-```
-
-There is no weighting by attribute value.
 
 Which county contains the geographic center of the state? Here we use the geometric binary predicate `st_contains()`.
 ```{r}
-( Contains <- st_contains(sfdf, 
-                          center.sf,
-                          sparse = FALSE) )
+( Contains <- sfdf %>%
+    st_contains(stateCenter.sf,
+                sparse = FALSE) )
 ```
 
 We add the `sparse = FALSE` argument so the result is a matrix containing `TRUE`s and `FALSE`s. Since there are 82 counties and one centroid the matrix has 82 rows and 1 column. All matrix entries are `FALSE` except one.
 
-To see the result we first plot the county geometries, then add the county geometry for the center county and fill it red. Note that we use the matrix to subset this county. Finally we add the location of the state centroid to the plot.
+To map the result we first plot the county geometries, then add the county geometry for the center county and fill it red. Note that we use the matrix to subset this county. Finally we add the location of the state centroid to the plot.
 ```{r}
 ggplot(data = sfdf) +
   geom_sf() +
   geom_sf(data = sfdf[Contains, ], col = "red") +
-  geom_sf(data = center.sf)
+  geom_sf(data = stateCenter.sf)
 ```
 
 The function `st_area()` returns a vector of the geographical area (in sq. units) of the spatial object.
 ```{r}
-st_area(sfdf)
+sfdf %>%
+  st_area()
 ```
 
 Units are given along with a vector of the area values.
@@ -481,26 +440,31 @@ There is an attribute called `AREA` in the data frame but it is better to calcul
 
 What happens when we apply the area function on the centroid object?
 ```{r}
-st_area(centers.sfdf)
+countyCenters.sf %>%
+  st_area()
 ```
 
 Compute a 100 km buffer around the state and show the result with a plot.
 ```{r}
-buffer.sf <- st_buffer(state.sf, 
-                       dist = 100)
+buffer.sf <- sfdf %>%
+  st_union() %>%
+  st_buffer(dist = 100)
 
 ggplot(data = buffer.sf) +
   geom_sf() +
-  geom_sf(data = state.sf)
+  geom_sf(data = sfdf)
 ```
 
 Length of boundary lines for U.S. states. Transform the CRS to 2163 (US National Atlas Equal Area). Note that the geometry is multi-polygons. Convert the polygons to multi-linestrings, then use `st_length()` to get the total length of the lines.
 ```{r}
+library(spData)
+
 states <- us_states %>%
   st_transform(crs = 2163)
-st_geometry(states) 
 
-states2 <- states %>%
-  st_cast(to = "MULTILINESTRING")
-st_length(states2)
+st_length(states) 
+
+states %>%
+  st_cast(to = "MULTILINESTRING") %>%
+  st_length()
 ```
