@@ -61,7 +61,7 @@ Which county contains the geographic center of the state? Here we use the geomet
                 sparse = FALSE) )
 ```
 
-We add the `sparse = FALSE` argument so the result is a matrix containing `TRUE`s and `FALSE`s. Since there are 82 counties and one centroid the matrix has 82 rows and 1 column. All matrix entries are `FALSE` except one.
+We add the `sparse = FALSE` argument so that the result is a matrix containing `TRUE`s and `FALSE`s. Since there are 82 counties and one centroid the matrix has 82 rows and 1 column. All matrix entries are `FALSE` except one.
 
 To map the result we first plot the county geometries, then add the county geometry for the center county and fill it red. Note that we use the matrix to subset this county. Finally we add the location of the state centroid to the plot.
 ```{r}
