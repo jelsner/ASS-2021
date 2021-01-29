@@ -426,10 +426,28 @@ Convert the `SpatialPolygonsDataFrame` to a simple features data frame.
 sfdf <- st_as_sf(spdf)
 ```
 
-
 ## Space-time data
 
 See stars.Rmd in space-time projects.
+
+Package {stars} provides infrastructure for _data cubes_, array data with labeled dimensions, with emphasis on arrays where some of the dimensions relate to time and/or space.
+
+Spatial data cubes are arrays with one or more spatial dimensions. Raster data cubes have at least two spatial dimensions that form the raster tesselation. Vector data cubes have at least one spatial dimension that may for instance reflect a polygon tesselation, or a set of point locations. Conversions between the two (rasterization,polygonization) are provided. Vector data are represented by simple feature geometries (packages `sf`). Tidyverse methods are provided.
+
+The {stars} package is loaded by
+```{r}
+library(stars)
+```
+
+Spatiotemporal arrays are stored in objects of class `stars`; methods for class `stars` currently available are
+``` {r}
+methods(class = "stars")
+```
+
+Note: tidyverse methods are only visible after loading package {tidyverse}.
+
+For more see: https://github.com/r-spatial/stars/tree/master/vignettes
+
 
 ## Spatial networks
 

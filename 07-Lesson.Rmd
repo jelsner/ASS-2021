@@ -397,7 +397,7 @@ library(sp)
 
 Spatial objects from the {sp} package fall into two types: 1) spatial-only information (the topology). These include `SpatialPoints`, `SpatialLines`, `SpatialPolygons`, etc, and 2) extensions to these cases where attribute information is available and stored in a data frame. These include `SpatialPointsDataFrame`, `SpatialLinesDataFrame`, etc.
 
-To convert a simple feature data frame (as an S3 spatial object) to an S4 spatial object use `as_Spatial()`. Here we first transform the CRS back to WGS84.
+We use `as_Spatial()` to convert a simple feature data frame (as an S3 spatial object) to an S4 spatial object. Here we first transform the CRS back to WGS84.
 ```{r}
 FL_Torn.sf <- FL_Torn.sf %>%
   st_transform(crs = 4326)
