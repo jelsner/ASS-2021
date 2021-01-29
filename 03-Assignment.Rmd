@@ -1,0 +1,121 @@
+---
+title: "Assignment 3"
+author: "Your Name"
+date: January 29, 2021
+output: 
+  html_document:
+    keep_md: true
+editor_options: 
+  chunk_output_type: console
+---
+
+## Geo-computation on simple features
+
+Consider the ESRI shape file of police expenditures by county in Mississippi. Download the data as a zipped file, unzip it, import it with the `st_read()` function from the {sf} package and then assign a geographic coordinate reference system (CRS) to it using the EPSG number 4326.
+```{r}
+library(sf)
+
+download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/police.zip",
+              destfile = "police.zip")
+unzip("police.zip")
+
+sfdf <- st_read(dsn = "police", 
+                layer = "police")
+st_crs(sfdf) <- 4326
+```
+
+The geometry type is polygon and there are 82 polygons, one for each county.
+
+We first transform the geographic coordinate reference system to a specific Lambert conic conformal (planar) projection with units of kilometers.
+```{r}
+library(tidyverse)
+
+sfdf <- sfdf %>%
+    st_transform(crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=km")
+```
+
+The `st_centroid()` function computes the geographic center of each simple feature geometry (`sfg`) in the data frame.
+```{r}
+countyCenters.sf <- sfdf %>%
+    st_centroid()
+```
+
+The warning is to let you know that the attributes attached to each geometry (polygons) might be misleading when attached to the new geometry (points).
+```{r}
+st_geometry(countyCenters.sf)
+```
+
+To get the centroid for the state, we first take the a union of all the counties using the `st_union()` function, then use the `st_centroid()` function.
+```{r}
+stateCenter.sfc <- sfdf %>%
+  st_union() %>%
+  st_centroid()
+```
+
+The result is a simple feature geometry column of length one. 
+
+Which county contains the geographic center of the state? Here we use the geometric binary predicate `st_contains()`.
+```{r}
+( Contains <- sfdf %>%
+    st_contains(stateCenter.sfc,
+                sparse = FALSE) )
+```
+
+We add the `sparse = FALSE` argument so the result is a matrix containing `TRUE`s and `FALSE`s. Since there are 82 counties and one centroid the matrix has 82 rows and 1 column. All matrix entries are `FALSE` except one.
+
+To map the result we first plot the county geometries, then add the county geometry for the center county and fill it red. Note that we use the matrix to subset this county. Finally we add the location of the state centroid to the plot.
+```{r}
+ggplot(data = sfdf) +
+  geom_sf() +
+  geom_sf(data = sfdf[Contains, ], col = "red") +
+  geom_sf(data = stateCenter.sfc)
+```
+
+The function `st_area()` returns a vector of the geographical area (in sq. units) of the spatial object.
+```{r}
+sfdf %>%
+  st_area()
+```
+
+Units are given along with a vector of the area values.
+
+There is an attribute called `AREA` in the data frame but it is better to calculate it from the spatial geometries because we are sure of the units.
+
+What happens when we apply the area function on the centroid object?
+```{r}
+countyCenters.sf %>%
+  st_area()
+```
+
+Compute a 100 km buffer around the state and show the result with a plot. First use `st_union()`, then `st_buffer()`, then pipe the output (a simple feature data frame to `ggplot()`).
+```{r}
+sfdf %>%
+  st_union() %>%
+  st_buffer(dist = 100) %>%
+ggplot() +
+  geom_sf() +
+  geom_sf(data = sfdf)
+```
+
+## Assignment 3
+
+Due: January 29, 2021, 3pm
+
+Total Points: 40
+
+**1** Use the file `Tornadoes.csv` and create a time series plot of the annual number of tornadoes in Florida since 1950. Use a point and a line layer (15).
+
+**2** Create a simple feature data frame from the following information about the Joplin tornado that killed 158 people on May 22, 2011 then determine the length in meters. Hint: use `st_linestring()` and `rbind()` to create the simple feature data frame then use `st_length()` to determine the length. (25)
+
+Geographic information:
+
+* Start longitude: -94.5932 
+* Start latitude: 37.0524 
+* End longitude: -94.2213 
+* End latitude: 36.9838 
+* crs: 4326
+
+Attributes:
+
+* number of fatalities: 158
+* name: "Joplin Tornado"

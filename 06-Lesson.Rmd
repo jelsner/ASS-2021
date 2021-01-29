@@ -369,8 +369,10 @@ Geo-computations on simple features are done with routines in the geometry engin
 
 As an example, consider the file `police.zip` on my website contains shapefiles in a folder called `police`. The variables include police expenditures (POLICE), crime (CRIME), income (INC), unemployment (UNEMP) and other socio-economic variables for counties in Mississippi.
 
-We download the data as a zipped file, unzip it, import it with the `st_read()` function from the {sf} package and then assign a geographic coordinate reference system (CRS) to it using the EPSG number 4326.
+it with the `st_read()` function from the {sf} package and then assign a geographic coordinate reference system (CRS) to it using the EPSG number 4326.
 ```{r}
+library(sf)
+
 download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/police.zip",
               destfile = "police.zip")
 unzip("police.zip")
@@ -380,13 +382,7 @@ sfdf <- st_read(dsn = "police",
 st_crs(sfdf) <- 4326
 ```
 
-As a quick check on the data we just imported, we use `ggplot()` method and the `geom_sf()` layer.
-```{r}
-ggplot(data = sfdf) +
-  geom_sf()
-```
-
-This indicates that geographic unit of analysis is counties.
+The geometry type is polygon and there are 82 polygons, one for each county.
 
 We first transform the geographic coordinate reference system to a specific Lambert conic conformal (planar) projection with units of kilometers.
 ```{r}
@@ -396,25 +392,30 @@ sfdf <- sfdf %>%
     st_transform(crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=km")
 ```
 
-The `st_centroid()` function computes the geometric center of the spatial objects. By default it does this for all geometries.
+The `st_centroid()` function computes the geographic center of each simple feature geometry (`sfg`) in the data frame.
 ```{r}
 countyCenters.sf <- sfdf %>%
     st_centroid()
 ```
 
-The warning is to let you know that the attributes represent a geometry (e.g., areal aggregate) that might be misleading when representing the new geometry.
-
-To get the centroid for the state we first create a new simple feature as a union of all the counties.
+The warning is to let you know that the attributes attached to each geometry (polygons) might be misleading when attached to the new geometry (points).
 ```{r}
-stateCenter.sf <- sfdf %>%
+st_geometry(countyCenters.sf)
+```
+
+To get the centroid for the state, we first take the a union of all the counties using the `st_union()` function, then use the `st_centroid()` function.
+```{r}
+stateCenter.sfc <- sfdf %>%
   st_union() %>%
   st_centroid()
 ```
 
+The result is a simple feature geometry column of length one. 
+
 Which county contains the geographic center of the state? Here we use the geometric binary predicate `st_contains()`.
 ```{r}
 ( Contains <- sfdf %>%
-    st_contains(stateCenter.sf,
+    st_contains(stateCenter.sfc,
                 sparse = FALSE) )
 ```
 
@@ -444,13 +445,12 @@ countyCenters.sf %>%
   st_area()
 ```
 
-Compute a 100 km buffer around the state and show the result with a plot.
+Compute a 100 km buffer around the state and show the result with a plot. First use `st_union()`, then `st_buffer()`, then pipe the output (a simple feature data frame to `ggplot()`).
 ```{r}
-buffer.sf <- sfdf %>%
+sfdf %>%
   st_union() %>%
-  st_buffer(dist = 100)
-
-ggplot(data = buffer.sf) +
+  st_buffer(dist = 100) %>%
+ggplot() +
   geom_sf() +
   geom_sf(data = sfdf)
 ```
