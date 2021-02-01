@@ -8,7 +8,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-**"An awful lot of time I spend "coding" is actually spent copying and pasting (And much of the rest is spent googling)."** --- Meghan Duffy
+**"An awful lot of time I spend "coding" is actually spent copying and pasting (And much of the rest is spent googling)."** – Meghan Duffy
 
 Today I show you the building blocks of spatial data in R. While most of what we do involve higher level functions, it is important to see how these building blocks fit together and how they fit with data frames.
 
