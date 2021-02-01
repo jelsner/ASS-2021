@@ -1,0 +1,207 @@
+---
+title: "Lesson 10"
+author: "James B. Elsner"
+date: "February 10, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+Today: More about making maps
+
+## Example 3: Tornado locations by month
+
+Import the tornado data. Remove Alaska, Hawaii, and Puerto Rico tornadoes. The native CRS is latitude/longitude so we transform it to a Web Mercator (EPSG 3857) used by Google Maps, OpenStreetMap, Bing, ArcGIS, ESRI.
+```{r}
+Torn.sf <- read_sf(dsn = "1950-2018-torn-initpoint",
+                   layer = "1950-2018-torn-initpoint") %>%
+      filter(!st %in% c("HI", "AK", "PR")) %>%
+      filter(yr >= 1994) %>%
+      st_transform(crs = 3857)
+```
+
+
+Suppose we want a map showing the location of tornadoes by month. First add the world map with countries as a polygon layer (fill is gray by default). Then overlay the U.S. country polygons and color them white. Then add the tornado genesis locations as dots faceted by month. Then add the state polygons as borders. Use a North American Lambert Azimuthal Equal Area Projection and make this the master layer. Finally add cartographic elements.
+```{r, eval=FALSE}
+tm_shape(world) +
+  tm_polygons() +
+tm_shape(world[world$name_long == "United States", ]) +
+  tm_polygons(col = "white") +
+tm_shape(Torn.sf) +
+  tm_dots() + 
+  tm_facets(by = "mo", as.layers = TRUE) +
+tm_shape(States, is.master = TRUE) + 
+  tm_borders() +
+  tm_compass(type = "arrow", position = c("left", "bottom")) +
+  tm_scale_bar(position = c("left", "bottom"), text.size = .75) +
+  tm_style("natural") +
+  tm_layout(main.title = "Contiguous U.S. Tornadoes [1950-2018]",
+            main.title.position = "center", main.title.size = .85,
+            panel.labels = month.name) +
+  tm_credits(c(rep("", 11), "Data Source: U.S. SPC"), 
+             position = c("right", "bottom"))
+```
+
+We can clearly see the spread of tornado activity from the southeast in January to the central Plains in May to the northern Plains during July and August and then back to the southeast in December.
+
+### Inset map
+
+An inset map contextualizes the geographic study area. Here we create a map of the central part of New Zealand's Southern Alps. The inset map shows where the main map is in relation to all of New Zealand. 
+
+The first step is to define the area of interest. Here it is done here by creating a new spatial object `nz_region` using the `st_bbox()` function and the `st_as_sfc()` to make it a simple feature column.
+```{r}
+nz_region <- st_bbox(c(xmin = 1340000, xmax = 1450000,
+                       ymin = 5130000, ymax = 5210000),
+                     crs = st_crs(nz_height)) %>% 
+  st_as_sfc()
+```
+
+The second step is to create a base map showing New Zealand's Southern Alps area. This is the closeup view of where the most important message is stated. The region is clipped to the simple feature column `nz_region` created above. The layers include a raster of elevations and locations of high points. A scale bar is included.
+```{r}
+nz_height_map <- tm_shape(nz_elev, 
+                          bbox = nz_region) +
+  tm_raster(style = "cont", 
+            palette = "YlGn", 
+            legend.show = TRUE) +
+  tm_shape(nz_height) + 
+  tm_symbols(shape = 2, 
+             col = "red", 
+             size = 1) +
+  tm_scale_bar(position = c("left", "bottom"))
+
+nz_height_map
+```
+
+The third step is to create the inset map. It gives a context and helps to locate the area of interest. This map clearly indicates the location of the main map.
+```{r}
+nz_map <- tm_shape(nz) + 
+  tm_polygons() +
+  tm_shape(nz_height) + 
+  tm_symbols(shape = 2, 
+             col = "red", 
+             size = .1) + 
+  tm_shape(nz_region) + 
+  tm_borders(lwd = 3)
+
+nz_map
+```
+
+The final step is to combine the two maps. The `viewport()` function from the {grid} package is used to give a center location (x and y) and the size (width and height) of the inset map.
+```{r}
+library(grid)
+
+nz_height_map
+print(nz_map, 
+      vp = viewport(.8, .27, width = .5, height = .5))
+```
+
+Additional details are available here: https://geocompr.robinlovelace.net/adv-map.html
+
+### Turn a static map into an interactive map
+
+Leaflet is a popular open-source platform (javascript) for making/serving interactive maps. The {leaflet} package provides access to the platform.
+
+As an example, here we create a world map by using the default mapping arguments in `leaflet()` and zoomable tiles with the `addTiles()` layer. The piping operator (`%>%`) is used to 'add' layers. 
+```{r}
+library(leaflet)
+
+m <- leaflet() %>% 
+  addTiles()
+m
+```
+
+Note: if the map doesn't render in your Viewer tab, then click the `Viewer` tab and select "Show in new window".
+
+Here we use `setView()` with longitude and latitude arguments in decimal degrees to center the map on FSU and use a zoom of 17.
+```{r}
+m <- m %>%
+  setView(lng = -84.29849, 
+          lat = 30.44188, 
+          zoom = 17)
+m
+```
+
+A nice feature of {tmap} is that we can create an interactive map using the same code as we used to create a static map. 
+
+For example our static map of New Zealand (`map_nz`) is viewed interactively by switching to view mode.
+```{r}
+tmap_mode("view")
+map_nz
+```
+
+With the interactive mode turned on, all maps produced with {tmap} will launch as zoomable HTML. This feature includes the ability to specify the basemap with `tm_basemap()` (or `tmap_options()`) as demonstrated here.
+```{r}
+map_nz + 
+  tm_basemap(server = "OpenTopoMap")
+```
+
+Q: Why is there no topography for New Zealand?
+
+We can also create interactive maps with the `tmap_leaflet()` function.
+
+The view mode in {tmap} works with faceted plots. The argument sync in `tm_facets()` is used to produce multiple maps with synchronized zoom and pan settings.
+```{r}
+world_coffee <- left_join(world, 
+                          coffee_data, 
+                          by = "name_long")
+tm_shape(world_coffee) + 
+  tm_polygons(c("coffee_production_2016", 
+                "coffee_production_2017")) + 
+  tm_facets(nrow = 1, sync = TRUE)
+```
+
+Change the view mode back to plot.
+```{r}
+tmap_mode("plot")
+```
+
+## Example 4: Tornado occurrences on a grid
+
+Convert the tornado simple feature data frame to geographic coordinates.
+```{r}
+Torn.sf <- Torn.sf %>%
+  st_transform(crs = 4326)
+```
+
+Create the leaflet map with a view set on campus. First use the `addTiles()` function and then the `addPolylines()` function with the argument `data = Alltors2.sfdf`. The piping operator is used to add layers.
+```{r}
+m <- leaflet() %>% 
+  setView(-84.29849, 30.44188, zoom = 17) %>%
+  addTiles() %>%
+  addPolylines(data = Alltors2.sfdf)
+m
+```
+  
+We can also use the `mapView()` function from the {mapview} package. It also provides interactivity for easy and quick visualization during spatial data analysis. But it is not intended for fine-tuned presentation quality map production.
+```{r}
+library(mapview)
+
+mapView(Alltors2.sfdf, 
+        zcol = "mag")
+```
+
+Use `mapView()` to create an interative map of tornado counts on a raster. First create a raster of grid cells at a resolution of a quarter of a degree latitude and longitude. Use the `rasterize()` function from the {raster} package to count the number of tornado occurrences in each cell. 
+
+We first create the raster with a cell resolution of 1/4 degree. We specify `field = "om"` so the result is a raster layer rather than a raster brick (all variables in `Alltors2.sfdf`).
+```{r}
+library(raster)
+
+r <- raster(xmn = -125, xmx = -67, 
+            ymn = 24, ymx = 50)
+res(r) <- .25
+Tor_r <- rasterize(x = Alltors2.sfdf, 
+                   y = r, 
+                   field = "om",
+                   fun = "count")
+```
+
+Finally use the `mapView()` function to create the interactive map.
+```{r}
+mapView(Tor_r,
+        alpha.regions = .35)
+```
+
+## Making maps with functions from the {cartography} package
+
+https://www.rdocumentation.org/packages/cartography/versions/2.4.2

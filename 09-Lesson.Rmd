@@ -8,9 +8,100 @@ editor_options:
   chunk_output_type: console
 ---
 
-Today: making maps in R
+**""You haven't mastered a tool until you understand when it should not be used."** – Kelsey Hightower
 
-How the BBC uses R. https://medium.com/bbc-visual-and-data-journalism/how-the-bbc-visual-and-data-journalism-team-works-with-graphics-in-r-ed0b35693535
+Today: space time data and introduction to making maps
+
+## Space-time data
+
+Package {stars} provides infrastructure for _data cubes_, array data with labeled dimensions, with emphasis on arrays where some of the dimensions relate to time and space.
+
+Spatio-temporal arrays are stored in objects of class `stars`; methods for class `stars` currently available are
+``` {r}
+library(stars)
+library(tidyverse)
+
+methods(class = "stars")
+```
+
+Note: the list of tidyverse methods are only visible after loading package {tidyverse}.
+
+This example covers a multiband raster taken from a Landsat 7 view of a small part of the Brazilian coast. We begin by reading a GeoTIFF file using three array dimensions, two planar space, and the third across six bands.
+```{r}
+library(stars)
+
+fn <- system.file("tif/L7_ETMs.tif",
+                  package = "stars")
+( L7.st <- read_stars(fn) )
+```
+
+Plot bands 3 and 4.
+```{r}
+plot(L7.st[,,,3:4])
+```
+
+The bands can be operated on to generate a new object containing values of the normalized difference vegetation index (NDVI) through a function applied across the `x` and `y` spatial dimensions using the `st_apply()` method.
+```{r}
+ndvi <- function(z) (z[4] - z[3]) / (z[4] + z[3])
+
+( ndvi.st <- st_apply(L7.st, 
+                      MARGIN = c("x", "y"), 
+                      FUN = ndvi) )
+```
+
+The same file can also be accessed using the _proxy_ mechanism, which creates a link to the external entity, here a file.
+```{r}
+L7p.st <- read_stars(fn, proxy = TRUE)
+L7p.st
+```
+
+The same function can be applied across the same two spatial dimensions of the proxy array, but no calculation is performed until the data are needed and the output resolution known, with the command needed to create the output stored object.
+```{r}
+( ndvi_p.st <- st_apply(L7.st, 
+                        MARGIN = c("x", "y"), 
+                        FUN = ndvi) )
+```
+
+The array object can also be split, here on the band dimension, to yield a representation as six rasters in the list form.
+```{r}
+( L7split.st <- split(L7.st, "band") )
+```
+
+Now the bands are given as list columns in the data frame part of the {stars} object.
+
+These rasters may also be subjected to arithmetic operations, and as may be seen, explicit arithmetic on the six rasters has the same outcome as applying the same calculation to the three-dimensional array.
+```{r}
+L7split.st$mean <- (L7split.st$X1 + L7split.st$X2 + 
+                    L7split.st$X3 + L7split.st$X4 + 
+                    L7split.st$X5 + L7split.st$X6) / 6
+xm <- st_apply(L7.st, 
+               MARGIN = c("x", "y"),
+               FUN = mean)
+all.equal(xm[[1]], L7split.st$mean)
+```
+
+### Another example
+
+Read a space-time raster stored as a NetCDF file. The data are monthly global precipitation anomalies on 2.5 by 2.5 degree lat/lon grid. We read the NetCDF file using three array dimensions, two planar space, and the third is time (monthly starting in 1948).
+```{r}
+if(!"precip.mon.anom.nc" %in% list.files()) {
+  download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/precip.mon.anom.nc",
+                destfile = "precip.mon.anom.nc")
+}
+
+w <- read_stars("precip.mon.anom.nc")
+
+plot(w[1,,,1])
+
+st_crs(w) <- 4326
+
+w1 <- w %>%
+  st_transform(crs = 3857)
+```
+
+For more see: https://github.com/r-spatial/stars/tree/master/vignettes
+Also see `stars.Rmd` in space-time projects.
+
 
 ## Making maps with functions from the {ggplot2} package
 
@@ -176,22 +267,23 @@ map_nz3
 
 Import the tornado data. Remove Alaska, Hawaii, and Puerto Rico tornadoes. The native CRS is latitude/longitude so we transform it to a Web Mercator (EPSG 3857) used by Google Maps, OpenStreetMap, Bing, ArcGIS, ESRI.
 ```{r}
-Alltors.sfdf <- read_sf(dsn = "1950-2018-torn-initpoint") %>%
-                  filter(!st %in% c("HI", "AK", "PR")) %>%
-                  filter(yr >= 1994) %>%
-                  st_transform(crs = 3857)
+Torn.sf <- read_sf(dsn = "1950-2018-torn-initpoint",
+                   layer = "1950-2018-torn-initpoint") %>%
+      filter(!st %in% c("HI", "AK", "PR")) %>%
+      filter(yr >= 1994) %>%
+      st_transform(crs = 3857)
 ```
 
 What is the geometry type in the simple feature column (`sfc`)?
 ```{r}
-st_geometry(Alltors.sfdf)
+st_geometry(Torn.sf)
 ```
 
 The start location of the tornado track has a `POINT` geometry. The CRS specified by the EPSG number specifies a particular proj4string.
 
 We use the `st_combine()` function to create a single feature column with a `MULTIPOINT` geometry. All the genesis locations are geometrically combined into a single `MULTIPOINT` simple feature (no attributes).
 ```{r}
-single <- st_combine(Alltors.sfdf)
+single <- st_combine(Torn.sf)
 st_geometry(single)
 ```
 
@@ -214,10 +306,10 @@ st_geometry(States)
 
 CAUTION: The {spData} package contains a spatial data frame for getting state-level boundaries with the same name (`us_states`)!!
 
-We note that the CRS of the state borders does not match the CRS of the tornadoes so we use the `st_transform()` function with the argument `crs = st_crs(Alltors.sfdf)`.
+We note that the CRS of the state borders does not match the CRS of the tornadoes so we use the `st_transform()` function with the argument `crs = st_crs(Torn.sf)`.
 ```{r}
 States <- st_transform(States, 
-                       crs = st_crs(Alltors.sfdf))
+                       crs = st_crs(Torn.sf))
 ```
 
 Which state contains the centroid? The function `st_contains()` returns a `TRUE` for the state that contains the center.
@@ -239,7 +331,7 @@ Then to make a map using the functions from the {tmap} package we start with the
 ```{r}
 tm_shape(States) +
   tm_borders() +
-tm_shape(Alltors.sfdf) +
+tm_shape(Torn.sf) +
   tm_dots() +
 tm_shape(States[mtrx, 1]) +
   tm_borders(col = "red") +
@@ -256,7 +348,7 @@ Here we compute and display the annual tornado occurrence rate (per 10,000 squar
 Start by first determining the intersections of the state polygons and the tornado points.
 ```{r}
 mtrx <- st_contains(States, 
-                    Alltors.sfdf, 
+                    Torn.sf, 
                     sparse = FALSE)
 dim(mtrx)
 ```
@@ -419,260 +511,3 @@ map2 <- tm_shape(World) +
 
 tmap_arrange(map1, map2)
 ```
-
-### Example 3: Tornado locations by month
-
-Suppose we want a map showing the location of tornadoes by month. First add the world map with countries as a polygon layer (fill is gray by default). Then overlay the U.S. country polygons and color them white. Then add the tornado genesis locations as dots faceted by month. Then add the state polygons as borders. Use a North American Lambert Azimuthal Equal Area Projection and make this the master layer. Finally add cartographic elements.
-```{r, eval=FALSE}
-tm_shape(world) +
-  tm_polygons() +
-tm_shape(world[world$name_long == "United States", ]) +
-  tm_polygons(col = "white") +
-tm_shape(Alltors.sfdf) +
-  tm_dots() + 
-  tm_facets(by = "mo", as.layers = TRUE) +
-tm_shape(States, is.master = TRUE) + 
-  tm_borders() +
-  tm_compass(type = "arrow", position = c("left", "bottom")) +
-  tm_scale_bar(position = c("left", "bottom"), text.size = .75) +
-  tm_style("natural") +
-  tm_layout(main.title = "Contiguous U.S. Tornadoes [1950-2018]",
-            main.title.position = "center", main.title.size = .85,
-            panel.labels = month.name) +
-  tm_credits(c(rep("", 11), "Data Source: U.S. SPC"), 
-             position = c("right", "bottom"))
-```
-
-We can clearly see the spread of tornado activity from the southeast in January to the central Plains in May to the northern Plains during July and August and then back to the southeast in December.
-
-### Inset map
-
-An inset map is a smaller map set within or next to the main map. An inset map is used to contextualize the geographic study area. Here we create a map of the central part of New Zealand's Southern Alps. The inset map shows where the main map is in relation to all of New Zealand. 
-
-The first step is to define the area of interest. Here it is done here by creating a new spatial object `nz_region` using the `st_bbox()` function and the `st_as_sfc()` to make it a simple feature column.
-```{r}
-nz_region <- st_bbox(c(xmin = 1340000, xmax = 1450000,
-                       ymin = 5130000, ymax = 5210000),
-                     crs = st_crs(nz_height)) %>% 
-  st_as_sfc()
-```
-
-The second step is to create a base map showing New Zealand's Southern Alps area. This is the closeup view of where the most important message is stated. The region is clipped to the simple feature column `nz_region` created above. The layers include a raster of elevations and locations of high points. A scale bar is included.
-```{r}
-nz_height_map <- tm_shape(nz_elev, 
-                          bbox = nz_region) +
-  tm_raster(style = "cont", 
-            palette = "YlGn", 
-            legend.show = TRUE) +
-  tm_shape(nz_height) + 
-  tm_symbols(shape = 2, 
-             col = "red", 
-             size = 1) +
-  tm_scale_bar(position = c("left", "bottom"))
-
-nz_height_map
-```
-
-The third step is to create the inset map. It gives a context and helps to locate the area of interest. This map clearly indicates the location of the main map.
-```{r}
-nz_map <- tm_shape(nz) + 
-  tm_polygons() +
-  tm_shape(nz_height) + 
-  tm_symbols(shape = 2, 
-             col = "red", 
-             size = .1) + 
-  tm_shape(nz_region) + 
-  tm_borders(lwd = 3)
-
-nz_map
-```
-
-The final step is to combine the two maps. The `viewport()` function from the {grid} package is used to give a center location (x and y) and the size (width and height) of the inset map.
-```{r}
-library(grid)
-
-nz_height_map
-print(nz_map, 
-      vp = viewport(.8, .27, width = .5, height = .5))
-```
-
-Additional details are available here: https://geocompr.robinlovelace.net/adv-map.html
-
-### Turn a static map into an interactive map
-
-Leaflet is a popular open-source platform (javascript) for making/serving interactive maps. The {leaflet} package provides access to the platform.
-
-As an example, here we create a world map by using the default mapping arguments in `leaflet()` and zoomable tiles with the `addTiles()` layer. The piping operator (`%>%`) is used to 'add' layers. 
-```{r}
-library(leaflet)
-
-m <- leaflet() %>% 
-  addTiles()
-m
-```
-
-Note: if the map doesn't render in your Viewer tab, then click the `Viewer` tab and select "Show in new window".
-
-Here we use `setView()` with longitude and latitude arguments in decimal degrees to center the map on FSU and use a zoom of 17.
-```{r}
-m <- m %>%
-  setView(lng = -84.29849, 
-          lat = 30.44188, 
-          zoom = 17)
-m
-```
-
-A nice feature of {tmap} is that we can create an interactive map using the same code as we used to create a static map. 
-
-For example our static map of New Zealand (`map_nz`) is viewed interactively by switching to view mode.
-```{r}
-tmap_mode("view")
-map_nz
-```
-
-With the interactive mode turned on, all maps produced with {tmap} will launch as zoomable HTML. This feature includes the ability to specify the basemap with `tm_basemap()` (or `tmap_options()`) as demonstrated here.
-```{r}
-map_nz + 
-  tm_basemap(server = "OpenTopoMap")
-```
-
-Q: Why is there no topography for New Zealand?
-
-We can also create interactive maps with the `tmap_leaflet()` function.
-
-The view mode in {tmap} works with faceted plots. The argument sync in `tm_facets()` is used to produce multiple maps with synchronized zoom and pan settings.
-```{r}
-world_coffee <- left_join(world, 
-                          coffee_data, 
-                          by = "name_long")
-tm_shape(world_coffee) + 
-  tm_polygons(c("coffee_production_2016", 
-                "coffee_production_2017")) + 
-  tm_facets(nrow = 1, sync = TRUE)
-```
-
-Change the view mode back to plot.
-```{r}
-tmap_mode("plot")
-```
-
-### Example 4: Tornado occurrences on a grid
-
-Import the tornado data convert it to geographic coordinates.
-```{r}
-Alltors2.sfdf <- st_read(dsn = "1950-2018-torn-aspath") %>%
-                       filter(!st %in% c("HI", "AK", "PR")) %>%
-                       filter(yr >= 2014 & mag >= 0)
-```
-
-Create the leaflet map with a view set on campus. First use the `addTiles()` function and then the `addPolylines()` function with the argument `data = Alltors2.sfdf`. The piping operator is used to add layers.
-```{r}
-m <- leaflet() %>% 
-  setView(-84.29849, 30.44188, zoom = 17) %>%
-  addTiles() %>%
-  addPolylines(data = Alltors2.sfdf)
-m
-```
-  
-We can also use the `mapView()` function from the {mapview} package. It also provides interactivity for easy and quick visualization during spatial data analysis. But it is not intended for fine-tuned presentation quality map production.
-```{r}
-library(mapview)
-
-mapView(Alltors2.sfdf, 
-        zcol = "mag")
-```
-
-Use `mapView()` to create an interative map of tornado counts on a raster. First create a raster of grid cells at a resolution of a quarter of a degree latitude and longitude. Use the `rasterize()` function from the {raster} package to count the number of tornado occurrences in each cell. 
-
-We first create the raster with a cell resolution of 1/4 degree. We specify `field = "om"` so the result is a raster layer rather than a raster brick (all variables in `Alltors2.sfdf`).
-```{r}
-library(raster)
-
-r <- raster(xmn = -125, xmx = -67, 
-            ymn = 24, ymx = 50)
-res(r) <- .25
-Tor_r <- rasterize(x = Alltors2.sfdf, 
-                   y = r, 
-                   field = "om",
-                   fun = "count")
-```
-
-Finally use the `mapView()` function to create the interactive map.
-```{r}
-mapView(Tor_r,
-        alpha.regions = .35)
-```
-
-
-## Making maps with functions from the {cartography} package
-
-https://www.rdocumentation.org/packages/cartography/versions/2.4.2
-
-## Other packages
-
-ggspatial
-
-https://github.com/paleolimbot/ggspatial/blob/master/vignettes/ggspatial.Rmd
-
-Cartograms
-
-A cartogram is a map where the geometry is distorted proportionally to the value of some variable. The {cartogram} package have functions for doing this.
-
-The `cartogram_cont()` function creates continuous area cartograms. It accepts an `sf` object and name of the variable (column) as inputs. Additionally, the maximum number of iterations for the transformation can be set with the `intermax =` argument. 
-
-For example, here we represent median income in New Zealand’s regions as a continuous cartogram/
-```{r}
-library(cartogram)
-
-nz_carto <- cartogram_cont(nz, 
-                           weight = "Median_income", 
-                           itermax = 5)
-tm_shape(nz_carto) + 
-  tm_polygons("Median_income")
-```
-
-We create non-contiguous cartograms using `cartogram_ncont()` and Dorling cartograms using `cartogram_dorling()`. Non-contiguous area cartograms are created by scaling down each region based on a weighting variable.
-```{r}
-States <- spData::us_states
-
-States2163 <- st_transform(States, 
-                           crs = 2163)
-States2163_ncont <- cartogram_ncont(States2163, 
-                                    "total_pop_15")
-tm_shape(States2163_ncont) +
-  tm_polygons("total_pop_15")
-```
-
-Dorling cartograms consist of circles with areas proportional to the weighting variable.
-```{r}
-States2163_dorling <- cartogram_dorling(States2163, 
-                                        "total_pop_15")
-tm_shape(States2163_dorling) +
-  tm_polygons("total_pop_15")
-```
-
-## Coordinate reference systems
-
-[See](https://www.r-bloggers.com/geographic-projections-and-transformations/)
-
-A Coordinate Reference System (CRS) defines how the spatial elements of the data relate to the surface of the Earth. CRSs are either geographic or projected.
-
-Geographic coordinate systems identify any location on the Earth's surface using longitude and latitude. Longitude is location in the east-west direction in angular distance from the Prime Meridian. Latitude is angular distance north or south of the equator. Distance in geographic CRSs are not measured in meters.
-
-The surface of the Earth in geographic coordinate systems is represented by a spherical or ellipsoidal surface. Spherical models assume that the Earth is a perfect sphere of a given radius. Spherical models have the advantage of simplicity but are rarely used because they are inaccurate. Ellipsoidal models are defined by two parameters: the equatorial radius and the polar radius.
-
-Ellipsoids are part of a wider component of CRSs: the datum. This contains information on what ellipsoid to use (with the `ellps` parameter in the proj4 CRS library) and the precise relationship between the cartesian coordinates and location on the Earth's service. These additional details are stored in the `towgs84` argument of proj4 notation (see proj4.org/parameters.html for details). These allow local variations in Earth's surface, e.g. due to large mountain ranges, to be accounted for in a local CRS. 
-
-There are local and geocentric datums. In a local datum such as NAD83 the ellipsoidal surface is shifted to align with the surface at a particular location. In a geocentric datum such as WGS84 the center is the Earth’s center of gravity and the accuracy of projections is not optimized for a specific location.
-
-### Projected coordinate systems
-
-Projected CRSs are based on Cartesian coordinates on a flat surface. They have an origin, x and y axes, and a unit of distance (meter). All projected CRSs are based on a geographic CRS, described in the previous section, and rely on map projections to convert the three-dimensional surface of the Earth into Easting and Northing (x and y) values in a projected CRS.
-
-This transition cannot be done without adding some distortion. Therefore, some properties of the Earth’s surface are distorted in this process, such as area, direction, distance, and shape. A projected coordinate system can preserve only one or two of those properties. Projections are often named based on a property they preserve: equal-area preserves area, azimuthal preserve direction, equidistant preserve distance, and conformal preserve local shape.
-
-There are three main groups of projection types - conic, cylindrical, and planar. In a conic projection, the Earth's surface is projected onto a cone along a single line of tangency or two lines of tangency. Distortions are minimized along the tangency lines and increase with the distance from those lines in this projection. Therefore, it is the best suited for maps of mid-latitude areas. A cylindrical projection maps the surface onto a cylinder. This projection could also be created by touching the Earth’s surface along a single line of tangency or two lines of tangency. Cylindrical projections are used most often when mapping the entire world. A planar projection projects data onto a flat surface touching the globe at a point or along a line of tangency. It is typically used in mapping polar regions.
-
-### Coastal buffers
-
-https://github.com/cabuelow/coastal-buffers/blob/master/coastal-buffers.R

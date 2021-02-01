@@ -10,11 +10,11 @@ editor_options:
 
 **"Measuring programming progress by lines of code is like measuring aircraft building progress by weight."** – Bill Gates
 
-S4 spatial data objects and working with rasters in R.
+S4 spatial data objects and working with raster data in R.
 
 ## Spatial data frames in the S4 class of data objects
 
-The {sp} package has methods for working with spatial data. Several of the packages for analyzing and modeling spatial data we will use this semester depend on {sp}.
+The {sp} package also has methods for working with spatial data. Several of the packages for analyzing and modeling spatial data we will use this semester depend on {sp} so it is important to see how to manipulate these data objects.
 
 Install and load the package.
 ```{r}
@@ -23,12 +23,19 @@ if(!require(sp)) install.packages(pkgs = "sp", repos = "http://cran.us.r-project
 library(sp)
 ```
 
-Spatial objects from the {sp} package fall into two types: 1) spatial-only information (the topology). These include `SpatialPoints`, `SpatialLines`, `SpatialPolygons`, etc, and 2) extensions to these cases where attribute information is available and stored in a data frame. These include `SpatialPointsDataFrame`, `SpatialLinesDataFrame`, etc.
+Spatial objects from the {sp} package fall into two types: 1) spatial-only information (the geometry). These include `SpatialPoints`, `SpatialLines`, `SpatialPolygons`, etc, and 2) extensions to these types where attribute information is available and stored in a data frame. These include `SpatialPointsDataFrame`, `SpatialLinesDataFrame`, etc.
 
-We use `as_Spatial()` to convert a simple feature data frame (as an S3 spatial object) to an S4 spatial object. Here we first transform the CRS back to WGS84.
+We use `as_Spatial()` to convert a simple feature data frame (as an S3 spatial object) to an S4 spatial object.
 ```{r}
 library(sf)
 library(tidyverse)
+
+if(!"1950-2018-torn-aspath" %in% list.files()) {
+  download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-aspath.zip",
+                destfile = "1950-2018-torn-aspath.zip")
+  unzip("1950-2018-torn-aspath.zip")
+  }
+
 
 FL_Torn.sf <- st_read(dsn = "1950-2018-torn-aspath", 
                    layer = "1950-2018-torn-aspath") %>%
@@ -40,9 +47,9 @@ FL_Torn.sp <- FL_Torn.sf %>%
 class(FL_Torn.sp)
 ```
 
-The result is a S4 spatial object of class `SpatialLinesDataFrame` called `FL_Torn.sp`. 
+The result is a S4 spatial object named `FL_Torn.sp` of class `SpatialLinesDataFrame`. 
 
-Information in S4 spatial objects is accessed through a slot name. The slot names are listed with the `slotNames()` function.
+Data in S4 spatial objects is accessed through a slot name. The slot names are listed with the `slotNames()` function.
 ```{r}
 FL_Torn.sp %>%
   slotNames()
@@ -124,11 +131,13 @@ plot(sldfP, add = TRUE)
 
 Note that the `plot()` method applied to an S4 spatial object plots the geometries without the attributes.
 
+As mentioned previously, we will do most of our pre and post-processing using simple feature data frames, so we do not need to dig deeper into the structure of these S4 data objects.
+
 ## Working with rasters
 
 The _raster data model_ divides geographic space into a grid of cells of constant size (resolution) and we use classes from the {raster} package to work with raster data.
 
-A raster in R is a data structure that divides space into rectangles called 'cells' (or 'pixels'). Each cell has an attribute value.
+A raster is a data structure that divides space into rectangles called 'cells' (or 'pixels'). Each cell has an attribute value.
 
 The {raster} package has functions for creating, reading, manipulating, and writing raster data as S4 objects and functions for raster manipulation common in GIS.
 ```{r}
@@ -141,7 +150,7 @@ A raster can also store information about the external file from where it came.
 
 The package has two classes for data with more than one variable associated with each cell (multi-layer data) the `RasterStack` and the `RasterBrick`. A `RasterBrick` can only be linked to a single (multi-layer) file. A `RasterStack` can be formed from separate files. Otherwise they are the same.
 
-Creating raster objects
+Creating a raster
 
 The `raster()` function creates a raster with a geographic (longitude/latitude) CRS and a 1 by 1 degree grid of cells across the globe.
 ```{r}
@@ -370,9 +379,8 @@ It is also possible to convert the values of a raster layer to points or polygon
 
 ### Example: Tornado counts by raster
 
+Create a raster of counts indicating the location of all tornado reports since 2003 in 1/2 degree latitude/longitude grid.
 ```{r}
-library(sf)
-
 Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint",
                    layer = "1950-2018-torn-initpoint") %>%
   filter(yr >= 2003)
@@ -469,23 +477,3 @@ TornCounts.sf <- st_as_sf(TornCounts.sp)
 ggplot(data = TornCounts.sf) +
   geom_sf(aes(fill = layer))
 ```
-
-## Space-time data
-
-Package {stars} provides infrastructure for _data cubes_, array data with labeled dimensions, with emphasis on arrays where some of the dimensions relate to time and space.
-
-Spatiotemporal arrays are stored in objects of class `stars`; methods for class `stars` currently available are
-``` {r}
-library(stars)
-
-methods(class = "stars")
-```
-
-Note: tidyverse methods are only visible after loading package {tidyverse}.
-
-For more see: https://github.com/r-spatial/stars/tree/master/vignettes
-Also see `stars.Rmd` in space-time projects.
-
-## Spatial network data
-
-See https://github.com/luukvdmeer/sfnetworks
