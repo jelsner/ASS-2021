@@ -14,10 +14,12 @@ S4 spatial data objects and working with rasters in R.
 
 ## Spatial data frames in the S4 class of data objects
 
-The {sp} package has methods for working with spatial data. Several of the packages for analyzing and modeling spatial data we will use this semester depend on {sp}. Check out [sp](http://cran.r-project.org/web/packages/sp/index.html) and note the number of packages that depend on {sp} (reverse depends and reverse imports).
+The {sp} package has methods for working with spatial data. Several of the packages for analyzing and modeling spatial data we will use this semester depend on {sp}.
 
 Install and load the package.
 ```{r}
+if(!require(sp)) install.packages(pkgs = "sp", repos = "http://cran.us.r-project.org")
+
 library(sp)
 ```
 
@@ -27,10 +29,6 @@ We use `as_Spatial()` to convert a simple feature data frame (as an S3 spatial o
 ```{r}
 library(sf)
 library(tidyverse)
-
-download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-aspath.zip",
-              destfile = "1950-2018-torn-aspath.zip")
-unzip("1950-2018-torn-aspath.zip")
 
 FL_Torn.sf <- st_read(dsn = "1950-2018-torn-aspath", 
                    layer = "1950-2018-torn-aspath") %>%
@@ -46,7 +44,8 @@ The result is a S4 spatial object of class `SpatialLinesDataFrame` called `FL_To
 
 Information in S4 spatial objects is accessed through a slot name. The slot names are listed with the `slotNames()` function.
 ```{r}
-slotNames(FL_Torn.sp)
+FL_Torn.sp %>%
+  slotNames()
 ```
 
 The `data` slot contains the data frame, the `lines` slot contains the spatial geometries (in this case lines), the `bbox` slot is the boundary box and the `proj4string` slot is the CRS.
@@ -70,7 +69,7 @@ Selecting, retrieving, or replacing attributes in S4 spatial data frames is done
 FL_Torn.sp$mag[7]
 ```
 
-Other methods include: `plot`, `summary`,`dim` and `names` (operate on the data slot), `as.data.frame`, `as.matrix` and `image` (for gridded spatial data), and `length` (number of features).
+Other methods include: `plot`, `summary`,`dim` and `names` (operate on the data slot), `as.data.frame`, `as.matrix` and `image` (for spatial data on a grid), and `length` (number of features).
 
 CAUTION: we can't use the {dplyr} verbs on S4 data frames. To convert from an S4 spatial data frame to a simple feature data frame, use `st_as_sf()`.
 
@@ -105,7 +104,7 @@ The CRS character string is in the open GIS standard format. It includes the pro
 FL_TornP.sp@proj4string
 ```
 
-We now have two copies of our `SpatialLinesDataFrame` object (unprojected `sldf` and projected `sldfP`).
+We now have two copies of our `SpatialLinesDataFrame` object (unprojected and projected).
 
 We perform geo-computation on the projected spatial data frame using functions from the {rgeos} package. 
 
@@ -371,9 +370,6 @@ It is also possible to convert the values of a raster layer to points or polygon
 
 ### Example: Tornado counts by raster
 
-https://rpubs.com/jelsner/tornadoRisk_longTermView
-https://rpubs.com/jelsner/tornadoRisk_shortTermView
-
 ```{r}
 library(sf)
 
@@ -435,6 +431,10 @@ plot(Torn_lmi.r)
 ```
 
 Here we can more clearly delineate the hot spots of tornadoes over the south-central Plains.
+
+See also: 
+https://rpubs.com/jelsner/tornadoRisk_longTermView
+https://rpubs.com/jelsner/tornadoRisk_shortTermView
 
 Focal (neighborhood) functions
 

@@ -3,7 +3,6 @@ title: "Lesson 7"
 author: "James B. Elsner"
 date: "February 1, 2021"
 output:
-  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -11,7 +10,7 @@ editor_options:
 
 **"Hell isn't other people's code. Hell is your own code from 3 years ago."** – Jeff Atwood
 
-Today: Working with spatial data in R, creating subsets of simple feature data frames, joining data frames, and interpolating variables using areal weights.
+Today: Working with spatial data in R, creating subsets of simple feature data frames, joining data frames, and interpolating variables using areal weights. Note: My answers to the assignments are available on the course GitHub site.
 
 ## Creating attribute (variable) subsets
 
@@ -62,7 +61,7 @@ Recall that the `select()` function picks the columns by name or position. For e
 library(tidyverse)
 
 world1 <- world %>%
-  select(name_long, pop)
+  dplyr::select(name_long, pop)
 names(world1)
 ```
 
@@ -71,8 +70,8 @@ The result is a simple feature data frame with the geometry column.
 The `select()` function lets us subset and rename columns at the same time.
 ```{r}
 world %>%
-  select(name_long, 
-         population = pop)
+  dplyr::select(name_long, 
+                population = pop)
 ```
 
 Note: the `pull()` function returns a single vector without the geometry.
@@ -104,14 +103,14 @@ The result is an simple feature data frame with a single row representing attrib
 We can chain together functions to find the world's three most populous continents and the number of countries they contain.
 ```{r}
 world %>% 
-  select(pop, continent) %>% 
+  dplyr::select(pop, continent) %>% 
   group_by(continent) %>% 
   summarize(Population = sum(pop, na.rm = TRUE), 
             nCountries = n()) %>% 
   top_n(n = 3, wt = Population) 
 ```
 
-If we want to create a new column based on existing columns we use `mutate()` (or `transmute()`. For example, we want to calculate population density for each country. For this we need to divide a population column, here `pop`, by an area column, here `area_km2` with unit area in square kilometers. 
+If we want to create a new column based on existing columns we use `mutate()` (or `transmute()`). For example, we want to calculate population density for each country. For this we need to divide a population column, here `pop`, by an area column, here `area_km2` with unit area in square kilometers. 
 ```{r}
 world %>% 
   mutate(Population_Density = pop / area_km2)
@@ -165,6 +164,9 @@ Then we use the geometric operation function `st_intersection()` to create a sub
 ```{r}
 KS_Torn.sf <- st_intersection(x = Torn.sf, 
                               y = KS.sf)
+
+Torn.sf %>%
+  st_intersection(KS.sf)
 ```
 
 Finally to visualize the result we make a plot.
@@ -213,6 +215,8 @@ ggplot(data = KS.sf) +
 
 geocenterKS %>%
   st_distance(centerKStornadoes)
+
+st_distance(geocenterKS, centerKStornadoes)
 ```
 
 More examples: https://www.jla-data.net/eng/spatial-aggregation/
@@ -239,7 +243,7 @@ It has 3 columns: `name_long` names major coffee-producing nations and `coffee_p
 Let us first select only the name and GDP (per person) from the `world` simple feature data frame.
 ```{r}
 ( world.sf <- world %>%
-    select(name_long, gdpPercap) )
+    dplyr::select(name_long, gdpPercap) )
 ```
 
 The `left_join()` function takes the data frame named by the argument `x =` and joins it to the data frame named by the argument `y =`.
