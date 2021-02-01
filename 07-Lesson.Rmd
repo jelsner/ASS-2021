@@ -3,6 +3,7 @@ title: "Lesson 7"
 author: "James B. Elsner"
 date: "February 1, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -14,9 +15,11 @@ Today: Working with spatial data in R, creating subsets of simple feature data f
 
 ## Creating attribute (variable) subsets
 
-Variables (stored as columns) in a simple feature data frame are referred to as 'attributes'. We can create a subset of the data using the {base} R functions including `[`, `subset()` and `$` and  the{tidyverse} functions including `select()`, `filter()`, and `pull()`.
+Variables (stored as columns) in spatial data structures are referred to as 'attributes'. 
 
-The `[` operator subsets rows and columns. Indexes specify the elements we wish to extract from an object, e.g. object[i, j], with i and j typically being numbers representing rows and columns. Leaving i or j empty returns all rows or columns, so `world[1:5, ]` returns the first five rows and all columns of the simple feature data frame `world`. 
+With simple feature data frames we can create data subsets using `[`, `subset()` and `$` from the {base} R packages and  `select()` and `filter()` from the {tidyverse} set of packages.
+
+Recall that the `[` operator subsets rows and columns. Indexes specify the elements we wish to extract from an object, e.g. object[i, j], with i and j typically being numbers representing rows and columns. Leaving i or j empty returns all rows or columns, so `world[1:5, ]` returns the first five rows and all columns of the simple feature data frame `world`. 
 
 Examples
 ```{r}
@@ -40,7 +43,7 @@ And then we select only cases from the `world` simple feature data frame where t
 small_countries <- world[sel_area, ]
 ```
 
-This creates a new simple feature data frame, `small_countries`, containing nations whose surface area is smaller than 10,000 sq km.
+This creates a new simple feature data frame, `small_countries`, containing nations whose surface area is smaller than 10,000 square kilometers.
 
 Note: there is no harm in keeping the geometry column because an operation on a {sf} object only changes the geometry when appropriate (e.g. by dissolving borders between adjacent polygons following aggregation). This means that the speed of operations with attribute data in {sf} objects is the same as with columns in a data frames.
 
@@ -54,7 +57,7 @@ Importantly the {tidyverse} verbs can also be used on {sf} objects. The function
 
 CAUTION! The {dplyr} (and  {raster}) package has a function called `select()`. When using both packages in the same session, the function in the most recently attached package will be used, 'masking' the incumbent function. This will generate error messages containing text like: unable to find an inherited method for function 'select' for signature "sf". To avoid this error message, and prevent ambiguity, we use the long-form function name, prefixed by the package name and two colons `dplyr::select()`.
 
-Recall that the `select()` function selects columns by name or position. For example, we can select only two columns, `name_long` and `pop`, with the following command.
+Recall that the `select()` function picks the columns by name or position. For example, we can select only two columns, `name_long` and `pop`, with the following command.
 ```{r}
 library(tidyverse)
 
@@ -72,7 +75,7 @@ world %>%
          population = pop)
 ```
 
-The `pull()` function returns a single vector without the geometry.
+Note: the `pull()` function returns a single vector without the geometry.
 ```{r}
 world %>%
   pull(pop)
@@ -96,7 +99,7 @@ world %>%
 
 The two columns in the resulting attribute table are `Population` and `nCountries`. The functions `sum()` and `n()` were the aggregating functions. 
 
-The result is an simple feature data frame with a single row representing attributes of the world and the geometry as a single multi-polygon through the geometric union operator.
+The result is an simple feature data frame with a single row representing attributes of the world and the geometry as a single multi-polygon through the geometric *union* operator.
 
 We can chain together functions to find the world's three most populous continents and the number of countries they contain.
 ```{r}
@@ -108,7 +111,7 @@ world %>%
   top_n(n = 3, wt = Population) 
 ```
 
-If we want to create a new column based on already existing columns we use `mutate()` (or `transmute()`. For example, we want to calculate population density for each country. For this we need to divide a population column, here `pop`, by an area column, here `area_km2` with unit area in square kilometers. 
+If we want to create a new column based on existing columns we use `mutate()` (or `transmute()`. For example, we want to calculate population density for each country. For this we need to divide a population column, here `pop`, by an area column, here `area_km2` with unit area in square kilometers. 
 ```{r}
 world %>% 
   mutate(Population_Density = pop / area_km2)
@@ -128,9 +131,9 @@ if(!require(USAboundaries)) install.packages(pkgs = "USAboundaries", repos = "ht
 library(USAboundaries)
 ```
 
-Individual states are extracted using the `us_states()` function. CAUTION: the function has the same name as the object `us_states` from the {spData} package. 
+Individual states are extracted using the `us_states()` function. CAUTION: this function has the same name as the object `us_states` from the {spData} package. 
 
-Here we use the argument `states =` to get only Kansas, then make a plot and check the native CRS.
+Here we use the argument `states =` to get only Kansas, then make a plot and check the native coordinate reference system (CRS).
 ```{r}
 KS.sf <- us_states(states = "Kansas")
 
@@ -142,11 +145,11 @@ ggplot(data = KS.sf) +
 st_crs(KS.sf)
 ```
 
-The polygon geometry includes the border and the area inside the border. The CRS has EPSG code of 4326.
+The polygon geometry includes the border and the area inside the border. The CRS is completely described by the 4326 EPSG code but implemented using well-known text (WKT).
 
-Suppose we want to subset geographically rather than based on some attribute value. For example here we want to subset the tornado tracks by the Kansas polygon.
+We use a geometric operation to subset spatial data geographically (rather than on some attribute). For example here we subset the tornado tracks as line strings by the Kansas polygon.
 
-Import the tornado data.
+First we import the tornado data.
 ```{r}
 download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-aspath.zip",
               destfile = "1950-2018-torn-aspath.zip")
@@ -158,22 +161,22 @@ Torn.sf <- st_read(dsn = "1950-2018-torn-aspath",
 
 The geometries are line strings representing the straight line track of each tornado. The CRS has EPSG code of 4326, same as the Kansas polygon.
 
-Here we use the `st_intersection()` function to create a subset data frame of tornado data frame returning only the tornado tracks (or parts of the tornado track) that intersect the Kansas polygon. The first argument (`x =`) is the simple feature data frame that we want to subset and the second argument (`y =`) defines the geometry over which the subset occurs.
+Then we use the geometric operation function `st_intersection()` to create a subset data frame of tornado data frame returning only a portion of the data frame that includes tracks that intersect the Kansas polygon. The first argument (`x =`) is the simple feature data frame that we want to subset and the second argument (`y =`) defines the geometry over which the subset occurs.
 ```{r}
 KS_Torn.sf <- st_intersection(x = Torn.sf, 
                               y = KS.sf)
 ```
 
-Then to visualize the result we make a plot.
+Finally to visualize the result we make a plot.
 ```{r}
 ggplot(data = KS.sf) +
   geom_sf() +
   geom_sf(data = KS_Torn.sf)
 ```
 
-Note that no tornado track lies outside the state border. Line strings that lie outside the border are clipped at the border.
+Note that no tornado track lies outside the state border. Line strings that lie outside the border are clipped at the border. However the attribute values represent the entire track.
 
-If we want the entire tornado track for all tornadoes that passed into (or through) the state, then we first use the geometric binary predict function `st_intersects()`. By specifying `sparse = FALSE` a matrix with a single column of `TRUE`s and `FALSE`s is returned. Here we use the piping operator to implicitly specify the `x =` argument as the `Torn.sf` data frame.
+If instead we want the entire tornado track for all tornadoes that passed into (or through) the state, then we first use the geometric binary predict function `st_intersects()`. By specifying `sparse = FALSE` a matrix with a single column of `TRUE`s and `FALSE`s is returned. Here we use the piping operator to implicitly specify the `x =` argument as the `Torn.sf` data frame.
 ```{r}
 Intersects <- Torn.sf %>%
   st_intersects(KS.sf, sparse = FALSE)
@@ -266,7 +269,7 @@ We can join in the other direction, starting with a regular data frame and addin
 
 More information on attribute data operations: https://geocompr.robinlovelace.net/attr.html
 
-## Interpolation using areal weighting
+## Interpolation using areal weights
 
 Areal-weighted interpolation estimates the value of some variable from a set of polygons to an overlapping but incongruent set of target polygons. For example, suppose we want demographic information given at the Census tract level to be estimated within the tornado damage path. Damage paths do not align with census tract boundaries so areal weighted interpolation is needed to get demographic estimates at the tornado level.
 
@@ -321,7 +324,7 @@ An *intensive* variable is independent of the spatial units (e.g., population de
 Since the number of births in each county is an extensive variable, we toggle the `extensive =` argument to `TRUE`.
 ```{r}
 a2.sf <- st_interpolate_aw(nc.sf["BIR74"], 
-                           to = g, 
+                           to = g.sfc, 
                            extensive = TRUE)
 ( p2 <- ggplot(a2.sf) +  
     geom_sf(mapping = aes(fill = BIR74)) +
@@ -352,9 +355,9 @@ unzip("1950-2018-torn-aspath.zip")
 
 Import the data, transform the native CRS to 3857 (pseudo-Mercator), and filter on `yr` (year) and `st` (state).
 ```{r}
-#Torn.sf <- st_read(dsn = "1950-2018-torn-aspath", 
-#                   layer = "1950-2018-torn-aspath") %>%
-#  st_transform(crs = 3857)
+Torn.sf <- st_read(dsn = "1950-2018-torn-aspath", 
+                   layer = "1950-2018-torn-aspath") %>%
+  st_transform(crs = 3857)
 
 FL_Torn.sf <- Torn.sf %>%
   filter(yr >= 2014, 
@@ -378,7 +381,7 @@ ggplot(FL_TornPath.sf[1, ]) +
 ```
 
 Next we get the census data using the `get_acs()` function from the {tidycensus} package. The package is an interface to the decennial US Census and American Community Survey APIs and the US Census Bureau's geographic boundary files. Functions return Census and ACS data as simple feature data frames for all Census geographies.
-```{r}
+```{r, getTidy}
 if(!require(tidycensus)) install.packages(pkgs = "tidycensus", repos = "http://cran.us.r-project.org")
 
 library(tidycensus)
@@ -397,7 +400,7 @@ head(Census.sf)
 ```
 
 Finally we use the `st_interpolate_aw()` function
-```{r}
+```{r, interpolate}
 awi.sf <- st_interpolate_aw(Census.sf["estimate"],
                             to = FL_TornPath.sf, 
                             extensive = TRUE)
@@ -506,7 +509,7 @@ The assigned object `box` is of class `SpatialPolygons`. It contains a single po
 Plot the box and the tornadoes using {base} R.
 ```{r}
 plot(box)
-plot(sldfP, add = TRUE)
+plot(FL_TornP.sp, add = TRUE)
 ```
 
 The `plot()` method applied to an S4 spatial object plots the geometries without the attributes.
