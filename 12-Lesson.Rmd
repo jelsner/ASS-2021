@@ -1,0 +1,308 @@
+---
+title: "Lesson 12"
+author: "James B. Elsner"
+date: "February 17, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+**"The most important single aspect of software development is to be clear about what you are trying to build."** – Bjarne Stroustrup
+
+## Local indicators of spatial autocorrelation (LISA)
+
+The Moran I statistic was first used in the 1950s. Localization of this statistic was presented by Luc Anselin in 1995 (Anselin, L. 1995. Local indicators of spatial association, Geographical Analysis, 27, 93–115).
+
+We saw the `raster::MoranLocal()` function will compute local Moran I on rasters and return a raster.
+
+Local I is a deconstruction of global I where geographic proximity is used in two ways. (1) to define and weight neighbors and (2) to determine the spatial scale over which I is computed. Illustrate on the board.
+
+Using queen's contiguity we determined the neighborhood topology and the weights for the police expenditure data from Mississippi. Here we print them in the full matrix form with the `list2mat()` function.
+```{r}
+round(listw2mat(wts)[1:5, 1:10], 2)
+```
+
+The matrix shows that the first county has three neighbors 2, 3, and 9 and each get a weight of 1/3. The third county has four neighbors 1, 4, 9 and 10 and each gets a weight of 1/4.
+
+Compute local Moran I with the `localmoran()` function. Two arguments are needed (1) the attribute variable for which we want to compute local correlation and (2) the weights matrix as a list object.
+```{r}
+Ii_stats <- localmoran(PE.sf$WHITE, 
+                       listw = wts)
+str(Ii_stats)
+```
+
+The local I is given in the first column of a matrix where the rows are the counties. The other columns are the expected value for I, the variance of I, the $z$ value and the $p$-value. For example, the local I statistics from the first county are given by typing
+```{r}
+head(Ii_stats)
+```
+
+Because these local values must average to the global value (when using row standardized weights), they can take on values outside the range between -1 and 1. A `summary()` method on the first column of the `Li`  object gives statistics from the non-spatial distribution of I's.
+```{r}
+summary(Ii_stats[, 1])
+```
+
+To map the values we first attach the matrix columns of interest to the simple feature data frame. Here we attach `Ii`, `Var`, and `Pi`.
+```{r}
+PE.sf$Ii <- Ii_stats[, 1]
+PE.sf$Vi <- Ii_stats[, 3]
+PE.sf$Pi <- Ii_stats[, 5]
+```
+
+Map the local spatial autocorrelation.
+```{r}
+( g1 <- ggplot(data = PE.sf) +
+  geom_sf(aes(fill = Ii)) +
+  scale_fill_gradient2(low = "green",
+                       high = "blue") )
+```
+
+Map the variances.
+```{r}
+ggplot(data = PE.sf) +
+  geom_sf(aes(fill = Vi)) +
+  scale_fill_gradient()
+```
+
+Variances are larger for counties near the boundaries as the sample sizes are smaller.
+
+Compare the map of local autocorrelation with a map of percent white. 
+```{r}
+( g2 <- ggplot(data = PE.sf) +
+  geom_sf(aes(fill = WHITE)) +
+  scale_fill_gradient(low = "black",
+                      high = "white") )
+```
+
+Plot them together.
+```{r, eval=FALSE}
+library(gridExtra)
+
+grid.arrange(g1, g2, nrow = 1)
+```
+
+Areas where percent white is high over the northeast are areas with the largest spatial correlation. Other areas of high spatial correlation include the Mississippi Valley and in the south. Note the county with the most negative spatial correlation is the county in the northwest with a fairly high percentage of whites neighbored by counties with much lower percentages of whites.
+
+Local values of Lee's bivariate spatial autocorrelation are available from the `lee()` function.
+```{r}
+lee_stat <- lee(crime, police, 
+                listw = wts, 
+                n = length(nbs))
+
+PE.sf$localL <- lee_stat$localL
+
+library(tmap)
+
+tm_shape(PE.sf) +
+  tm_fill("localL",
+          title = "") +
+  tm_borders(col = "gray70") +
+  tm_layout(title = "Local Bivariate Spatial Autocorrelation",
+            legend.outside = TRUE)
+```
+
+Areas in dark green indicate where the correlation between crime and policing is most influenced by neighboring crime and policing.
+
+#### Population and tornadoes in Iowa
+
+We are interested in quantifying the bivariate spatial autocorrelation between tornado occurrences and population.
+
+Get U.S. Census data with functions from the {tidycensus} package. When working outside this class you first need to obtain a API key from http://api.census.gov/data/key_signup.html. Then set and save the key.
+```{r}
+library(tidycensus)
+# census_api_key("YOUR API KEY GOES HERE INSIDE THE QUOTES", install = TRUE)
+```
+
+The `get_decennial()` function grants access to the 1990, 2000, and 2010 decennial US Census data and the `get_acs()` function grants access to the 5-year American Community Survey data. For example, here is how you would get county-level population  for Iowa.
+```{r, eval=FALSE}
+IA_counties.sf <- get_acs(geography = "county", 
+                          variables = "B02001_001E", 
+                          state = "IA", 
+                          geometry = TRUE)
+```
+
+This returns a simple feature data frame with county borders as multipolygons. The variable `B02001_001E` is the 2015 (mid year of the 5-year period 2013-2017) population in each county.
+
+I then write it out to my working directory as an ESRI Shapefile and zip it.
+```{r, eval=FALSE}
+st_write(IA_counties.sf, 
+         dsn = "IA_Counties", 
+         driver = "ESRI Shapefile")
+
+zip(zipfile = "IA_Counties.zip", 
+    files = "IA_Counties")
+```
+
+I then upload it to the RStudio Cloud Lesson 10 project so that we can import it.
+```{r}
+IA_counties.sf <- st_read(dsn = "IA_Counties") %>%
+  st_transform(crs = 3857)
+```
+
+Now get the tornado locations and compute the annual tornado occurrence rate for each county. We did this at the state level in Example 2 of Lesson 8.
+
+Start by first determining the intersections of the county polygons and the tornado points.
+```{r, readTors}
+Alltors.sfdf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
+                        filter(yr >= 1994) %>%
+                        st_transform(crs = st_crs(IA_counties.sf))
+
+mtrx <- st_contains(IA_counties.sf, 
+                    Alltors.sfdf, 
+                    sparse = FALSE)
+
+nT <- rowSums(mtrx)
+CountyArea <- st_area(IA_counties.sf)
+
+( IA_counties.sf <- IA_counties.sf %>%
+  mutate(nT,
+         rate = nT/CountyArea/(2018 - 1994 + 1) * 10^10, 
+         lpop = log(estimate)) )
+```
+
+Make a two-panel map displaying the log of the population and the tornado rates.
+```{r, eval=FALSE}
+map1 <- tm_shape(IA_counties.sf) +
+  tm_borders(col = "gray70") +
+  tm_fill(col = "lpop",
+          title = "Log Population",
+          palette = "Blues") +
+  tm_layout(legend.outside = "TRUE")
+
+map2 <- tm_shape(IA_counties.sf) +
+  tm_borders(col = "gray70") +
+  tm_fill(col = "rate",
+          title = "Annual Rate\n[/10,000 sq. km]",
+          palette = "Greens") +
+  tm_layout(legend.outside = "TRUE")
+
+tmap_arrange(map1, map2)
+```
+
+There appears some relationship. The non-spatial correlation between the two variables is obtained with the `cor.test()` function.
+```{r}
+lpop <- IA_counties.sf$lpop
+rate <- as.numeric(IA_counties.sf$rate)
+
+cor.test(lpop, rate)
+```
+
+The bivariate spatial autocorrelation is assessed using the Lee statistic. A formal non-parametric test under the null hypothesis of no bivariate spatial autocorrelation is done using a Monte Carlo simulation.
+```{r}
+nbs <- poly2nb(IA_counties.sf)
+wts <- nb2listw(nbs)
+
+lee_stat <- lee(lpop, rate, 
+                listw = wts, 
+                n = length(nbs))
+lee_stat$L
+
+lee.mc(lpop, rate, listw = wts, nsim = 999)
+```
+
+Finally we map out the local variation in the bivariate spatial autocorrelation.
+```{r}
+IA_counties.sf$localL <- lee_stat$localL
+
+tm_shape(IA_counties.sf) +
+  tm_fill("localL",
+          title = "Local Bivariate\nSpatial Autocorrelation") +
+  tm_borders(col = "gray70") +
+  tm_layout(legend.outside = TRUE)
+```
+
+What might cause this?
+
+### Spatial autocorrelation in model residuals
+
+The knowledge of significant spatial autocorrelation by itself is not typically useful. But knowledge of significant spatial autocorrelation in the residuals from some statistical model can help us build a more precise model.
+
+A spatial regression model may be needed whenever the residuals resulting from a aspatial regression model exhibit significant spatial autocorrelation. So a common way to proceed is to first regress the response variable onto the explanatory variables and check for spatial autocorrelation in the residuals.
+
+If the explanatory variables remove the spatial autocorrelation then a spatial regression model is not needed.
+
+Let's return to the Columbus crime data and fit a linear regression model with `CRIME` as the response variable and `INC` and `HOVAL` as the explanatory variables.
+
+Import the data.
+```{r}
+download.file("http://myweb.fsu.edu/jelsner/temp/data/columbus.zip",
+              "columbus.zip")
+unzip("columbus.zip")
+
+CC.sf <- read_sf(dsn = "columbus", 
+                 layer = "columbus")
+```
+
+First make a choropleth map displaying the crime rates.
+```{r}
+tm_shape(CC.sf) +
+  tm_fill("CRIME",
+          title = "") +
+  tm_borders(col = "gray70") +
+  tm_layout(title = "Burglary & Vehicle Thefts\n/1000 Households",
+            legend.outside = TRUE)
+```
+
+Next compute Moran I on the `CRIME` variable using row-standardized weights.
+```{r}
+nbs <- poly2nb(CC.sf)
+wts <- nb2listw(nbs)
+
+moran(CC.sf$CRIME,
+       listw = wts,
+       n = length(nbs),
+       S0 = Szero(wts))
+```
+
+Is this spatial autocorrelation the result of a clustering of income and housing values?
+
+Fit a linear regression model to the crime rates using income and housing values as explanatory variables.
+```{r}
+model.lm <- lm(CRIME ~ INC + HOVAL, 
+               data = CC.sf)
+summary(model.lm)
+```
+
+Income and housing values vary indirectly with values of crime. The model statistically explains 55% of the variation in crime. 
+
+We use the `residuals()` method to extract the vector of residuals from the model.
+```{r}
+res <- residuals(model.lm)
+```
+
+There are 49 residuals one for every census tract. A residual is defined as the difference between the observed value and the model predicted value. In this case a positive residual indicates that there is more crime than predicted by the model.
+
+We then check on the distribution of the residuals relative to a normal distribution.
+```{r}
+sm::sm.density(res, 
+               model = "Normal")
+```
+
+Based on this graph we find no reason to reject a normal distribution as a model for these residuals.
+
+The next step is to create a choropleth map of the model residuals. Are there clusters of high and low residuals? First put the vector of residuals into simple feature data frame as a new column labeled `residuals`.
+```{r}
+CC.sf$residuals <- res
+
+tm_shape(CC.sf) +
+  tm_fill("residuals") +
+  tm_borders(col = "gray70") +
+  tm_layout(title = "Linear Model Residuals")
+```
+
+There appears to be clustered regions where the model over predicts crime (yellow to green tracts) conditional on household income and housing values and where it under predicts crime (yellow to red tracts).
+
+The amount of clustering appears to be is less than before. That is, after accounting for regional factors related to crime the spatial autocorrelation is reduced.
+
+To determine I on the residuals we use the `lm.morantest()` function and pass the regression model object and the weights object to it.
+```{r}
+lm.morantest(model.lm, wts)
+```
+
+Moran I on the model residuals is .222.  This compares with the value of .5 on crime alone. Part of the spatial autocorrelation is absorbed by the explanatory factors.
+
+Do we need a spatial regression model?  The output gives a $p$-value on I of .002, thus we reject the null hypothesis of no spatial autocorrelation in the residuals and conclude that a spatial regression model would improve the fit.  
+
+The $z$-value takes into account the fact that these are residuals so the variance is adjusted accordingly.
+
+The next step is to choose a spatial regression model.

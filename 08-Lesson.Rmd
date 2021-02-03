@@ -447,7 +447,7 @@ plot(Torn.r)
 
 We can recognize the broad shape of the eastern 2/3rds of the United States. Some cells across the Plains and the South have quite a few tornadoes.
 
-A spatial statistic indicating how similar values in neighboring cells tend to be is called Moran's I. It is a global measure of clustering (high values near high values and low values near low values). Values range from -1 to +1 where positive values indicate clustering and negative values indicate regularity (e.g., chessboard). It is implemented on a raster with the `Moran()` function. 
+A spatial statistic indicating how similar values in neighboring cells tend to be is called Moran I. It is a global measure of clustering (high values near high values and low values near low values). Values range from -1 to +1 where positive values indicate clustering and negative values indicate regularity (e.g., chessboard). It is implemented on a raster with the `Moran()` function. 
 ```{r}
 Moran(Torn.r)
 ```

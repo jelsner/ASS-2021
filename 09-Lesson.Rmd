@@ -8,13 +8,13 @@ editor_options:
   chunk_output_type: console
 ---
 
-**""You haven't mastered a tool until you understand when it should not be used."** – Kelsey Hightower
+**"Maps invest information with meaning by translating it into visual form."** – Susan Schulten
 
 Today: space time data and introduction to making maps
 
-## Space-time data
+## Working with space-time data using the {stars} package
 
-Package {stars} provides infrastructure for space-time data through the class `stars`. Tp see what methods for class `stars` are available we use the `methods()` function.
+Package {stars} provides functions and methods for working with space-time data. To see what methods for class `stars` are available we use the `methods()` function.
 ``` {r}
 library(stars)
 library(tidyverse)
@@ -105,8 +105,6 @@ w1 <- w %>%
 ```
 
 For more see: https://github.com/r-spatial/stars/tree/master/vignettes
-Also see `stars.Rmd` in space-time projects.
-
 
 ## Making maps with functions from the {ggplot2} package
 
