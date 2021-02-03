@@ -14,9 +14,7 @@ Today: space time data and introduction to making maps
 
 ## Space-time data
 
-Package {stars} provides infrastructure for _data cubes_, array data with labeled dimensions, with emphasis on arrays where some of the dimensions relate to time and space.
-
-Spatio-temporal arrays are stored in objects of class `stars`; methods for class `stars` currently available are
+Package {stars} provides infrastructure for space-time data through the class `stars`. Tp see what methods for class `stars` are available we use the `methods()` function.
 ``` {r}
 library(stars)
 library(tidyverse)
@@ -26,14 +24,21 @@ methods(class = "stars")
 
 Note: the list of tidyverse methods are only visible after loading package {tidyverse}.
 
-This example covers a multiband raster taken from a Landsat 7 view of a small part of the Brazilian coast. We begin by reading a GeoTIFF file using three array dimensions, two planar space, and the third across six bands.
+This example is a multi-band raster taken from a Landsat 7 view of a small part of the Brazilian coast. We begin by importing the _GeoTIFF_ file labeled `L7_ETMS.tif` using the `read_stars()` function.
 ```{r}
 library(stars)
 
-fn <- system.file("tif/L7_ETMs.tif",
+f <- system.file("tif/L7_ETMs.tif",
                   package = "stars")
-( L7.st <- read_stars(fn) )
+( L7.st <- read_stars(f) )
 ```
+
+Note there are three dimensions, two planar space, and the third across six bands. 
+```{r}
+dim(L7.st)
+```
+
+Values across the six bands and space are summarized as a single attribute with name `L7_ETMs.tif`.
 
 Plot bands 3 and 4.
 ```{r}
@@ -511,3 +516,5 @@ map2 <- tm_shape(World) +
 
 tmap_arrange(map1, map2)
 ```
+
+https://www.nceas.ucsb.edu/sites/default/files/2020-04/OverviewCoordinateReferenceSystems.pdf
