@@ -3,7 +3,6 @@ title: "Lesson 8"
 author: "James B. Elsner"
 date: "February 3, 2021"
 output:
-  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -43,7 +42,7 @@ library(sf)
 library(tidyverse)
 
 FL_Torn.sf <- st_read(dsn = "1950-2018-torn-aspath", 
-                   layer = "1950-2018-torn-aspath") %>%
+                      layer = "1950-2018-torn-aspath") %>%
   filter(st == "FL")
 class(FL_Torn.sf)
 ```
@@ -86,7 +85,7 @@ Selecting, retrieving, or replacing attributes in S4 spatial data frames is done
 FL_Torn.sp$mag[7]
 ```
 
-Other methods include: `plot`, `summary`,`dim` and `names` (operate on the data slot), `as.data.frame`, `as.matrix` and `image` (for spatial data on a grid), and `length` (number of features).
+Other methods include: `plot()`, `summary()`,`dim()` and `names()` (operate on the data slot), `as.data.frame()`, `as.matrix()` and `image()` (for spatial data on a grid), and `length()` (number of features).
 
 We can't use the {dplyr} verbs on S4 data frames. To convert from an S4 spatial data frame to a simple feature data frame, use `st_as_sf()`.
 
@@ -326,7 +325,7 @@ r <- raster(b, layer = 2)
 plot(r)
 ```
 
-Most base R functions (`+`, `*`, `round()`, `ceiling()`, `log()`, etc) work on raster objects. Operations are done on all cells at once.
+Most {base} R functions (`+`, `*`, `round()`, `ceiling()`, `log()`, etc) work on raster objects. Operations are done on all cells at once.
 
 Here we place the numbers from 1 to 100 sequentially in the cells, then add 100 to these values and take the square root.
 ```{r}
