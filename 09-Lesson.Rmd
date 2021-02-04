@@ -12,9 +12,50 @@ editor_options:
 
 Today: space time data and introduction to making maps
 
-## Working with space-time data using the {stars} package
+## Brief introduction to working with space-time data using the {stars} package
 
-Package {stars} provides functions and methods for working with space-time data. To see what methods for class `stars` are available we use the `methods()` function.
+In the last lesson we learned how to work with raster data with functions from the {raster} package. Functions from that package require data objects to be of S4 reference class, like those vector data objects in the {sp} package. S4 reference classes are used for specialized applications to construct rich and complicated data representations (see the _Bioconductor_ project).
+
+Most packages from CRAN use the S3 reference class. It is simpler (all objects are a list with a class), easier to maintain, and it allows for new dialects (e.g., {dplyr}, {ggplot2}).
+
+Functions from the {stars} package allow us to work with the raster data model as S3 objects.
+
+Consider a multi-band raster taken from a Landsat 7 view of a small part of the Brazilian coast as part of the {stars} package and stored as a _GeoTIFF_ file labeled `L7_ETMs.tif`. We first import it as a raster stack.
+```{r}
+f <- system.file("tif/L7_ETMs.tif",
+                  package = "stars")
+
+library(raster)
+L7.rs <- stack(f)
+
+class(L7.rs)
+```
+
+The data `L7.rs` is a `RasterStack` object with as a S4 reference class. 
+
+We list the slot names and extract the extent and CRS using the `@` syntax.
+```{r}
+L7.rs@extent
+L7.rs@crs
+```
+
+We extract a single band (layer) from the stack with the `layer =` argument in the `raster()` function. We then plot the raster values with the `plot()` method and compute the spatial autocorrelation with the `Moran()` function.
+```{r}
+L7.rB3 <- raster(L7.rs, layer = 3)
+plot(L7.rB3)
+Moran(L7.rB3)
+```
+
+Space-time data often comes in the form of arrays, with space and time being array dimensions. Examples include
+
+* raster images
+* socio-economic or demographic data,
+* environmental variables monitored at fixed stations,
+* time series of satellite images with multiple spectral bands,
+* spatial simulations, and
+* climate and weather model output
+
+The package {stars} provides functions and methods for working with space-time data. To see what methods for class `stars` are available we use the `methods()` function.
 ``` {r}
 library(stars)
 library(tidyverse)
@@ -22,70 +63,63 @@ library(tidyverse)
 methods(class = "stars")
 ```
 
-Note: the list of tidyverse methods are only visible after loading package {tidyverse}.
+The list includes {base} R and {tidyverse} methods.
 
-This example is a multi-band raster taken from a Landsat 7 view of a small part of the Brazilian coast. We begin by importing the _GeoTIFF_ file labeled `L7_ETMS.tif` using the `read_stars()` function.
+The canonical data array is that where two dimensions represent spatial raster dimensions, and the third a band (or time). [Data array](https://raw.githubusercontent.com/r-spatial/stars/master/images/cube1.png)
+
+But data cubes can be of higher dimensions such as a five-dimensional where along with time and space, the spectral band and the sensor are additional dimensions. [Data cube](https://raw.githubusercontent.com/r-spatial/stars/master/images/cube2.png)
+
+We import the raster stack as a {stars} object using the `read_stars()` function.
 ```{r}
-library(stars)
+L7.stars <- read_stars(f)
+L7.stars
 
-f <- system.file("tif/L7_ETMs.tif",
-                  package = "stars")
-( L7.st <- read_stars(f) )
+dim(L7.stars)
 ```
 
-Note there are three dimensions, two planar space, and the third across six bands. 
+Note there are three dimensions, two spatial (`x` and `y`), and the third across six bands (`band`). Values across the six bands and space are summarized as a single attribute with name `L7_ETMs.tif`.
+
+The data `L7.stars` is a `stars` object with a S3 reference class. It has no slots.
 ```{r}
-dim(L7.st)
+slotNames(L7.stars)
 ```
 
-Values across the six bands and space are summarized as a single attribute with name `L7_ETMs.tif`.
+The data are stored in a four dimensional array with the first index the attribute, the second and third indexes the spatial coordinates, and the fourth index the band.
 
-Plot bands 3 and 4.
+We plot only bands 3 and 4 by subsetting on the fourth index and using the `plot()` method. 
 ```{r}
-plot(L7.st[,,,3:4])
+plot(L7.stars[,,,3:4])
 ```
 
-The bands can be operated on to generate a new object containing values of the normalized difference vegetation index (NDVI) through a function applied across the `x` and `y` spatial dimensions using the `st_apply()` method.
+Since this the data object is S3 we can use functions from the `ggplot2()` package together with the `geom_stars()` layer from the {stars} package to plot all 6 bands with a common color scale bar.
+```{r}
+library(ggplot2)
+
+ggplot() +
+  geom_stars(data = L7.stars) +
+  facet_wrap(~ band)
+```
+
+The bands can be operated on to generate a new object. For example here we compute the normalized difference vegetation index (NDVI) through a function applied across the `x` and `y` spatial dimensions using the `st_apply()` method after creating the function `nvdi`.
 ```{r}
 ndvi <- function(z) (z[4] - z[3]) / (z[4] + z[3])
 
-( ndvi.st <- st_apply(L7.st, 
-                      MARGIN = c("x", "y"), 
-                      FUN = ndvi) )
+( NDVI.stars <- st_apply(L7.stars, 
+                         MARGIN = c("x", "y"), 
+                         FUN = ndvi) )
+ggplot() +
+  geom_stars(data = NDVI.stars) 
 ```
 
-The same file can also be accessed using the _proxy_ mechanism, which creates a link to the external entity, here a file.
+The stars data frame can also be split, here on the band dimension, to yield a representation as six rasters in the list form.
 ```{r}
-L7p.st <- read_stars(fn, proxy = TRUE)
-L7p.st
+( L7split.stars <- split(L7.stars, 
+                         f = "band") )
 ```
 
-The same function can be applied across the same two spatial dimensions of the proxy array, but no calculation is performed until the data are needed and the output resolution known, with the command needed to create the output stored object.
-```{r}
-( ndvi_p.st <- st_apply(L7.st, 
-                        MARGIN = c("x", "y"), 
-                        FUN = ndvi) )
-```
+Now the bands are given as columns in the data frame part of the {stars} object and there are only two dimensions (`x` and `y`).
 
-The array object can also be split, here on the band dimension, to yield a representation as six rasters in the list form.
-```{r}
-( L7split.st <- split(L7.st, "band") )
-```
-
-Now the bands are given as list columns in the data frame part of the {stars} object.
-
-These rasters may also be subjected to arithmetic operations, and as may be seen, explicit arithmetic on the six rasters has the same outcome as applying the same calculation to the three-dimensional array.
-```{r}
-L7split.st$mean <- (L7split.st$X1 + L7split.st$X2 + 
-                    L7split.st$X3 + L7split.st$X4 + 
-                    L7split.st$X5 + L7split.st$X6) / 6
-xm <- st_apply(L7.st, 
-               MARGIN = c("x", "y"),
-               FUN = mean)
-all.equal(xm[[1]], L7split.st$mean)
-```
-
-### Another example
+Monthly precipitation across the globe
 
 Read a space-time raster stored as a NetCDF file. The data are monthly global precipitation anomalies on 2.5 by 2.5 degree lat/lon grid. We read the NetCDF file using three array dimensions, two planar space, and the third is time (monthly starting in 1948).
 ```{r}
@@ -94,14 +128,12 @@ if(!"precip.mon.anom.nc" %in% list.files()) {
                 destfile = "precip.mon.anom.nc")
 }
 
-w <- read_stars("precip.mon.anom.nc")
+( w.stars <- read_stars("precip.mon.anom.nc") )
+```
 
-plot(w[1,,,1])
-
-st_crs(w) <- 4326
-
-w1 <- w %>%
-  st_transform(crs = 3857)
+There are two spatial dimensions and the third dimension is time in months. There is no CRS so we assign the geographic EPSG 4326 using the `st_crs()` function.
+```{r}
+plot(w.stars[,,,1])
 ```
 
 For more see: https://github.com/r-spatial/stars/tree/master/vignettes
