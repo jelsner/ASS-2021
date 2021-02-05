@@ -10,9 +10,9 @@ editor_options:
 
 **""You haven't mastered a tool until you understand when it should not be used."** – Kelsey Hightower
 
-Today: Map examples using the tornado data. 
+Today: Mapping examples using the tornado data. 
 
-## Example: Tornado locations by month
+## Example: Tornado locations by month in the continental U.S.
 
 Import the tornado data. Remove Alaska, Hawaii, and Puerto Rico tornadoes. The native CRS is latitude/longitude so we transform it to a Web Mercator (EPSG 3857) used by Google Maps, OpenStreetMap, Bing, ArcGIS, ESRI.
 ```{r}
@@ -24,7 +24,7 @@ Torn.sf <- read_sf(dsn = "1950-2018-torn-initpoint",
 ```
 
 
-Suppose we want a map showing the location of tornadoes by month. First add the world map with countries as a polygon layer (fill is gray by default). Then overlay the U.S. country polygons and color them white. Then add the tornado genesis locations as dots faceted by month. Then add the state polygons as borders. Use a North American Lambert Azimuthal Equal Area Projection and make this the master layer. Finally add cartographic elements.
+Suppose we want a map showing the location of tornadoes in the continental U.S. by month. First add the world map with countries as a polygon layer (fill is gray by default). Then overlay the U.S. country polygons and color them white. Then add the tornado genesis locations as dots faceted by month. Then add the state polygons as borders. Use a North American Lambert Azimuthal Equal Area Projection and make this the master layer. Finally add cartographic elements.
 ```{r, eval=FALSE}
 tm_shape(world) +
   tm_polygons() +
@@ -47,9 +47,7 @@ tm_shape(States, is.master = TRUE) +
 
 We can clearly see the spread of tornado activity from the southeast in January to the central Plains in May to the northern Plains during July and August and then back to the southeast in December.
 
-## An inset map
-
-SKIP in Class
+## An inset map (extra)
 
 An inset map contextualizes the geographic study area. Here we create a map of the central part of New Zealand's Southern Alps. The inset map shows where the main map is in relation to all of New Zealand. 
 
@@ -108,6 +106,7 @@ Leaflet is a popular open-source platform (javascript) for making/serving intera
 
 As an example, here we create a world map by using the default mapping arguments in `leaflet()` and zoomable tiles with the `addTiles()` layer. The piping operator (`%>%`) is used to 'add' layers. 
 ```{r}
+if(!require(leaflet)) install.packages(pkgs = "leaflet", repos = "http://cran.us.r-project.org")
 library(leaflet)
 
 m <- leaflet() %>% 
@@ -179,6 +178,7 @@ m
   
 We can also use the `mapView()` function from the {mapview} package. It also provides interactivity for easy and quick visualization during spatial data analysis. But it is not intended for fine-tuned presentation quality map production.
 ```{r}
+if(!require(mapview)) install.packages(pkgs = "mapview", repos = "http://cran.us.r-project.org")
 library(mapview)
 
 mapView(Alltors2.sfdf, 
@@ -206,16 +206,13 @@ mapView(Tor_r,
         alpha.regions = .35)
 ```
 
-
-Making maps with functions from the {cartography} package: https://www.rdocumentation.org/packages/cartography/versions/2.4.2
+I encourage to take a look at the functions in the {cartography} package for making maps. https://www.rdocumentation.org/packages/cartography/versions/2.4.2
 
 ## Spatial neighborhoods and weights
 
-The concept of spatial autocorrelation plays a central role in spatial statistics. How it gets estimated and exploited depends on the spatial geometry of the data. For example, Ripley's K function estimates spatial autocorrelation of events as point geometries. 
+The concept of autocorrelation plays a central role in spatial statistics. How it gets estimated and exploited depends on the spatial geometry of the data. In the case where data are aggregated to polygons (or raster cells) spatial autocorrelation measures the degree to which attribute values tend to cluster. Keep in mind that attributes are variables in a spatial data frame (either as a column in a simple feature object or as a layer in a raster object). 
 
-In the case where data are aggregated to polygons (or raster cells) spatial autocorrelation measures the degree to which attribute values tend to cluster. Recall attributes are variables in a spatial data frame (either as a column in a simple feature object or as a layer in a raster object). 
-
-Spatial clustering arises from:
+Clustering arises from:
 
 * Association: whatever is causing an attribute to have a certain value in one area causes the attribute to have a similar value in areas nearby. Crime rates in nearby neighborhoods might tend to cluster due to similar factors such as economic status and the amount of policing. Non-infectious diseases (e.g., lung cancer) might have similar rates in neighborhoods close to an oil refinery.
 
@@ -223,9 +220,7 @@ Spatial clustering arises from:
 
 * Interaction: the movement of people, goods or information creates relationships between areas. Infectious diseases might spread from a source region thus increasing the disease rates in surrounding areas as the direct result of contact or movement of people between regions.
 
-Spatial statistics can quantify, and condition on, spatial autocorrelation but are silent about physical causes. Understanding the reason for spatial autocorrelation is important for causal inference because the causal mechanism might be confounded (statistically) by it. Divorce rates are high in states in the South but so is the number of Waffle Houses.
-
-Understanding causation requires domain specific knowledge.
+Spatial statistics quantify, and condition on, autocorrelation but they are silent about physical causes. Understanding the reason for autocorrelation is important for causal inference because the causal mechanism might be confounded by it. Divorce rates are high in states in the South, but so is the number of Waffle Houses. Understanding causation requires domain specific knowledge.
 
 When variables are spatially aggregated to regions, autocorrelation is quantified by calculating how similar a value in region $i$ is to the value in region $j$ and weighting this similarity by how 'close' region $i$ is to region $j$. Closer regions have greater weight.
 
@@ -404,6 +399,7 @@ where $N$ is the number regions, $w_{ij}$ is the matrix of spatial weights, and 
 
 Consider the following spatial grid of cells containing random attribute values.
 ```{r}
+if(!require(spatstat)) install.packages(pkgs = "spatstat", repos = "http://cran.us.r-project.org")
 library(spatstat)
 
 set.seed(6750)
