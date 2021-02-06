@@ -14,14 +14,15 @@ Today: (1) space time data and (2) making maps
 
 ## Working with space-time data using the {stars} package
 
-In the last lesson we learned how to work with raster data with functions from the {raster} package. Functions from that package require data objects to be of S4 reference class, like those vector data objects in the {sp} package. S4 reference classes are used for specialized applications to construct rich and complicated data representations (see the _Bioconductor_ project).
+In the last lesson we saw how to work with raster data with functions from the {raster} package. Functions from that package require data objects to be of S4 reference class, like those vector data objects in the {sp} package. S4 reference classes allow rich data representations at the expense of flexibility. 
 
-Most packages from CRAN use the S3 reference class. It is simpler (all objects are a list with a class), easier to maintain, and it allows for new dialects (e.g., {dplyr}, {ggplot2}).
+Most packages on CRAN use S3 reference classes because they are more flexible, easier to maintain, and allow for new dialects (e.g., {dplyr}, {ggplot2}). The {stars} package has functions that work with raster data as S3 objects.
 
-Functions from the {stars} package allow us to work with the raster data model as S3 objects.
-
-Consider a multi-band raster taken from a Landsat 7 view of a small part of the Brazilian coast as part of the {stars} package and stored as a _GeoTIFF_ file labeled `L7_ETMs.tif`. We first import it as a raster stack.
+Consider a multi-band raster taken from a Landsat 7 view of a small part of the Brazilian coast. It is included in the {stars} package and stored as a _GeoTIFF_ file labeled `L7_ETMs.tif`. We first import it as a raster stack.
 ```{r}
+if(!require(stars)) install.packages("stars", repos = "http://cran.us.r-project.org")
+library(stars)
+
 f <- system.file("tif/L7_ETMs.tif",
                   package = "stars")
 
@@ -31,7 +32,7 @@ L7.rs <- stack(f)
 class(L7.rs)
 ```
 
-The data `L7.rs` is a `RasterStack` object with as a S4 reference class. 
+The data `L7.rs` is a `RasterStack` object as a S4 reference class. 
 
 We list the slot names and extract the extent and CRS using the `@` syntax.
 ```{r}
@@ -39,14 +40,22 @@ L7.rs@extent
 L7.rs@crs
 ```
 
-We extract a single band (layer) from the stack with the `layer =` argument in the `raster()` function. We then plot the raster values with the `plot()` method and compute the spatial autocorrelation with the `Moran()` function.
+We extract a single band (layer) from the stack with the `layer =` argument in the `raster()` function. We then plot the raster values with the `plot()` method and compute the spatial autocorrelation with the `Moran()` function as we did in Assignment 4.
 ```{r}
 L7.rB3 <- raster(L7.rs, layer = 3)
 plot(L7.rB3)
 Moran(L7.rB3)
 ```
 
-Space-time data often comes in the form of arrays, with space and time being array dimensions. Examples include
+We can convert the raster to a data frame with the `as.data.frame()` method. Here we do that and then compute the normalized difference vegetation index (NDVI) using columns `L7_ETMs.4` and `L7_ETMs.3`.
+```{r}
+library(tidyverse)
+
+L7.df <- as.data.frame(L7.rs) %>%
+  mutate(NDVI = (L7_ETMs.4 - L7_ETMs.3)/(L7_ETMs.4 + L7_ETMs.3))
+```
+
+Space-time data often come in the form of arrays, with space and time being array dimensions. Examples include
 
 * raster images
 * socio-economic or demographic data,
@@ -57,17 +66,14 @@ Space-time data often comes in the form of arrays, with space and time being arr
 
 The package {stars} provides functions and methods for working with space-time data. To see what methods for class `stars` are available we use the `methods()` function.
 ``` {r}
-library(stars)
-library(tidyverse)
-
 methods(class = "stars")
 ```
 
 The list includes {base} R and {tidyverse} methods.
 
-The canonical data array is that where two dimensions represent spatial raster dimensions, and the third a band (or time). [Data array](https://raw.githubusercontent.com/r-spatial/stars/master/images/cube1.png)
+The canonical data array is that where two dimensions represent spatial raster dimensions and the third a band (or time). [Data array](https://raw.githubusercontent.com/r-spatial/stars/master/images/cube1.png)
 
-But data cubes can be of higher dimensions such as a five-dimensional where along with time and space, the spectral band and the sensor are additional dimensions. [Data cube](https://raw.githubusercontent.com/r-spatial/stars/master/images/cube2.png)
+But data cubes can have more dimensions. For example, time, space, spectral band, and sensor type. [Data cube](https://raw.githubusercontent.com/r-spatial/stars/master/images/cube2.png)
 
 We import the raster stack as a {stars} object using the `read_stars()` function.
 ```{r}
@@ -77,14 +83,14 @@ L7.stars
 dim(L7.stars)
 ```
 
-Note there are three dimensions, two spatial (`x` and `y`), and the third across six bands (`band`). Values across the six bands and space are summarized as a single attribute with name `L7_ETMs.tif`.
+In this example, there are three dimensions, two spatial (`x` and `y`), and the third across six bands (`band`). Values across the six bands and space are summarized as a single attribute with name `L7_ETMs.tif`.
 
-The data `L7.stars` is a `stars` object with a S3 reference class. It has no slots.
+The data `L7.stars` is a `stars` object with a S3 reference class. It has no slots and thus no slot names.
 ```{r}
 slotNames(L7.stars)
 ```
 
-The data are stored in a four dimensional array with the first index the attribute, the second and third indexes the spatial coordinates, and the fourth index the band.
+The data are stored in a four dimensional array. The first index is the attribute, the second and third indexes are the spatial coordinates, and the fourth index is the band.
 
 We plot only bands 3 and 4 by subsetting on the fourth index and using the `plot()` method. 
 ```{r}
@@ -100,13 +106,13 @@ ggplot() +
   facet_wrap(~ band)
 ```
 
-The bands can be operated on to generate a new object. For example here we compute the normalized difference vegetation index (NDVI) through a function applied across the `x` and `y` spatial dimensions using the `st_apply()` method after creating the function `nvdi`.
+We can generate a new {stars} object by applying a function to the band values. For example here we again compute NDVI through a function applied across the `x` and `y` spatial dimensions using the `st_apply()` method after creating the function `NVDI()`.
 ```{r}
-ndvi <- function(z) (z[4] - z[3]) / (z[4] + z[3])
+NDVI <- function(z) (z[4] - z[3]) / (z[4] + z[3])
 
 ( NDVI.stars <- st_apply(L7.stars, 
                          MARGIN = c("x", "y"), 
-                         FUN = ndvi) )
+                         FUN = NDVI) )
 ggplot() +
   geom_stars(data = NDVI.stars) 
 ```
@@ -144,20 +150,22 @@ Or points (e.g., denoting sensor locations). [Vector data cube points](https://r
 
 For more see: https://github.com/r-spatial/stars/tree/master/vignettes and https://awesomeopensource.com/project/r-spatial/stars
 
-Also you can check out some rough code that I've been working on to take advantage of the {stars} functionality including plotting daily temperatures across the U.S. and creating a vector data cube of Covid19 data in the `stars.Rmd` file on course GitHub site.
+Also you can check out some rough code that I've been working on to take advantage of the {stars} functionality including plotting daily temperatures across the U.S. and creating a vector data cube of COVID19 data in the `stars.Rmd` file on course GitHub site.
 
-## Making maps with functions from the {ggplot2} package
+## Mapping with functions from the {ggplot2} package
 
-The package {ggplot2} supports `sf` objects with the function `geom_sf()`. An initial `ggplot()` function followed by one or more layers, that are added with `+`. The layers begin with `geom_`.
+As we have already seen, the {ggplot2} package supports `sf` objects with the function `geom_sf()`. An initial `ggplot()` function followed by one or more layers, that are added with `+`. The layers begin with `geom_`.
 
 For example, consider the objects `nz` and `nz_height` from the {spData} package, where `nz` is a simple feature data frame from the New Zealand census with information about the area, population, and sex ratio (male/female) of the 16 districts in the country.
 ```{r}
+library(spData)
+
 str(nz)
 ```
 
 The simple feature column is labeled `geom` and the geometry type is multi-polygon.
 
-And `nz_height` is a simple feature data fraome containing the elevation of specific locations in New Zealand.
+And `nz_height` is a simple feature data frame containing the elevation of specific locations in New Zealand.
 ```{r}
 str(nz_height)
 ```
@@ -166,34 +174,36 @@ The simple feature column is labeled `geomtry` and the geometry type is point.
 
 Here we make a choropleth map of the median income by region across New Zealand and add a layer indicating elevation heights.
 ```{r}
-library(ggplot2)
-library(spData)
-
 ggplot() + 
   geom_sf(data = nz, aes(fill = Median_income)) +
   geom_sf(data = nz_height) +
   scale_x_continuous(breaks = c(170, 175))
 ```
 
-The function `geom_sf()` uses the `geometry` column of the simple feature data frame. It does not work with S4 spatial data frames.
+The function `geom_sf()` uses the `geometry` column of the simple feature data frame. The function does not work with S4 spatial data frames.
 
 The function automatically plots graticules (lines of latitude and longitude) labels. The default settings for the graticules can be overridden using `scale_x_continuous()`, `scale_y_continuous()` or `coord_sf(datum = NA)`.
 
-An advantage of using functions from the {ggplot2} package for mapping is that the package has a strong user-community and there are many add-on packages.
+A big advantage of using {ggplot2} for mapping is the large user-community and the many add-on packages. We've already seen {ggrepel} for nice labeling.
 
-The maps (and plots) from {ggplot2} are given a level of interactivity when printed using the function `ggplotly()` from the {plotly} package. Try `plotly::ggplotly(g1)`, for example.
+The maps from {ggplot2} are given a level of interactivity when printed using the function `ggplotly()` from the {plotly} package. 
+```{r}
+if(!require(plotly)) install.packages("plotly", repos = "http://cran.us.r-project.org")
+```
+
+For example, let's recreate the choropleth map but this time assigning the object to `g1`. Then to make the map interactive we use `plotly::ggplotly(g1)`.
 ```{r}
 g1 <- ggplot() + 
   geom_sf(data = nz, aes(fill = Median_income)) +
   geom_sf(data = nz_height) +
   scale_x_continuous(breaks = c(170, 175))
+
 plotly::ggplotly(g1)
 ```
 
-County level data
+Another example: the county area by state in the U.S. The data as a simple feature data frames is available in the {USAboundariesData} package at `ropensci.org`.
 ```{r}
 if(!require(USAboundariesData)) install.packages("USAboundariesData", repos = "http://packages.ropensci.org", type = "source")
-
 
 FLcounties.sf <- us_counties(states = "FL")
 
@@ -203,37 +213,19 @@ ggplot(data = FLcounties.sf) +
 
 But {ggplot2} has a few drawbacks for making maps. The `geom_sf()` function does not always produce a nice legend. Raster objects are not supported and need to be converted into a data frame before plotting.
 
-## Making maps with functions from the {tmap} package
+## Mapping with functions from the {tmap} package
 
-There are other packages for making nice maps with some of them listed in the syllabus. In particular I like the {tmap} package because it is agnostic to the type of spatial data object. Simple feature data frames, S4 spatial data, and  rasters from the {raster} package can be layers on a single map.
+There are other packages for making nice maps with some of them listed in the syllabus. In particular I like the {tmap} package because it is agnostic to the type of spatial data object. S3 simple feature data frames and S4 spatial vector data and raster objects can be used as layers on a single map.
 ```{r}
 if(!require(tmap)) install.packages(pkgs = "tmap", repos = "http://cran.us.r-project.org")
 library(tmap)
 ```
 
-Like functions in the {ggplot2} package, functions in the {tmap} use the 'grammar of graphics'. The grammar separates the input data frame from the aesthetics (how data are visualised). The functions translate the data into aesthetics. The aesthetics can include the location on a geographic map (defined by the geometry), color, and other visual components.
+Like functions in the {ggplot2} package, functions in the {tmap} use the 'grammar of graphics'. The grammar separates the input data frame from the aesthetics (how data are made visible). The functions translate the data into aesthetics. The aesthetics can include the location on a geographic map (defined by the geometry), color, and other visual components.
 
-A {tmap} map starts with the `tm_shape()` function that takes as input a spatial data frame. The function is followed by one or more layers such as `tm_fill()` and `tm_dots()` that defines how a property in the data gets translated to an aesthetic. 
+A {tmap} map starts with the `tm_shape()` function that takes as input a spatial data frame. The function is followed by one or more layers such as `tm_fill()`, `tm_dots()`, `tm_raster()`, etc that defines how a property in the data gets translated to an aesthetic. 
 
-Consider the New Zealand simple feature data frame (`nz`) from the {spData} package. Make the data frame available, check its class, and make a plot of the geometry.
-```{r}
-library(spData)
-library(sf)
-
-class(nz)
-plot(nz$geom)
-```
-
-The geometry column is labeled `geom`. 
-
-Check the native coordinate reference system (CRS) of the spatial data frame with the `st_crs()` function from the {sf} package.
-```{r}
-st_crs(nz)
-```
-
-The CRS is called the New Zealand transverse Mercator. The distance unit is meter (https://epsg.io/2193).
-
-To make a {tmap} map we first identify the spatial data frame with the `tm_shape()` function and then add a borders layer.
+Consider again the New Zealand simple feature data frame (`nz`) from the {spData} package.To make a map we first identify the spatial data frame with the `tm_shape()` function and then add a borders layer with the `tm_borders()` layer.
 ```{r}
 tm_shape(nz) +
   tm_borders() 
@@ -243,11 +235,13 @@ The borders separate New Zealand into 16 administrative regions.
 
 The function `tm_shape()` and its subsequent drawing layers (here `tm_borders()`) as a 'group'. The data in the `tm_shape()` function must be a spatial object of class simple feature, raster, or an S4 class spatial object.
 
-Here we use a fill layer instead of the borders layer.
+Here we use a fill layer (`tm_fill()`) instead of the borders layer.
 ```{r}
 tm_shape(nz) +
   tm_fill() 
 ```
+
+The multi-polygons are filled using the same gray color as the borders.
 
 Here we layer using the fill aesthetic and then add a border aesthetic.
 ```{r}
@@ -272,12 +266,12 @@ New spatial data are added with `+ tm_shape(new_object)`. In this case `new_obj`
 
 For example, let's add an elevation layer to the New Zealand map. The elevation raster (`nz_elev`) spatial data frame is in the {spDataLarge} package on GitHub.
 
-The `install_github()` function from the {devtools} package is used to install a package on GitHub. GitHub is a company that provides hosting for software development version control using Git. Git is a version-control system for tracking changes in code during software development.
+The `install_github()` function from the {devtools} package is used to install packages on GitHub. GitHub is a company that provides hosting for software development version control using Git. Git is a version-control system for tracking changes in code during software development.
 ```{r}
 if(!require(devtools)) install.packages(pkgs = "devtools", repos = "http://cran.us.r-project.org")
 library(devtools)
 
-install_github(repo = "Nowosad/spDataLarge")
+if(!require(spDataLarge)) install_github(repo = "Nowosad/spDataLarge")
 library(spDataLarge)
 ```
 
@@ -294,26 +288,24 @@ The new map object `map_nz1` builds on the existing map object `map_nz` by addin
 
 We can create new layers with functions. For instance, a function like `st_union()` operates on the `geometry` column of a simple feature data frame.
 
-As an example, here we create a line string layer as a simple feature object using three geocomputation functions. We start by creating a union over all polygons (regions) with the `st_union()` function applied to the `nz` simple feature object. The result is a multipolygon defining the coastlines. 
+As an example, here we create a line string layer as a simple feature object using three geo-computation functions. We start by creating a union over all polygons (regions) with the `st_union()` function applied to the `nz` simple feature object. The result is a multi-polygon defining the coastlines. 
 
-Then we buffer this multipolgyon out to a distance of 22.2 km using the `st_buffer()` function. The result is a single polygon defining the coastal boundary around the entire country. 
+Then we buffer this multi-polgyon out to a distance of 22.2 km using the `st_buffer()` function. The result is a single polygon defining the coastal boundary around the entire country. 
 
-Finally we change the polygon geometry to a line string geometry with the `st_cast()` function. The default in `st_cast()` is to simplify the geometry (e.g., a LINESTRING is simpler than a `POLYGON`).
+Finally we change the polygon geometry to a line string geometry with the `st_cast()` function.
 
-The operations can be linked together with the pipe (`%>%`) from the {dplyr} package.
+The operations are linked together with the pipe operator from the {dplyr} package.
 ```{r}
-library(dplyr)
-
-nz_water <- st_union(nz) %>% 
+nz_water.sfc <- st_union(nz) %>% 
   st_buffer(22200) %>% 
   st_cast(to = "LINESTRING")
-class(nz_water)
+class(nz_water.sfc)
 ```
 
-Now we add the resulting spatial object as a layer to our map.
+Now we add the resulting `sfc` as a layer to our map.
 ```{r}
 map_nz2 <- map_nz1 +
-  tm_shape(nz_water) + 
+  tm_shape(nz_water.sfc) + 
     tm_lines()
 
 map_nz2
@@ -328,183 +320,7 @@ map_nz3 <- map_nz2 +
 map_nz3
 ```
 
-### Example 1: What state contains the geographic centroid of tornado activity?
-
-Import the tornado data. Remove Alaska, Hawaii, and Puerto Rico tornadoes. The native CRS is latitude/longitude so we transform it to a Web Mercator (EPSG 3857) used by Google Maps, OpenStreetMap, Bing, ArcGIS, ESRI.
-```{r}
-Torn.sf <- read_sf(dsn = "1950-2018-torn-initpoint",
-                   layer = "1950-2018-torn-initpoint") %>%
-      filter(!st %in% c("HI", "AK", "PR")) %>%
-      filter(yr >= 1994) %>%
-      st_transform(crs = 3857)
-```
-
-What is the geometry type in the simple feature column (`sfc`)?
-```{r}
-st_geometry(Torn.sf)
-```
-
-The start location of the tornado track has a `POINT` geometry. 
-
-We use the `st_combine()` function to create a single feature column with a `MULTIPOINT` geometry. All the genesis locations are geometrically combined into a single `MULTIPOINT` simple feature (no attributes).
-```{r}
-single <- st_combine(Torn.sf)
-st_geometry(single)
-```
-
-Next we use the `st_centroid()` function to find the geographic center of the simple feature column.
-```{r}
-center <- st_centroid(single)
-```
-
-The result is a single feature of type `POINT`. In this case the order of operations is cummutative, but it is not in general.
-
-To create a map, we first get a simple feature data frame (geometry type: `MULTIPOLYGON`) of the continental U.S. state borders from the {spData} package.
-```{r}
-library(USAboundaries)
-
-States <- us_states() %>%
-  filter(!state_name %in% c("Alaska", 
-                            "Hawaii", 
-                            "Puerto Rico", 
-                            "District of Columbia"))
-st_crs(States)
-st_geometry(States)
-```
-
-CAUTION: The {spData} package contains a spatial data frame for getting state-level boundaries with the same name (`us_states`)!!
-
-We note that the CRS of the state borders does not match the CRS of the tornadoes so we use the `st_transform()` function with the argument `crs = st_crs(Torn.sf)`.
-```{r}
-States <- st_transform(States, 
-                       crs = st_crs(Torn.sf))
-```
-
-Which state contains the centroid? The function `st_contains()` returns a `TRUE` for the state that contains the center.
-```{r}
-mtrx <- st_contains(States, 
-                    center, 
-                    sparse = FALSE)
-```
-
-The result is  a 48 x 1 matrix with all entries `FALSE` except the state containing the centroid.
-
-Select the geometry containing the centroid.
-```{r}
-centerState <- States[mtrx[, 1], ]
-plot(centerState$geometry)
-```
-
-Then to make a map using the functions from the {tmap} package we start with the state borders group, then add the tornadoes as a group with a dot layer, then add the state borders subsetted by the state containing the centroid, finally add the centroid location as a group with bubbles as a layer.
-```{r}
-tm_shape(States) +
-  tm_borders() +
-tm_shape(Torn.sf) +
-  tm_dots() +
-tm_shape(States[mtrx, 1]) +
-  tm_borders(col = "red") +
-tm_shape(centerState) +
-  tm_bubbles(size = .3, col = "red")
-```
-
-Note that we need to think about the order of the layers.
-
-### Example 2: State-level tornado rates
-
-Here we compute and display the annual tornado occurrence rate (per 10,000 square km) for each state.
-
-Start by first determining the intersections of the state polygons and the tornado points.
-```{r}
-mtrx <- st_contains(States, 
-                    Torn.sf, 
-                    sparse = FALSE)
-dim(mtrx)
-```
-
-The result is a 48 (states) by 30,497 (tornadoes) matrix of logical values indicating whether or not each tornado occurred within each state.
-
-Next we use the `rowSums()` function to get the total number of `TRUE` entries for each states.
-```{r}
-rowSums(mtrx)
-```
-
-The key is that the order of the elements from the `rowSums()` function matches the order of the states in `States`. 
-
-Also see the `aggregate()` function (KBDI.Rmd).
-
-So we include the counts as a column in the `States` simple feature data frame. We include the area of each state. This allows us to compute the rate per 10,000 sq. km. The spatial unit is meter so areas are in sq. meter. To change square meter to square kilometer we multiply by 10 billion (10^10).
-```{r}
-nT <- rowSums(mtrx)
-StateArea <- st_area(States)
-
-States <- States %>%
-  mutate(nT,
-         rate = nT/StateArea/(2018 - 1994 + 1) * 10^10)
-head(States)
-```
-
-Then we make a map. Here since all the information is in a single spatial data frame `States` we only have one group. The group has two layers; borders and fill. The fill layer has the color aesthetic pointed to the column labeled 'rate'.
-```{r}
-tm_shape(States) +
-  tm_borders(col = "gray70") +
-  tm_fill(col = "rate",
-          title = "Annual Rate\n[/10,000 sq. km]") +
-  tm_layout(legend.outside = TRUE)
-```
-
-Note: functions from {tmap} (1) expect data as spatial objects rather than data frames and (2) variable names need to be surrounded by quotes.
-
-All functions start with `tm_`. The first function in a group needs to be `tm_shape()`. It specifies the spatial object. Functions following `tm_shape()` specify sequential aesthetics as layers. Layers are divided into base and derived.
-
-Base layers
-
-* `tm_polygons()`: Draws polygons; 	col
-* `tm_symbols()`: Draws symbols;	size, col, shape
-* `tm_lines()`:	Draws polylines;	col, lwd
-* `tm_raster()`:	Draws a raster;	col
-* `tm_text()`:	Add text labels;	text, size, col
-
-Derived layers
-
-* `tm_fill()`:	Fills the polygons;	see `tm_polygons()`
-* `tm_borders()`:	Draws polygon borders;	none
-* `tm_bubbles()`:	Draws bubbles;	see `tm_symbols()`
-* `tm_squares()`:	Draws squares;	see `tm_symbols()`
-* `tm_dots()`:	Draws dots;	see `tm_symbols()`
-* `tm_markers()`:	Draws markers;	see `tm_symbols()` and `tm_text()`
-* `tm_iso()`	Draws iso/contour lines;	see `tm_lines()` and `tm_text()`
-
-Each aesthetic (layer) can take a constant value or a data variable name. For instance, `tm_fill(col = 'green')` colors all polygons green, while `tm_fill(col = "var1")`, where `"var1"` is the name of a data variable in the shape object, creates a choropleth. If a vector of constant values or variable names are provided, the output is a set of maps.
-
-The following layers are cartographic elements:
-
-* `tm_grid()`:	Add coordinate grid lines
-* `tm_credits()`:	Add credits text label
-* `tm_compass()`:	Add map compass
-* `tm_scale_bar()`:	Add scale bar
-
-For example here we create a choropleth map of countries using an index of happiness.
-```{r}
-data(World)
-
-tm_shape(World) +
-    tm_polygons(col = "HPI")
-```
-
-The simple feature spatial object `World` is the only required argument in the `tm_shape()` function. A polygon layer is added where the fill color (`col =`) is set to the column `HPI` in the attribute table of the simple feature data frame.
-
-The legend title is set with the `title =` argument. For example, here we create a title with the `expression()` and `paste()` functions then use the title in the `tm_fill()` function. Here we also use `tm_fill()` plus `tm_borders()` rather than the `tm_polygons()` as the layer.
-```{r}
-legend_title <- expression(paste("Area (km", {}^2, ")"))
-tm_shape(nz) +
-  tm_fill(col = "Land_area", 
-          title = legend_title) +
-  tm_borders()
-```
-
-The default are sensible breaks. The argument `breaks =` sets the breaks manually. The argument `n =` sets the number of bins into which numeric variables are categorized. The `palette =` argument defines the color scheme, for example `BuGn` from the {RColorBrewer} package.
-
-### Map layout, facets, and inserts
+Map layout, facets, and inserts
 
 Layout functions help create a cartographic map. Elements include the title, the scale bar, margins, aspect ratios, etc. For example, here elements such as a north arrow and a scale bar are added with `tm_compass()` and `tm_scale_bar()`, respectively and the `tm_layout()` function is used to add the title and background color.
 ```{r}
@@ -580,4 +396,147 @@ map2 <- tm_shape(World) +
 tmap_arrange(map1, map2)
 ```
 
-https://www.nceas.ucsb.edu/sites/default/files/2020-04/OverviewCoordinateReferenceSystems.pdf
+## Creating an interactive map
+
+Leaflet is a popular open-source platform (javascript) for making/serving interactive maps. The {leaflet} package provides access to the platform.
+
+As an example, here we create a world map by using the default mapping arguments in `leaflet()` and zoomable tiles with the `addTiles()` layer. The piping operator (`%>%`) is used to 'add' layers. 
+```{r}
+if(!require(leaflet)) install.packages(pkgs = "leaflet", repos = "http://cran.us.r-project.org")
+library(leaflet)
+
+m <- leaflet() %>% 
+  addTiles()
+m
+```
+
+Note: if the map doesn't render in your Viewer tab, then click the `Viewer` tab and select "Show in new window".
+
+Here we use `setView()` with longitude and latitude arguments in decimal degrees to center the map on FSU and use a zoom of 17.
+```{r}
+m <- m %>%
+  setView(lng = -84.29849, 
+          lat = 30.44188, 
+          zoom = 17)
+m
+```
+
+A nice feature of {tmap} is that we can create an interactive map using the same code as we used to create a static map. 
+
+For example our static map of New Zealand (`map_nz`) is viewed interactively by switching to view mode.
+```{r}
+tmap_mode("view")
+map_nz
+```
+
+With the interactive mode turned on, all maps produced with {tmap} will launch as zoomable HTML. This feature includes the ability to specify the basemap with `tm_basemap()` (or `tmap_options()`) as demonstrated here.
+```{r}
+map_nz + 
+  tm_basemap(server = "OpenTopoMap")
+```
+
+We can also create interactive maps with the `tmap_leaflet()` function.
+
+The view mode in {tmap} works with faceted plots. The argument sync in `tm_facets()` is used to produce multiple maps with synchronized zoom and pan settings.
+```{r}
+world_coffee <- left_join(world, 
+                          coffee_data, 
+                          by = "name_long")
+tm_shape(world_coffee) + 
+  tm_polygons(c("coffee_production_2016", 
+                "coffee_production_2017")) + 
+  tm_facets(nrow = 1, sync = TRUE)
+```
+
+Change the view mode back to plot.
+```{r}
+tmap_mode("plot")
+```
+
+## Example: Tornado locations by month in the continental U.S.
+
+Import the tornado data. Remove Alaska, Hawaii, and Puerto Rico tornadoes. The native CRS is latitude/longitude so we transform it to a Web Mercator (EPSG 3857) used by Google Maps, OpenStreetMap, Bing, ArcGIS, ESRI.
+```{r}
+Torn.sf <- read_sf(dsn = "1950-2018-torn-initpoint",
+                   layer = "1950-2018-torn-initpoint") %>%
+      filter(!st %in% c("HI", "AK", "PR")) %>%
+      filter(yr >= 1994) %>%
+      st_transform(crs = 3857)
+```
+
+
+Suppose we want a map showing the location of tornadoes in the continental U.S. by month. First add the world map with countries as a polygon layer (fill is gray by default). Then overlay the U.S. country polygons and color them white. Then add the tornado genesis locations as dots faceted by month. Then add the state polygons as borders. Use a North American Lambert Azimuthal Equal Area Projection and make this the master layer. Finally add cartographic elements.
+```{r, eval=FALSE}
+tm_shape(world) +
+  tm_polygons() +
+tm_shape(world[world$name_long == "United States", ]) +
+  tm_polygons(col = "white") +
+tm_shape(Torn.sf) +
+  tm_dots() + 
+  tm_facets(by = "mo", as.layers = TRUE) +
+tm_shape(States, is.master = TRUE) + 
+  tm_borders() +
+  tm_compass(type = "arrow", position = c("left", "bottom")) +
+  tm_scale_bar(position = c("left", "bottom"), text.size = .75) +
+  tm_style("natural") +
+  tm_layout(main.title = "Contiguous U.S. Tornadoes [1950-2018]",
+            main.title.position = "center", main.title.size = .85,
+            panel.labels = month.name) +
+  tm_credits(c(rep("", 11), "Data Source: U.S. SPC"), 
+             position = c("right", "bottom"))
+```
+
+We can clearly see the spread of tornado activity from the southeast in January to the central Plains in May to the northern Plains during July and August and then back to the southeast in December.
+
+## Adding an inset map
+
+An inset map contextualizes the geographic study area. Here we create a map of the central part of New Zealand's Southern Alps. The inset map shows where the main map is in relation to all of New Zealand. 
+
+The first step is to define the area of interest. Here it is done here by creating a new spatial object `nz_region` using the `st_bbox()` function and the `st_as_sfc()` to make it a simple feature column.
+```{r}
+nz_region <- st_bbox(c(xmin = 1340000, xmax = 1450000,
+                       ymin = 5130000, ymax = 5210000),
+                     crs = st_crs(nz_height)) %>% 
+  st_as_sfc()
+```
+
+The second step is to create a base map showing New Zealand's Southern Alps area. This is the closeup view of where the most important message is stated. The region is clipped to the simple feature column `nz_region` created above. The layers include a raster of elevations and locations of high points. A scale bar is included.
+```{r}
+nz_height_map <- tm_shape(nz_elev, 
+                          bbox = nz_region) +
+  tm_raster(style = "cont", 
+            palette = "YlGn", 
+            legend.show = TRUE) +
+  tm_shape(nz_height) + 
+  tm_symbols(shape = 2, 
+             col = "red", 
+             size = 1) +
+  tm_scale_bar(position = c("left", "bottom"))
+
+nz_height_map
+```
+
+The third step is to create the inset map. It gives a context and helps to locate the area of interest. This map clearly indicates the location of the main map.
+```{r}
+nz_map <- tm_shape(nz) + 
+  tm_polygons() +
+  tm_shape(nz_height) + 
+  tm_symbols(shape = 2, 
+             col = "red", 
+             size = .1) + 
+  tm_shape(nz_region) + 
+  tm_borders(lwd = 3)
+
+nz_map
+```
+
+The final step is to combine the two maps. The `viewport()` function from the {grid} package is used to give a center location (x and y) and the size (width and height) of the inset map.
+```{r}
+library(grid)
+
+nz_height_map
+print(nz_map, 
+      vp = viewport(.8, .27, width = .5, height = .5))
+```
+
+Additional details are available here: https://geocompr.robinlovelace.net/adv-map.html
