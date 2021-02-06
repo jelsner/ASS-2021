@@ -396,30 +396,40 @@ map2 <- tm_shape(World) +
 tmap_arrange(map1, map2)
 ```
 
+## Example: Current COVID19 vaccinations by state
+
+Get the data.
+```{r}
+f <- "https://raw.githubusercontent.com/owid/covid-19-data/e2da3a49250481a8a22f993ee5c3731111ba6958/scripts/scripts/vaccinations/us_states/input/cdc_data_2021-02-06.csv"
+
+df <- read_csv(f) 
+```
+
+Get a US census map with geography shifted for Alaska and Hawaii. Rename the state name column (`NAME`) to `LongName`.
+```{r}
+library(tidycensus)
+
+sf <- get_acs(geography = "state",
+              variables = "B01003_001",
+              geometry = TRUE,
+              shift_geo = TRUE) %>%
+  rename(LongName = NAME)
+```
+
+Join the COVID data frame with the simple feature data frame from the census. Then make a map showing the doses administered per 100K people as of February 6, 2021.
+```{r}
+sf <- sf %>%
+  left_join(df)
+
+library(tmap)
+
+tm_shape(sf) +
+  tm_fill(col = "Admin_Per_100K", title = "Per 100K" ) +
+  tm_borders(col = "gray70") +
+  tm_layout(legend.outside = TRUE)
+```
+
 ## Creating an interactive map
-
-Leaflet is a popular open-source platform (javascript) for making/serving interactive maps. The {leaflet} package provides access to the platform.
-
-As an example, here we create a world map by using the default mapping arguments in `leaflet()` and zoomable tiles with the `addTiles()` layer. The piping operator (`%>%`) is used to 'add' layers. 
-```{r}
-if(!require(leaflet)) install.packages(pkgs = "leaflet", repos = "http://cran.us.r-project.org")
-library(leaflet)
-
-m <- leaflet() %>% 
-  addTiles()
-m
-```
-
-Note: if the map doesn't render in your Viewer tab, then click the `Viewer` tab and select "Show in new window".
-
-Here we use `setView()` with longitude and latitude arguments in decimal degrees to center the map on FSU and use a zoom of 17.
-```{r}
-m <- m %>%
-  setView(lng = -84.29849, 
-          lat = 30.44188, 
-          zoom = 17)
-m
-```
 
 A nice feature of {tmap} is that we can create an interactive map using the same code as we used to create a static map. 
 
@@ -452,41 +462,6 @@ Change the view mode back to plot.
 ```{r}
 tmap_mode("plot")
 ```
-
-## Example: Tornado locations by month in the continental U.S.
-
-Import the tornado data. Remove Alaska, Hawaii, and Puerto Rico tornadoes. The native CRS is latitude/longitude so we transform it to a Web Mercator (EPSG 3857) used by Google Maps, OpenStreetMap, Bing, ArcGIS, ESRI.
-```{r}
-Torn.sf <- read_sf(dsn = "1950-2018-torn-initpoint",
-                   layer = "1950-2018-torn-initpoint") %>%
-      filter(!st %in% c("HI", "AK", "PR")) %>%
-      filter(yr >= 1994) %>%
-      st_transform(crs = 3857)
-```
-
-
-Suppose we want a map showing the location of tornadoes in the continental U.S. by month. First add the world map with countries as a polygon layer (fill is gray by default). Then overlay the U.S. country polygons and color them white. Then add the tornado genesis locations as dots faceted by month. Then add the state polygons as borders. Use a North American Lambert Azimuthal Equal Area Projection and make this the master layer. Finally add cartographic elements.
-```{r, eval=FALSE}
-tm_shape(world) +
-  tm_polygons() +
-tm_shape(world[world$name_long == "United States", ]) +
-  tm_polygons(col = "white") +
-tm_shape(Torn.sf) +
-  tm_dots() + 
-  tm_facets(by = "mo", as.layers = TRUE) +
-tm_shape(States, is.master = TRUE) + 
-  tm_borders() +
-  tm_compass(type = "arrow", position = c("left", "bottom")) +
-  tm_scale_bar(position = c("left", "bottom"), text.size = .75) +
-  tm_style("natural") +
-  tm_layout(main.title = "Contiguous U.S. Tornadoes [1950-2018]",
-            main.title.position = "center", main.title.size = .85,
-            panel.labels = month.name) +
-  tm_credits(c(rep("", 11), "Data Source: U.S. SPC"), 
-             position = c("right", "bottom"))
-```
-
-We can clearly see the spread of tornado activity from the southeast in January to the central Plains in May to the northern Plains during July and August and then back to the southeast in December.
 
 ## Adding an inset map
 

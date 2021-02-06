@@ -8,7 +8,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-**""You haven't mastered a tool until you understand when it should not be used."** – Kelsey Hightower
+**"You haven't mastered a tool until you understand when it should not be used."** – Kelsey Hightower
 
 Today: Defining spatial neighborhoods and spatial weights. The spatial lag variable and its relationship to autocorrelation.
 
