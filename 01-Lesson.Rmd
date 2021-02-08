@@ -105,11 +105,11 @@ This is a guide for the course and is subject to change with advanced notice.
 Topics:
 
 1. Working with data and making graphs (~ 4 lessons)
-2. Working with spatial data and making maps (~ 4 lessons)
-3. Quantifying spatial autocorrelation and spatial regression (~ 4 lessons)
+2. Working with spatial data and making maps (~ 5 lessons)
+3. Quantifying spatial autocorrelation and spatial regression (~ 5 lessons)
 4. Analyzing and modeling point pattern data (~ 6 lessons)
 5. Estimating variograms and spatial interpolation (~ 6 lessons)
-6. Other topics (~ 6 lessons)
+6. Other topics (~ 2 lessons)
 
 Calendars
 
