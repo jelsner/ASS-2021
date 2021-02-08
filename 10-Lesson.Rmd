@@ -12,12 +12,13 @@ editor_options:
 
 Today: Defining spatial neighborhoods and spatial weights. The spatial lag variable and its relationship to autocorrelation.
 
-A nice feature of the {tmap} package is that we can create an interactive map using the same code as we used to create a static map. 
+Finishing up from last lesson, a nice feature of the {tmap} package is that we can create an interactive map using the same code as we used to create a static map. 
 
-For example our static map of New Zealand (`map_nz`) is viewed interactively by switching to view mode.
+For example create map showing the county borders in Florida.
 ```{r}
 library(tmap)
 library(USAboundaries)
+library(sf)
 
 FLcounties.sf <- us_counties(state = "FL",
                              resolution = "high")
@@ -35,7 +36,7 @@ tmap_mode("plot")
 
 ## Defining spatial neighborhoods and weights
 
-The concept of autocorrelation plays a central role in spatial statistics. How it gets estimated and exploited depends on the spatial geometry of the data. In the case where data are aggregated to polygons (or raster cells) spatial autocorrelation measures the degree to which attribute values tend to cluster. Keep in mind that attributes are variables in a spatial data frame (either as a column in a simple feature object or as a layer in a raster object). 
+The concept of autocorrelation plays a central role in spatial statistics. It measures the degree to which things tend to cluster. Things include attribute values aggregate to polygons (or raster cells) or spatial locations. How it gets estimated depends on the geometry of the spatial data.
 
 Clustering arises from:
 
@@ -45,13 +46,11 @@ Clustering arises from:
 
 * Interaction: the movement of people, goods or information creates relationships between areas. Infectious diseases might spread from a source region thus increasing the disease rates in surrounding areas as the direct result of contact or movement of people between regions.
 
-Spatial statistics quantify, and condition on, autocorrelation but they are silent about physical causes. Understanding the reason for autocorrelation is important for causal inference because the causal mechanism might be confounded by it. Divorce rates are high in states in the South, but so is the number of Waffle Houses. Understanding causation requires domain specific knowledge.
+Spatial statistics quantify, and condition on, autocorrelation but they are silent about physical causes. Understanding the reason for autocorrelation is important for inference because the causal mechanism might be confounded by its. Divorce rates are high in states in the South, but so is the number of Waffle Houses. Understanding causation requires domain specific knowledge.
 
-When variables are spatially aggregated to regions, autocorrelation is quantified by calculating how similar a value in region $i$ is to the value in region $j$ and weighting this similarity by how 'close' region $i$ is to region $j$. Closer regions have greater weight.
+When a variable's values are aggregated to regions, autocorrelation is quantified by calculating how similar a value in region $i$ is to the value in region $j$ and weighting this similarity by how 'close' region $i$ is to region $j$. Closer regions have greater weight.
 
-High similarities with high weight (similar values close together) yield high values of spatial autocorrelation. Low similarities with high weight (dissimilar values close together) yield low values of spatial autocorrelation. 
-
-Let $\hbox{sim}_{ij}$ denote the similarity between values $Y_i$ and $Y_j$, and let $w_{ij}$ denote a weight describing the 'distance' between regions $i$ and $j$, for $i$, $j$ = 1, ..., $N$. 
+High similarities with high weight (similar values close together) yield high values of spatial autocorrelation. Low similarities with high weight (dissimilar values close together) yield low values of spatial autocorrelation. Let $\hbox{sim}_{ij}$ denote the similarity between values $Y_i$ and $Y_j$, and let $w_{ij}$ denote a weight describing the 'distance' between regions $i$ and $j$, for $i$, $j$ = 1, ..., $N$. 
 
 Then a spatial autocorrelation index (SAI) is given by
 $$
@@ -59,40 +58,38 @@ $$
 $$
 which represents the weighted similarity between regions. The collection of weights is called a spatial weights matrix. The spatial weights matrix defines the neighbors for each region and their strength of association.
 
-For cells in a raster under the rook-contiguity criterion, $w_{ij}$ = 1 if cell $i$ and $j$ share a boundary, and 0 otherwise. In this case $w_{ij}$ = $w_{ji}$. Also a cell is not a neighbor to itself so $w_{ii}$ = 0.
+For cells in a raster under the rook-contiguity criterion, $w_{ij}$ = 1 if cell $i$ and $j$ share a boundary, and 0 if they don't share a boundary. In this case $w_{ij}$ = $w_{ji}$. Also, a cell is not a neighbor of itself so $w_{ii}$ = 0.
 
-As an alternative we can define center locations from a set of polygon regions and let $w_{ij}$ = 1 if the center of region $i$ is near the center of region $j$ and 0 otherwise. In this case we need to decide on the number of nearest neighbors.
+Alternatively we can define center locations from a set of polygon regions and let $w_{ij}$ = 1 if the center of region $i$ is near the center of region $j$ and 0 otherwise. Here we need to decide on the number of nearest neighbors.
 
 We can also define neighbors by distance. For example, if $d_{ij}$ is the distance between centers $i$ and $j$, we can let $w_{ij}$ = 1 if $d_{ij}$ < $\delta$ and 0 otherwise.
 
 Consider crime data at the tract level in the city of Columbus, Ohio (Anselin, 1988: Spatial Econometrics. Boston, Kluwer Academic). The tract polygons are projected with arbitrary spatial coordinates.
 ```{r}
-library(sf)
-
-download.file("http://myweb.fsu.edu/jelsner/temp/data/columbus.zip",
+if(!"columbus" %in% list.files()) {
+download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/columbus.zip",
               destfile = "columbus.zip")
 unzip("columbus.zip")
+}
 
-CC.sf <- read_sf(dsn = "columbus")
+( CC.sf <- read_sf(dsn = "columbus") )
 ```
 
-The simple feature data frame contains the following names and geometry.
-```{r}
-names(CC.sf)
-st_geometry(CC.sf)
-```
+The simple feature data frame contains housing values (`HOVAL`), income values (`INC`) and (`CRIME`) in census tracts across the city of Columbus, OH.
 
-Create a choropleth map of the crime rates (`"CRIME"`). Residential burglaries and vehicle thefts per 1000 households.
+Create a choropleth map of the crime rates (`CRIME`). Residential burglaries and vehicle thefts per 1000 households.
 ```{r}
 library(tmap)
 
 tm_shape(CC.sf) +
-  tm_fill("CRIME",
+  tm_fill(col = "CRIME",
           title = "") +
   tm_borders(col = "gray70") +
   tm_layout(title = "Burglary & Vehicle Thefts\n/1000 Households",
             legend.outside = TRUE)
 ```
+
+Note that the variable name must be in quotes.
 
 Alternatively
 ```{r, eval=FALSE}
@@ -103,20 +100,19 @@ ggplot(data = CC.sf) +
   ggtitle("Burglary & Vehicle Thefts/1000 Households")
 ```
 
-High crime areas tend to cluster. Spatial autocorrelation quantifies this clustering. To quantify we first need to define a list of neighbors for each polygon. 
-
-List of neighbors
+High crime areas tend to cluster. Autocorrelation quantifies this clustering. To quantify we first need to define a list of neighbors for each polygon.
 
 We create a list of neighbors using the `poly2nb()` function from the {spdep} package. The function now works on S4 spatial classes and simple features.
 ```{r}
+if(!require(spdep)) install.packages("spdep", repos = "http://cran.us.r-project.org")
 library(spdep)
 
 ( nbs <- poly2nb(CC.sf) )
 ```
 
-The `nb` in the `poly2nb()` function names stands for neighbor list object. The function builds the list from regions based on contiguity. Neighbors must share one or more geometry points. By default the contiguity is defined as having at least one point in common. This is changed by using the argument `queen = FALSE`.
+The `nb` in the `poly2nb()` function names stands for neighbor list object. The function builds the list from geometries based on contiguity. Neighbors must share one or more points. By default the contiguity is defined as having at least one point in common. This is changed by using the argument `queen = FALSE`.
 
-There are 49 tracts (polygons). Each tract is bordered by at least one other tract (each tract is bordered by at least one tract). The average number of neighbors is 4.8. The total number of neighbors over all tracts is 236. This represents 9.8% of all possible connections (if every tract is a neighbor of itself and every other tract 49 * 49).
+There are 49 tracts (polygons). Each tract is bordered by at least one other tract. The average number of neighbors is 4.8. The total number of neighbors over all tracts is 236. This represents 9.8% of all possible connections (if every tract is a neighbor of itself and every other tract 49 * 49).
 
 A graph of the neighbor links is obtained with the `plot()` method. The arguments include the neighbor list object (`nbs`) and the location of the polygon centers, which are extracted from the simple feature data frame using the `st_centroid()`.
 ```{r}
@@ -124,9 +120,9 @@ plot(nbs,
      st_centroid(CC.sf$geometry))
 ```
 
-The graph is a network showing the contiguity pattern (topology). Tracts close to the center of the city have more neighbors than those on the outskirts.
+The graph is a network (topology) showing the contiguity pattern. Tracts close to the center of the city have the most neighbors.
 
-The number of links per node (tract)--link distribution--is obtained with the `summary()` method.
+The number of links per tract (node)--link distribution--is obtained with the `summary()` method.
 ```{r}
 summary(nbs)
 ``` 
@@ -144,9 +140,7 @@ card(nbs)
 
 Tract 5 has 8 neighbors.
 
-Weights matrix
-
-Next weights are added to the neighbor list object to create a weights matrix. The weights specifying how 'close' each neighbor is. This is done with the `nb2listw()` function. The function turns the neighbor list object into a spatial weights object. By default the weighting scheme gives each link the same weight equal to the multiplicative inverse of the number of neighbors.
+Next, weights are added to the neighbor list object to create a weights matrix. The weights specifying how 'close' each neighbor is. This is done with the `nb2listw()` function. The function turns the neighbor list object into a spatial weights object. By default the weighting scheme gives each link the same weight equal to the multiplicative inverse of the number of neighbors.
 ```{r}
 wts <- nb2listw(nbs)
 
@@ -205,7 +199,7 @@ wts2 <- nb2listw(nbs2,
 head(wts2$weights)
 ```
 
-Moran I
+## Spatial autocorrelation
 
 A commonly used autocorrelation statistic is Moran I. Moran I follows the basic form of spatial autocorrelation indexes where the similarity between regions $i$ and $j$ is proportional to the product of the deviations from the mean such that
 $$
