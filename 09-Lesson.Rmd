@@ -220,7 +220,7 @@ A {tmap} map starts with the `tm_shape()` function that takes as input a spatial
 
 Returning to the New Zealand simple feature data frame (`nz`). To make a map of the region borders we first identify the spatial data frame with the `tm_shape()` function and then add a borders layer with the `tm_borders()` layer.
 ```{r}
-tm_shape(nz) +
+tm_shape(shp = nz) +
   tm_borders() 
 ```
 
@@ -253,7 +253,7 @@ class(map_nz)
 
 The resulting object is of class `tmap`.
 
-New spatial data are added with `+ tm_shape(new_object)`. In this case `new_obj` represents a new spatial data frame to be plotted over the preceding layers. When a new spatial data frame is added in this way, all subsequent aesthetic functions refer to it, until another spatial data frame is added.
+New spatial data are added with `+ tm_shape(new_object)`. In this case `new_object` represents a new spatial data frame to be plotted over the preceding layers. When a new spatial data frame is added in this way, all subsequent aesthetic functions refer to it, until another spatial data frame is added.
 
 For example, let's add an elevation layer to the New Zealand map. The elevation raster (`nz_elev`) spatial data frame is in the {spDataLarge} package on GitHub.
 
@@ -356,7 +356,7 @@ tm_shape(urb_1970_2030) +
              border.col = "white",
              size = "population_millions") +
   tm_facets(by = "year", 
-            nrow = 4, 
+            nrow = 2, 
             free.coords = FALSE)
 ```
 

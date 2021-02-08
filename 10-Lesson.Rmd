@@ -12,6 +12,27 @@ editor_options:
 
 Today: Defining spatial neighborhoods and spatial weights. The spatial lag variable and its relationship to autocorrelation.
 
+A nice feature of the {tmap} package is that we can create an interactive map using the same code as we used to create a static map. 
+
+For example our static map of New Zealand (`map_nz`) is viewed interactively by switching to view mode.
+```{r}
+library(tmap)
+library(USAboundaries)
+
+FLcounties.sf <- us_counties(state = "FL",
+                             resolution = "high")
+
+( FLmap <- tm_shape(FLcounties.sf) +
+  tm_borders() )
+```
+
+Toggle the mode to `view` with the `tmap_mode()` function.
+```{r, eval=FALSE}
+tmap_mode("view")
+FLmap
+tmap_mode("plot")
+```
+
 ## Defining spatial neighborhoods and weights
 
 The concept of autocorrelation plays a central role in spatial statistics. How it gets estimated and exploited depends on the spatial geometry of the data. In the case where data are aggregated to polygons (or raster cells) spatial autocorrelation measures the degree to which attribute values tend to cluster. Keep in mind that attributes are variables in a spatial data frame (either as a column in a simple feature object or as a layer in a raster object). 
@@ -49,10 +70,10 @@ Consider crime data at the tract level in the city of Columbus, Ohio (Anselin, 1
 library(sf)
 
 download.file("http://myweb.fsu.edu/jelsner/temp/data/columbus.zip",
-              destfile = "data/columbus.zip")
-unzip("data/columbus.zip", exdir = "data")
+              destfile = "columbus.zip")
+unzip("columbus.zip")
 
-CC.sf <- read_sf(dsn = "data/columbus")
+CC.sf <- read_sf(dsn = "columbus")
 ```
 
 The simple feature data frame contains the following names and geometry.
