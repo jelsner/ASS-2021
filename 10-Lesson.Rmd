@@ -10,9 +10,9 @@ editor_options:
 
 **"You haven't mastered a tool until you understand when it should not be used."** – Kelsey Hightower
 
-Today: Defining spatial neighborhoods and spatial weights. The spatial lag variable and its relationship to autocorrelation.
+Today: Defining neighborhoods and spatial weights. The spatial lag variable and its relationship to autocorrelation.
 
-Finishing up from last lesson, a nice feature of the {tmap} package is that we can create an interactive map using the same code as we used to create a static map. 
+From last lesson a nice feature of the {tmap} package is that we can create an interactive map using the same code as we used to create a static map. 
 
 For example create map showing the county borders in Florida.
 ```{r}
@@ -34,7 +34,7 @@ FLmap
 tmap_mode("plot")
 ```
 
-## Defining spatial neighborhoods and weights
+## Defining neighborhoods and neighborhood weights
 
 The concept of autocorrelation plays a central role in spatial statistics. It measures the degree to which things tend to cluster. Things include attribute values aggregate to polygons (or raster cells) or spatial locations. How it gets estimated depends on the geometry of the spatial data.
 
@@ -97,7 +97,8 @@ library(ggplot2)
 
 ggplot(data = CC.sf) + 
   geom_sf(aes(fill = CRIME), col = "gray70") +
-  ggtitle("Burglary & Vehicle Thefts/1000 Households")
+  ggtitle("Burglary & Vehicle Thefts/1000 Households") +
+  theme_void()
 ```
 
 High crime areas tend to cluster. Autocorrelation quantifies this clustering. To quantify we first need to define a list of neighbors for each polygon.
@@ -116,11 +117,13 @@ There are 49 tracts (polygons). Each tract is bordered by at least one other tra
 
 A graph of the neighbor links is obtained with the `plot()` method. The arguments include the neighbor list object (`nbs`) and the location of the polygon centers, which are extracted from the simple feature data frame using the `st_centroid()`.
 ```{r}
+plot(CC.sf$geometry)
 plot(nbs, 
-     st_centroid(CC.sf$geometry))
+     st_centroid(CC.sf$geometry),
+     add = TRUE)
 ```
 
-The graph is a network (topology) showing the contiguity pattern. Tracts close to the center of the city have the most neighbors.
+The graph is a network (topology) showing the contiguity pattern (adjacency neighbor structure). Tracts close to the center of the city have the most neighbors.
 
 The number of links per tract (node)--link distribution--is obtained with the `summary()` method.
 ```{r}
@@ -199,7 +202,7 @@ wts2 <- nb2listw(nbs2,
 head(wts2$weights)
 ```
 
-## Spatial autocorrelation
+## Computing autocorrelation
 
 A commonly used autocorrelation statistic is Moran I. Moran I follows the basic form of spatial autocorrelation indexes where the similarity between regions $i$ and $j$ is proportional to the product of the deviations from the mean such that
 $$
@@ -369,15 +372,16 @@ Again, alternatively we can use `geom_sf()`.
 ```{r, eval=FALSE}
 ggplot(data = SIDS.sf) + 
   geom_sf(aes(fill = SIDR79), col = "gray70") +
-  ggtitle("SIDS Rates 1979-84 [per 1000]")
+  ggtitle("SIDS Rates 1979-84 [per 1000]") +
+  theme_void()
 ```
 
 Create a neighborhood list (`nb`) and a `listw` object (`wts`) then graph the neighborhood network.
 ```{r}
-nb <- poly2nb(SIDS.sf)
-wts <- nb2listw(nb)
+nbs <- poly2nb(SIDS.sf)
+wts <- nb2listw(nbs)
 
-plot(nb, 
+plot(nbs, 
      st_centroid(st_geometry(SIDS.sf)))
 ```
 
@@ -404,7 +408,7 @@ moran.test(x, nb2listw(nb, style = "B"))$estimate[1]  # binary
 moran.test(x, nb2listw(nb, style = "S"))$estimate[1]  # variance-stabilizing
 ```
 
-Thus when we report a Moran I we need to state what weighting scheme was used.
+When we report a Moran I we need to state what type of weighting was used.
 
 Let `sids` be a vector with elements containing the SIDS rate in each county. We create a spatial lag variable using the `lag.listw()` function. The first argument is the `listw` object and the second is the vector of rates.
 ```{r}
@@ -421,7 +425,7 @@ j
 sum(SIDS.sf$SIDR79[j])/length(j)
 ```
 
-The weight for county one is `Wsids[1]` = 2.659. The neighbor indices for this county are in the vector `wts$neighbours[[1]]` of length 3. Add the SIDS rates from those counties and divide by the number of counties (`length(j)`).
+The weight for county one is `Wsids[1]` = 2.659. The neighbor indexes for this county are in the vector `wts$neighbours[[1]]` of length 3. Add the SIDS rates from those counties and divide by the number of counties (`length(j)`).
 
 A scatter plot of the neighborhood average SIDS rate versus the actual SIDS rate in each region.
 ```{r}

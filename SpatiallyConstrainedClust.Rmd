@@ -1,30 +1,30 @@
 ---
 title: "Spatially constrained clustering & regionalization"
-author: "James B. Elsner"
-date: "February 15, 2021"
+date: "February 9, 2021"
 output:
   html_document: null
 editor_options:
   chunk_output_type: console
 ---
 
-From: https://www.dshkol.com/post/spatially-constrained-clustering-and-regionalization/
-
 ```{r}
 library(sf)
 library(tidyverse)
 library(spdep)
+library(ggplot2)
 ```
 
 ## Spatially constrained clustering
+
+From: https://www.dshkol.com/post/spatially-constrained-clustering-and-regionalization/
 
 The advantage of spatially constrained clustering methods is that it has a hard requirement that spatial objects in the same cluster are also geographically linked. 
 
 There are a lot of cases that require separating geographies into discrete but contiguous regions (regionalization) such as designing communities, planning areas, amenity zones, logistical units, or even for the purpose of setting up experiments with real world geographic constraints. 
 
-There are many applications and many situations where the optimal grouping, if solely using traditional cluster evaluation measures, is sub-optimal in practice because of real-world constraints.
+There are many situations where the optimal grouping, if solely using traditional cluster evaluation measures, is sub-optimal in practice because of real-world constraints.
 
-Unconstrained grouping on data with spatial characteristics will often still result in contiguous regions because of autocorrelation, but if we want to ensure that all objects are in entirely spatially-contiguous groups we need a method specifically designed for the task. The 'skater' algorithm available in R via the {spdep} package is well-implemented and well-documented.
+Unconstrained grouping on data with spatial characteristics will result in contiguous regions because of autocorrelation, but if we want to ensure that all objects are in entirely spatially-contiguous groups we need a method specifically designed for the task. The 'skater' algorithm available in R via the {spdep} package is well-implemented and well-documented.
 
 The 'skater' (spatial ’k’luster analysis by tree edge removal) builds a connectivity graph to represent spatial relationships between neighboring areas, where each area is represented by a node and edges represent connections between areas (see https://www.tandfonline.com/doi/abs/10.1080/13658810600665111). Edge costs are calculated by evaluating the dissimilarity between neighboring areas. The connectivity graph is reduced by pruning edges with higher dissimilarity until we are left with n nodes and n−1 edges. At this point any further pruning would create subgraphs and these subgraphs become cluster candidates.
 
@@ -37,4 +37,84 @@ unzip("columbus.zip")
 }
 
 ( CC.sf <- read_sf(dsn = "columbus") )
+```
+
+We check if there is a clear spatial pattern to this data.
+```{r}
+plot(CC.sf[,7:9])
+```
+
+Promising start as there looks to be some fairly distinct regional patterns happening. 
+
+Next, scale variable values and center them. This is done regardless of clustering approach.
+```{r}
+( CCs.df <- CC.sf %>% 
+    mutate(HOVAL = scale(HOVAL),
+           INC = scale(INC),
+           CRIME = scale(CRIME)) %>%
+    select(HOVAL, INC, CRIME) %>%
+    st_drop_geometry() )
+```
+
+Next create the adjacency neighbor structure using rook contiquity.
+```{r}
+nbs <- poly2nb(CC.sf, 
+               queen = TRUE)
+
+plot(CC.sf$geometry)
+plot(nbs, 
+     st_centroid(st_geometry(CC.sf)),
+     add = TRUE)
+```
+
+Next we combine the contiguity graph with our scaled attribute data to calculate edge costs based on the statistical distance between each node. The function `nbcosts()` from the {spdep} package provides distance methods for Euclidian, Manhattan, Canberra, binary, Minkowski, and Mahalanobis, and defaults to Euclidean if not specified.
+```{r}
+costs <- nbcosts(nbs, 
+                 data = CC.sf)
+```
+
+Next we transform the edge costs into spatial weights using the `nb2list2()` function before constructing the minimum spanning tree with the weights list.
+```{r}
+wts <- nb2listw(nbs,
+                glist = costs,
+                style = "B")
+mst <- mstree(wts)
+
+plot(mst, 
+     coordinates(as_Spatial(CC.sf)), 
+     col = "blue")
+```
+
+Edges with higher dissimilarity are removed sequentially until left with a spanning tree that takes the minimum sum of dissimilarities across all edges of the tree, hence minimum spanning tree. At this point, any further reduction in edges would create disconnected sub-graphs which then lead to the resulting spatial clusters.
+
+Once the minimum spanning tree is in place, the SKATER algorithm comes in to partition the MST. It partitions the graph identifying which edge to remove to maximize the quality of resulting clusters as measured by the sum of the inter-cluster square deviations SSD. Regions that are similar to one another have lower values. This is implemented with the `skater` function and the `ncuts =` argument indicates the number of partitions to make, resulting in ncuts + 1 groups.
+```{r}
+clus5 <- skater(edges = mst[,1:2], 
+                data = CCs.df, 
+                ncuts = 4)
+```
+
+Where are these groups located?
+```{r}
+CC.sf <- CC.sf %>%
+  mutate(Group = clus5$groups)
+
+ggplot() +
+  geom_sf(data = CC.sf,
+          mapping = aes(fill = factor(Group)))
+```
+
+Hierarchical clustering
+```{r}
+dd <- dist(CCs.df)
+hc <- hclust(dd, 
+             method = "ward.D")
+hcGroup <- cutree(hc, k = 5)
+CC.sf <- CC.sf %>%
+  mutate(hcGroup = hcGroup)
+
+ggplot() +
+  geom_sf(data = CC.sf,
+          mapping = aes(fill = factor(hcGroup)))
+
 ```
