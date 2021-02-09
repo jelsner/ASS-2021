@@ -1,0 +1,40 @@
+---
+title: "Spatially constrained clustering & regionalization"
+author: "James B. Elsner"
+date: "February 15, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+From: https://www.dshkol.com/post/spatially-constrained-clustering-and-regionalization/
+
+```{r}
+library(sf)
+library(tidyverse)
+library(spdep)
+```
+
+## Spatially constrained clustering
+
+The advantage of spatially constrained clustering methods is that it has a hard requirement that spatial objects in the same cluster are also geographically linked. 
+
+There are a lot of cases that require separating geographies into discrete but contiguous regions (regionalization) such as designing communities, planning areas, amenity zones, logistical units, or even for the purpose of setting up experiments with real world geographic constraints. 
+
+There are many applications and many situations where the optimal grouping, if solely using traditional cluster evaluation measures, is sub-optimal in practice because of real-world constraints.
+
+Unconstrained grouping on data with spatial characteristics will often still result in contiguous regions because of autocorrelation, but if we want to ensure that all objects are in entirely spatially-contiguous groups we need a method specifically designed for the task. The 'skater' algorithm available in R via the {spdep} package is well-implemented and well-documented.
+
+The 'skater' (spatial ’k’luster analysis by tree edge removal) builds a connectivity graph to represent spatial relationships between neighboring areas, where each area is represented by a node and edges represent connections between areas (see https://www.tandfonline.com/doi/abs/10.1080/13658810600665111). Edge costs are calculated by evaluating the dissimilarity between neighboring areas. The connectivity graph is reduced by pruning edges with higher dissimilarity until we are left with n nodes and n−1 edges. At this point any further pruning would create subgraphs and these subgraphs become cluster candidates.
+
+Consider crime data at the tract level in the city of Columbus, Ohio (Anselin, 1988: Spatial Econometrics. Boston, Kluwer Academic). The tract polygons are projected with arbitrary spatial coordinates.
+```{r}
+if(!"columbus" %in% list.files()) {
+download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/columbus.zip",
+              destfile = "columbus.zip")
+unzip("columbus.zip")
+}
+
+( CC.sf <- read_sf(dsn = "columbus") )
+```

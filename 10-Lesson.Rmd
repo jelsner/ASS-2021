@@ -435,7 +435,7 @@ ggplot(aes(x = sids, y = Wsids)) +
   theme_minimal()
 ```
 
-The slope of the regression line is upward indicating positive spatial autocorrelation. The value of the slope is I. To check this type
+The regression line slopes upward indicating positive spatial autocorrelation. The value of the slope is I. To check this type
 ```{r}
 lm(Wsids ~ sids)
 ```

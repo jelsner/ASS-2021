@@ -10,9 +10,16 @@ editor_options:
 
 **"Be curious. Read widely. Try new things. I think a lot of what people call intelligence boils down to curiosity."** - Aaron Swartz
 
+```{r}
+if(!require(sm)) install.packages("sm", repos = "http://cran.us.r-project.org")
+if(!require(equatiomatic)) install.packages("equatiomatic", repos = "http://cran.us.r-project.org")
+```
+
+
+
 ## Statistical significance of spatial autocorrelation
 
-Even in a random pattern of attribute values across a spatial domain the value of $I$ will almost certainly be non-zero. If we want to use $I$ to establish clustering we need a way to guard against being fooled by this randomness.
+Even attribute values randomly placed across a spatial domain will exhibit some amount of autocorrelation. Statistical tests provide a way to guard against being fooled by this randomness.
 
 Is the value of Moran I significant with respect to the null hypothesis of no spatial autocorrelation? One way to answer this question is to draw an uncertainty band on the regression line and see if a horizontal line can be placed within the band. If not, then I is statistically different than what we would expect if the null hypothesis of no spatial autocorrelation were true.
 
