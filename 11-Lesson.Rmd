@@ -12,6 +12,10 @@ editor_options:
 
 ## Using other neighborhood definitions
 
+Last time we learned how to compute autocorrelation on areal aggregated data. It involved a weights matrix, which we created using default settings for the neighborhood definition and the weighting scheme.
+
+Other neighborhood definitions are possible.
+
 Let's consider the historical demographic data in Mississippi counties that we used in Assignment 5. Import the data as a simple feature data frame and assign the geometry a geographic CRS.
 ```{r}
 if(!"police" %in% list.files()) {
@@ -38,15 +42,13 @@ ggplot(data = PE.sf) +
   geom_sf()
 ```
 
-Recall we first need to assign the neighborhoods and the associated weights between each region and each neighbor of that region. 
-
-One way is based on contiguity with the weights based on row standardization (default `style = "W"`) using the `poly2nb()` and `nb2listw()` functions in that order from the {spdep} package.
+We need to assign the neighborhoods and the associated weights between each region and each neighbor of that region. The default options in the `poly2nb()` and `nb2listw()` functions from the {spdep} package result in a neighborhood definition based on queen contiguity and the weights based on row standardization (the sum of the weights equals the number of regions).
 ```{r}
 nbs <- poly2nb(PE.sf)
 wts <- nb2listw(nbs)
 ```
 
-Another way is to specify the number of neighbors and then assign the neighbors based on proximity. We first extract the coordinates of the polygon centroids.
+Alternatively we can specify the number of neighbors and then assign the neighbors based on proximity. We first extract the coordinates of the polygon centroids.
 ```{r}
 coords <- PE.sf %>%
   st_centroid() %>%
@@ -81,7 +83,7 @@ nbs3 <- knn2nb(knn,
 summary(nbs3)
 ```
 
-Compare the neighborhood topologies.
+Compare the neighborhoods.
 ```{r, eval=FALSE}
 par(mfrow = c(1, 2))
 
@@ -199,13 +201,11 @@ The unemployment rates are a bit more "peaked" (higher kurtosis) than a normal d
 
 Further, the assumptions underlying Moran test are sensitive to the form of the graph of neighbor relationships and other factors so results should be checked against a test that involves permutations.
 
-Monte Carlo approach to inference
-
-A permutation test for Moran I is performed with the `moran.mc()` function. MC stands for Monte Carlo which refers to the city of Monte Carlo in Monaco famous for its gambling casinos. The MC procedure refers to random sampling.
+A random sampling approach to inference is made with the `moran.mc()` function. MC stands for Monte Carlo which refers to the city of Monte Carlo in Monaco famous for its gambling casinos.
 
 The name of the data vector and the weights list object (`listw`) are required arguments as is the number of permutations (`nsim`). Each permutation is a random rearrangement of the SIDS rates across the counties. This removes the spatial autocorrelation but keeps the non-spatial distribution of the SIDS rates. The neighbor topology and weights remain the same.
 
-For each permutation (random shuffle), I is computed and saved. The $p$-value is obtained as the ratio of the number of permuted I values greater or exceeding the observed I over the number of permutation plus one. In the case where there are 5 permuted I values greater or equal to the observed value based on 99 simulations, the $p$-value is 5/(99 + 1) = .05.
+For each permutation (random shuffle of the data values), I is computed and saved. The $p$-value is obtained as the ratio of the number of permuted I values greater or exceeding the observed I over the number of permutation plus one. In the case where there are 5 permuted I values greater or equal to the observed value based on 99 simulations, the $p$-value is 5/(99 + 1) = .05.
 
 For example, if you want inference on I using 99 permutations type
 ```{r}
@@ -386,6 +386,7 @@ tm_shape(PE.sf) +
 ```
 
 Areas in dark green indicate where the correlation between crime and policing is most influenced by neighboring crime and policing.
+
 ## Autocorrelation in model residuals
 
 Knowledge of significant autocorrelation by itself is not typically useful. But knowledge of significant autocorrelation in the residuals from some statistical model can help us build a more precise model.
