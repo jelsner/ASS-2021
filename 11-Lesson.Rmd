@@ -387,60 +387,97 @@ tm_shape(PE.sf) +
 
 Areas in dark green indicate where the correlation between crime and policing is most influenced by neighboring crime and policing.
 
-## Autocorrelation in model residuals
+### Example: Population and tornadoes in Iowa
 
-Knowledge of significant autocorrelation by itself is not typically useful. But knowledge of significant autocorrelation in the residuals from some statistical model can help us build a more precise model.
+We are interested in quantifying the bi-variate autocorrelation between tornado occurrences and population.
 
-A spatial regression model may be needed whenever the residuals resulting from a aspatial regression model exhibit significant spatial autocorrelation. So a common way to proceed is to first regress the response variable onto the explanatory variables and check for spatial autocorrelation in the residuals.
-
-If the explanatory variables remove the spatial autocorrelation then a spatial regression model is not needed.
-
-Let's return to the Columbus crime data and fit a linear regression model with `CRIME` as the response variable and `INC` and `HOVAL` as the explanatory variables.
+Get U.S. Census data with functions from the {tidycensus} package. The `get_decennial()` function grants access to the 1990, 2000, and 2010 decennial US Census data and the `get_acs()` function grants access to the 5-year American Community Survey data. For example, here is how you would get county-level population  for Iowa.
 ```{r}
-model <- lm(CRIME ~ INC + HOVAL, 
-            data = CC.sf)
-summary(model)
+library(tidycensus)
+
+IA_counties.sf <- get_acs(geography = "county", 
+                          variables = "B02001_001E", 
+                          state = "IA", 
+                          geometry = TRUE)
 ```
 
-The model statistically explains 55% of the variation in crime. As income and housing values increase crime goes down. 
+This returns a simple feature data frame with county borders as multi-polygons. The variable `B02001_001E` is the 2015 (mid year of the 5-year period 2013-2017) population in each county.
 
-We use the `residuals()` method to extract the vector of residuals from the model.
+Now get the tornado locations and compute the annual tornado occurrence rate for each county. Start by determining the intersections of the county polygons and the tornado points.
 ```{r}
-res <- residuals(model)
+if(!"1950-2018-torn-initpoint" %in% list.files()) {
+download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-initpoint.zip",
+              destfile = "1950-2018-torn-initpoint.zip")
+unzip("1950-2018-torn-aspath.zip")
+}
+
+Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint", 
+                   layer = "1950-2018-torn-initpoint") %>%
+      st_transform(crs = st_crs(IA_counties.sf))
+
+TorCounts.df <- Torn.sf %>%
+  st_intersection(IA_counties.sf) %>%
+  st_drop_geometry() %>%
+  group_by(GEOID) %>%
+  summarize(nT = n()) 
+
+IA_counties.sf <- IA_counties.sf %>%
+  left_join(TorCounts.df,
+            by = "GEOID") %>%
+  mutate(Area = st_area(IA_counties.sf),
+         rate = nT/Area/(2018 - 1950 + 1) * 10^10,
+         lpop = log10(estimate))
 ```
 
-We then check on the distribution of the residuals relative to a normal distribution.
+Make a two-panel map displaying the log of the population and the tornado rates.
 ```{r}
-sm::sm.density(res, 
-               model = "Normal")
-```
-
-The next step is to create a choropleth map of the model residuals. Are the residuals clustered?
-```{r}
-CC.sf$res <- res
-
-library(tmap)
-tm_shape(CC.sf) +
-  tm_fill("res") +
+map1 <- tm_shape(IA_counties.sf) +
   tm_borders(col = "gray70") +
-  tm_layout(title = "Linear Model Residuals")
+  tm_fill(col = "lpop",
+          title = "Log Population",
+          palette = "Blues") +
+  tm_layout(legend.outside = "TRUE")
+
+map2 <- tm_shape(IA_counties.sf) +
+  tm_borders(col = "gray70") +
+  tm_fill(col = "rate",
+          title = "Annual Rate\n[/10,000 sq. km]",
+          palette = "Greens") +
+  tm_layout(legend.outside = "TRUE")
+
+tmap_arrange(map1, map2)
 ```
 
-Yes. There are clustered regions where the model over predicts crime conditional on household income and housing values and where it under predicts crime.
-
-The amount of clustering is less than before. That is, after accounting for regional factors related to crime the spatial autocorrelation is reduced.
-
-To determine I on the residuals we use the `lm.morantest()` function and pass the regression model object and the weights object to it.
+There appears some relationship. The non-spatial correlation between the two variables is obtained with the `cor.test()` function.
 ```{r}
-nbs <- poly2nb(CC.sf)
-wts <- nb2listw(nbs)
-lm.morantest(model, wts)
+lpop <- IA_counties.sf$lpop
+rate <- as.numeric(IA_counties.sf$rate)
+
+cor.test(lpop, rate)
 ```
 
-Moran I on the model residuals is .222.  This compares with the value of .5 on crime alone. Part of the spatial autocorrelation is absorbed by the explanatory factors.
+The bivariate spatial autocorrelation is assessed using the Lee statistic. A formal non-parametric test under the null hypothesis of no bivariate spatial autocorrelation is done using a Monte Carlo simulation.
+```{r}
+nbs <- poly2nb(IA_counties.sf)
+wts <- nb2listw(nbs)
 
-Do we need a spatial regression model?  The output gives a $p$-value on I of .002, thus we reject the null hypothesis of no spatial autocorrelation in the residuals and conclude that a spatial regression model would improve the fit.  
+lee_stat <- lee(lpop, rate, 
+                listw = wts, 
+                n = length(nbs))
+lee_stat$L
 
-The $z$-value takes into account the fact that these are residuals so the variance is adjusted accordingly.
+lee.mc(lpop, rate, listw = wts, nsim = 999)
+```
 
-The next step is to choose a spatial regression model.
+Finally we map out the local variation in the bivariate spatial autocorrelation.
+```{r}
+IA_counties.sf$localL <- lee_stat$localL
+
+tm_shape(IA_counties.sf) +
+  tm_fill("localL",
+          title = "Local Bivariate\nSpatial Autocorrelation") +
+  tm_borders(col = "gray70") +
+  tm_layout(legend.outside = TRUE)
+```
+
+What might cause this?
