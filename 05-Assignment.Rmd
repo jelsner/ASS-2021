@@ -12,6 +12,7 @@ editor_options:
 Due: February 12, 2021, 3pm
 
 Total Points: 40
+Score: 37
 
 **1** The file `http://myweb.fsu.edu/jelsner/temp/data/police.zip` contains demographic information at the county level across the state of Mississippi.
 

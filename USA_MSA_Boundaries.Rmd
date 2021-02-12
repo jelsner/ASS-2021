@@ -1,0 +1,73 @@
+---
+title: "MSA Boundary File"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+if(!"tl_2019_us_cbsa.zip" %in% list.files()){
+unzip("tl_2019_us_cbsa.zip",
+      exdir = "tl_2019_us_cbsa")
+}
+
+library(sf)
+
+MSA.sf <- read_sf(dsn = "tl_2019_us_cbsa", 
+                 layer = "tl_2019_us_cbsa") 
+
+# no need to do this
+MSA.sf <- MSA.sf %>%
+  mutate(Area = st_area(MSA.sf)) %>%
+  slice_max(Area, n = 50)
+
+```
+
+```{r}
+Torn.sf <- st_read(dsn = "1950-2018-torn-aspath", 
+                   layer = "1950-2018-torn-aspath") %>%
+  st_transform(crs = st_crs(MSA.sf)) %>%
+  mutate(EarlyLate = yr < 1985) %>%
+  filter(mag >= 1)
+  
+
+library(tidyverse)
+
+TorCounts.df <- Torn.sf %>%
+  st_intersection(MSA.sf) %>%
+  st_drop_geometry() %>%
+  group_by(GEOID, EarlyLate) %>%
+  summarize(nT = n()) 
+
+( Diff.df <- TorCounts.df %>%
+  pivot_wider(names_from = EarlyLate, 
+              values_from = nT) )
+
+
+( Diff.df <- TorCounts.df %>%
+  group_by(GEOID) %>%
+  mutate(Difference = nT - lag(nT)) %>%
+  filter(EarlyLate) )
+  
+  
+  
+
+MSA2.sf <- MSA.sf %>%
+  left_join(Diff.df,
+            by = "GEOID") %>%
+  mutate(Area = st_area(MSA.sf))
+
+MSA2.sf %>%
+  select(GEOID, NAME, Difference) %>%
+  slice_min(Difference, n = 10)
+
+
+Top.sf %>%
+  ggplot(mapping = aes(y = reorder(NAME, nT), x = nT)) +
+  geom_point(size = 2, colour = "black", aes(color = )) + 
+  geom_segment(mapping = aes(yend = NAME, xend = 0), size = 1)+
+  labs(y= "", x = "") +
+  theme_minimal()
+
+```
+
