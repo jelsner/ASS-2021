@@ -17,7 +17,7 @@ Total Points: 40
 
 (a) Import the data as a simple features spatial object and assign it to an object called `PE.sf`. Set the CRS to 4326 using the `st_set_crs()` function. (5)
 
-(b) Using the simple feature data frame `PE.sf` from part (a), create a choropleth map of the percentage of people unemployed in 1980 (variable name `UNEMP`) using functions from the {tmap} package. (5)
+(b) Using the simple feature data frame `PE.sf` from part (a), create a choropleth map of the percentage of people unemployed (variable name `UNEMP`) using functions from the {tmap} package. (5)
 
 (c) Using the simple feature data frame `PE.sf` from part (a), create a choropleth map of the percentage of people unemployed using functions from the {ggplot2} package. (5)
 
