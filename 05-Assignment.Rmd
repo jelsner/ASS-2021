@@ -15,7 +15,7 @@ Total Points: 40
 
 **1** The file `http://myweb.fsu.edu/jelsner/temp/data/police.zip` contains demographic information at the county level across the state of Mississippi.
 
-(a) Import the data as a simple features spatial object and assign it to an object called `PE.sf`. Set the CRS to 4326 using the `set_set_crs()` function. (5)
+(a) Import the data as a simple features spatial object and assign it to an object called `PE.sf`. Set the CRS to 4326 using the `st_set_crs()` function. (5)
 
 (b) Using the simple feature data frame `PE.sf` from part (a), create a choropleth map of the percentage of people unemployed in 1980 (variable name `UNEMP`) using functions from the {tmap} package. (5)
 
