@@ -5,8 +5,15 @@ editor_options:
   chunk_output_type: console
 ---
 
+Cities with the largest change in the number of tornadoes before/after 1985.
+
+Core-Based Statistical Areas are geographic locations neighboring urban areas of 10,000+ population and/or are socioeconomically tied to the urban center by commute proximity. Prior to the year 2000, these were collectively known as MSA- Metropolitan Statistical Areas and Micropolitan Statistical Areas. An exclusive feature of GreatData CBSA Data is that the population statistics are calculated annually. Therefore, the CBSA rank is based on a more recent population than typical census data classifications.
+
+https://catalog.data.gov/dataset/tiger-line-shapefile-2019-nation-u-s-current-metropolitan-statistical-area-micropolitan-statist
+
+Was not able to download it from home. I was at work.
 ```{r}
-if(!"tl_2019_us_cbsa.zip" %in% list.files()){
+if(!"tl_2019_us_cbsa" %in% list.files()){
 unzip("tl_2019_us_cbsa.zip",
       exdir = "tl_2019_us_cbsa")
 }
@@ -14,60 +21,109 @@ unzip("tl_2019_us_cbsa.zip",
 library(sf)
 
 MSA.sf <- read_sf(dsn = "tl_2019_us_cbsa", 
-                 layer = "tl_2019_us_cbsa") 
-
-# no need to do this
-MSA.sf <- MSA.sf %>%
-  mutate(Area = st_area(MSA.sf)) %>%
-  slice_max(Area, n = 50)
+                  layer = "tl_2019_us_cbsa") 
 
 ```
 
+Counts by metropolitan areas
 ```{r}
+library(tidyverse)
+
 Torn.sf <- st_read(dsn = "1950-2018-torn-aspath", 
                    layer = "1950-2018-torn-aspath") %>%
   st_transform(crs = st_crs(MSA.sf)) %>%
   mutate(EarlyLate = yr < 1985) %>%
-  filter(mag >= 1)
-  
-
-library(tidyverse)
+  filter(mag >= 2)
 
 TorCounts.df <- Torn.sf %>%
   st_intersection(MSA.sf) %>%
   st_drop_geometry() %>%
-  group_by(GEOID, EarlyLate) %>%
-  summarize(nT = n()) 
-
-( Diff.df <- TorCounts.df %>%
-  pivot_wider(names_from = EarlyLate, 
-              values_from = nT) )
-
-
-( Diff.df <- TorCounts.df %>%
   group_by(GEOID) %>%
-  mutate(Difference = nT - lag(nT)) %>%
-  filter(EarlyLate) )
-  
-  
-  
+  summarize(nT = n())
 
-MSA2.sf <- MSA.sf %>%
-  left_join(Diff.df,
+( TorCounts.df <- TorCounts.df %>%
+  left_join(MSA.sf,
             by = "GEOID") %>%
-  mutate(Area = st_area(MSA.sf))
+  arrange(desc(nT)) )
 
-MSA2.sf %>%
-  select(GEOID, NAME, Difference) %>%
-  slice_min(Difference, n = 10)
-
-
-Top.sf %>%
+TorCounts.df %>%
+  slice_max(nT, n = 25) %>%
   ggplot(mapping = aes(y = reorder(NAME, nT), x = nT)) +
   geom_point(size = 2, colour = "black", aes(color = )) + 
   geom_segment(mapping = aes(yend = NAME, xend = 0), size = 1)+
   labs(y= "", x = "") +
   theme_minimal()
-
 ```
 
+Counts grouped early and late
+```{r}
+TorCounts.df <- Torn.sf %>%
+  st_intersection(MSA.sf) %>%
+  st_drop_geometry() %>%
+  group_by(GEOID, EarlyLate) %>%
+  summarize(nT = n()) %>%
+  ungroup()
+
+( Diff.df <- TorCounts.df %>%
+  pivot_wider(names_from = EarlyLate, 
+              values_from = nT) %>%
+  rename(After1985 = `FALSE`,
+         Before1985 = `TRUE`) %>%
+  mutate(Difference = After1985 - Before1985,
+         DiffPerc = Difference/Before1985 * 100) %>%
+  drop_na() )
+
+sum(Diff.df$Difference > 0)
+sum(Diff.df$Difference < 0)
+```
+
+Top 10 and bottom 10 combined.
+```{r}
+Upward <- Diff.df %>%
+  slice_max(Difference, n = 10) %>%
+  mutate(Tendency = "Upward")
+
+Downward <- Diff.df %>%
+  slice_min(Difference, n = 10) %>%
+  mutate(Tendency = "Downward")
+
+Both <- rbind(Upward, Downward)
+
+Both <- Both %>%
+  left_join(MSA.sf,
+            by = "GEOID") 
+```
+
+Plot a slope graph.
+```{r}
+library(ggplot2)
+library(ggrepel)
+
+ggplot(Both) +
+  geom_segment(mapping = aes(x = .4, xend = .6, 
+                             y = Before1985, yend = After1985, 
+                             color = Tendency)) +
+  scale_color_brewer(palette = "Paired", guide = FALSE) +
+  scale_x_continuous(limits = c(0, 1)) +
+  theme(panel.background = element_blank(),
+        panel.grid=element_blank(),
+        axis.ticks=element_blank(),
+        axis.text=element_blank(),
+        panel.border=element_blank()) +
+  xlab("") + ylab("") +
+  geom_text(data = Both[Both$Tendency == "Upward", ],
+            mapping = aes(x = .62, y = After1985, 
+                          label = paste(After1985, NAME, sep = "   ")), hjust = 0, size = 2.3) +
+  geom_text(data = Both[Both$Tendency == "Downward", ], 
+            mapping = aes(x = .38, y = Before1985, 
+                          label = paste(NAME, Before1985, sep = "   ")), hjust = 1, size = 2.3) +
+  geom_text(data = Both[1, ], 
+            mapping = aes(label = "1950-1984", x = .38, y = 1), hjust = 1, size = 3) +
+  geom_text(data = Both[1, ], 
+            mapping = aes(label = "1985-2018", x = .62, y = 1), hjust = 0, size = 3) +
+  geom_segment(data = Both[1,],
+               mapping = aes(x = .45, y = 1, xend = .55, yend = 1),
+               arrow = arrow(angle = 20, length = unit(2, "mm"), type = "closed")) +
+  ggtitle(label = "The shifting tornado threat", 
+          subtitle = "Top ten increases and decreases in the number of strong (EF2+) tornadoes\nwithin metropolitan areas before and after 1985")
+```
