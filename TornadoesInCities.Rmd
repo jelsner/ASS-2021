@@ -7,11 +7,11 @@ editor_options:
 
 Cities with the largest change in the number of tornadoes before/after 1985.
 
-Core-Based Statistical Areas are geographic locations neighboring urban areas of 10,000+ population and/or are socioeconomically tied to the urban center by commute proximity. Prior to the year 2000, these were collectively known as MSA- Metropolitan Statistical Areas and Micropolitan Statistical Areas. An exclusive feature of GreatData CBSA Data is that the population statistics are calculated annually. Therefore, the CBSA rank is based on a more recent population than typical census data classifications.
+The Core-Based Statistical Areas (CBSA) are geographic locations neighboring urban areas of 10,000+ population and/or are socioeconomically tied to the urban center by commute proximity. Prior to the year 2000, these were collectively known as MSA- Metropolitan Statistical Areas and Micropolitan Statistical Areas. An exclusive feature of GreatData CBSA Data is that the population statistics are calculated annually. Therefore, the CBSA rank is based on a more recent population than typical census data classifications.
 
 https://catalog.data.gov/dataset/tiger-line-shapefile-2019-nation-u-s-current-metropolitan-statistical-area-micropolitan-statist
 
-Was not able to download it from home. I was at work.
+I was not able to download the CBSA file from home. I was able at work.
 ```{r}
 if(!"tl_2019_us_cbsa" %in% list.files()){
 unzip("tl_2019_us_cbsa.zip",
@@ -125,5 +125,5 @@ ggplot(Both) +
                mapping = aes(x = .45, y = 1, xend = .55, yend = 1),
                arrow = arrow(angle = 20, length = unit(2, "mm"), type = "closed")) +
   ggtitle(label = "The shifting tornado threat", 
-          subtitle = "Top ten increases and decreases in the number of strong (EF2+) tornadoes\nwithin metropolitan areas before and after 1985")
+          subtitle = "Cities with the largest change (top 10 increases & decreases) in the number of strong (EF2+ damage) tornadoes before/after 1985")
 ```
