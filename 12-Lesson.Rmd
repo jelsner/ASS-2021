@@ -52,7 +52,7 @@ Next, scale variable values and center them. This is done regardless of clusteri
     st_drop_geometry() )
 ```
 
-Next create the adjacency neighbor structure using rook contiquity.
+Next create the adjacency neighbor structure using rook contiguity.
 ```{r}
 nbs <- poly2nb(CC.sf, 
                queen = TRUE)

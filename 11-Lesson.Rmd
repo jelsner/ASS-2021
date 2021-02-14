@@ -10,11 +10,11 @@ editor_options:
 
 **"Be curious. Read widely. Try new things. I think a lot of what people call intelligence boils down to curiosity."** - Aaron Swartz
 
-I'm declaring this Friday to be a mid semester wellness day for this class. No lesson and no assignment!
+I'm declaring this Friday to be a mid-semester wellness day. No lesson and no assignment!
 
 ## Using other neighborhood definitions to estimate autocorrelation
 
-Last time we learned how to compute autocorrelation on areal aggregated data. The procedure involves a weights matrix, which we created using default settings for the neighborhood definition and the weighting scheme. Other neighborhood definitions are possible.
+Last time we learned how to compute autocorrelation using areal aggregated data. The procedure involves a weights matrix, which we created using the default neighborhood definition and the weighting scheme in the {spdep} package. Other neighborhood definitions are possible.
 
 Let's consider the historical demographic data in Mississippi counties that we used in Assignment 5. Import the data as a simple feature data frame and assign the geometry a geographic CRS.
 ```{r}
@@ -32,9 +32,9 @@ PE.sf <- read_sf(dsn = "police",
 names(PE.sf)
 ```
 
-Variables in the simple feature data frame include police expenditures (`POLICE`), crime (`CRIME`), income (`INC`), unemployment (`UNEMP`) and other socio-economic characteristics across Mississippi at the county level. Police expenditures are per capita 1982 (dollars per person). Personal income is per county resident in 1982 (dollars per person). Crime is the number of serious crimes per 100,000 residents in 1981. Unemployment is percent of folks looking for work in 1980.
+Variables in the simple feature data frame include police expenditures (`POLICE`), crime (`CRIME`), income (`INC`), unemployment (`UNEMP`) and other socio-economic characteristics across Mississippi at the county level. Police expenditures are per person 1982 (dollars per person). Personal income is per person in 1982 (dollars per person). Crime is the number of serious crimes per 100,000 person in 1981. Unemployment is percent of people looking for work in 1980.
 
-The geometries are polygons defining the county borders.
+The geometries are polygons that define the county borders.
 ```{r}
 library(ggplot2)
 
@@ -388,23 +388,27 @@ tm_shape(PE.sf) +
 
 Areas in dark green indicate where the correlation between crime and policing is most influenced by neighboring crime and policing.
 
-### Example: Population and tornadoes in Iowa
+### Example: Population and tornadoes
 
-We are interested in quantifying the bi-variate autocorrelation between tornado occurrences and population.
+Tornado reports, not tornadoes.
 
-Get U.S. Census data with functions from the {tidycensus} package. The `get_decennial()` function grants access to the 1990, 2000, and 2010 decennial US Census data and the `get_acs()` function grants access to the 5-year American Community Survey data. For example, here is how you would get county-level population  for Iowa.
+Is the frequency of tornado reports correlated with the number of people in a region? Might this correlation extend to the number of people in neighboring region?
+
+To answer these questions we quantify the non-spatial correlation and the bi-variate spatial autocorrelation between tornado occurrences and population. To keep this manageable we focus only on the state of Iowa.
+
+We start by getting the U.S. Census data with functions from the {tidycensus} package. The `get_decennial()` function grants access to the 1990, 2000, and 2010 decennial US Census data and the `get_acs()` function grants access to the 5-year American Community Survey data. For example, here is how we get county-level population for Iowa.
 ```{r}
 library(tidycensus)
 
-IA_counties.sf <- get_acs(geography = "county", 
-                          variables = "B02001_001E", 
-                          state = "IA", 
-                          geometry = TRUE)
+Counties.sf <- get_acs(geography = "county", 
+                       variables = "B02001_001E", 
+                       state = "IA", 
+                       geometry = TRUE)
 ```
 
 This returns a simple feature data frame with county borders as multi-polygons. The variable `B02001_001E` is the 2015 (mid year of the 5-year period 2013-2017) population in each county.
 
-Now get the tornado locations and compute the annual tornado occurrence rate for each county. Start by determining the intersections of the county polygons and the tornado points.
+Now get the tornado locations and compute the annual tornado occurrence rate for each county. Start by determining the intersections of the county polygons and the tornado points. The join the counts to the simple feature data frame.
 ```{r}
 if(!"1950-2018-torn-initpoint" %in% list.files()) {
 download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-initpoint.zip",
@@ -414,34 +418,38 @@ unzip("1950-2018-torn-aspath.zip")
 
 Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint", 
                    layer = "1950-2018-torn-initpoint") %>%
-      st_transform(crs = st_crs(IA_counties.sf))
+  st_transform(crs = st_crs(Counties.sf)) %>%
+  filter(yr >= 2013)
 
 library(tidyverse)
 
 TorCounts.df <- Torn.sf %>%
-  st_intersection(IA_counties.sf) %>%
+  st_intersection(Counties.sf) %>%
   st_drop_geometry() %>%
   group_by(GEOID) %>%
   summarize(nT = n()) 
 
-IA_counties.sf <- IA_counties.sf %>%
+Counties.sf <- Counties.sf %>%
   left_join(TorCounts.df,
             by = "GEOID") %>%
-  mutate(Area = st_area(IA_counties.sf),
-         rate = nT/Area/(2018 - 1950 + 1) * 10^10,
+  mutate(nT = replace_na(nT, 0)) %>%
+  mutate(Area = st_area(Counties.sf),
+         rate = nT/Area/(2018 - 2013 + 1) * 10^10,
          lpop = log10(estimate))
 ```
 
+Note that some counties have no tornadoes and the `left_join()` returns a value of `NA` for those. We use `mutate()` with `replace_na()` to turn those counts to a value of 0.
+
 Make a two-panel map displaying the log of the population and the tornado rates.
 ```{r}
-map1 <- tm_shape(IA_counties.sf) +
+map1 <- tm_shape(Counties.sf) +
   tm_borders(col = "gray70") +
   tm_fill(col = "lpop",
           title = "Log Population",
           palette = "Blues") +
   tm_layout(legend.outside = "TRUE")
 
-map2 <- tm_shape(IA_counties.sf) +
+map2 <- tm_shape(Counties.sf) +
   tm_borders(col = "gray70") +
   tm_fill(col = "rate",
           title = "Annual Rate\n[/10,000 sq. km]",
@@ -453,15 +461,15 @@ tmap_arrange(map1, map2)
 
 There appears some relationship. The non-spatial correlation between the two variables is obtained with the `cor.test()` function.
 ```{r}
-lpop <- IA_counties.sf$lpop
-rate <- as.numeric(IA_counties.sf$rate)
+lpop <- Counties.sf$lpop
+rate <- as.numeric(Counties.sf$rate)
 
 cor.test(lpop, rate)
 ```
 
-The bivariate spatial autocorrelation is assessed using the Lee statistic. A formal non-parametric test under the null hypothesis of no bivariate spatial autocorrelation is done using a Monte Carlo simulation.
+The bi-variate spatial autocorrelation is assessed using the Lee statistic. A formal non-parametric test under the null hypothesis of no bi-variate spatial autocorrelation is done using a Monte Carlo simulation.
 ```{r}
-nbs <- poly2nb(IA_counties.sf)
+nbs <- poly2nb(Counties.sf)
 wts <- nb2listw(nbs)
 
 lee_stat <- lee(lpop, rate, 
@@ -469,18 +477,32 @@ lee_stat <- lee(lpop, rate,
                 n = length(nbs))
 lee_stat$L
 
-lee.mc(lpop, rate, listw = wts, nsim = 999)
+lee.mc(lpop, rate, listw = wts, nsim = 9999)
 ```
 
-Finally we map out the local variation in the bivariate spatial autocorrelation.
+Finally we map out the local variation in the bi-variate spatial autocorrelation.
 ```{r}
-IA_counties.sf$localL <- lee_stat$localL
+Counties.sf$localL <- lee_stat$localL
 
-tm_shape(IA_counties.sf) +
+tm_shape(Counties.sf) +
   tm_fill("localL",
           title = "Local Bivariate\nSpatial Autocorrelation") +
   tm_borders(col = "gray70") +
   tm_layout(legend.outside = TRUE)
 ```
 
-What might cause this?
+What might cause this? Compare with Kansas.
+
+Also, compare local Lee with local Moran.
+```{r}
+Ii_stats <- localmoran(rate, 
+                       listw = wts)
+Counties.sf$localI = Ii_stats[, 1]
+
+tm_shape(Counties.sf) +
+  tm_borders(col = "gray70") +
+  tm_fill(col = "localI",
+          title = "Local Autocorrelation",
+          palette = "Purples") +
+  tm_layout(legend.outside = "TRUE")
+```
