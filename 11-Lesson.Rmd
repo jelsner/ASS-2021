@@ -10,11 +10,11 @@ editor_options:
 
 **"Be curious. Read widely. Try new things. I think a lot of what people call intelligence boils down to curiosity."** - Aaron Swartz
 
-I'm declaring this Friday to be a mid-semester wellness day. No lesson and no assignment!
+I'm making this Friday a mid-semester wellness day. No lesson and no assignment!
 
 ## Using other neighborhood definitions to estimate autocorrelation
 
-Last time we learned how to compute autocorrelation using areal aggregated data. The procedure involves a weights matrix, which we created using the default neighborhood definition and the weighting scheme in the {spdep} package. Other neighborhood definitions are possible.
+Last time we learned how to compute autocorrelation using areal aggregated data. The procedure involves a weights matrix, which we created using the default neighborhood definition and the weighting scheme in the {spdep} package. We saw that the magnitude of autocorrelation depends on the weighting scheme used. Other neighborhood definitions are also possible and will influence the magnitude of the autocorrelation.
 
 Let's consider the historical demographic data in Mississippi counties that we used in Assignment 5. Import the data as a simple feature data frame and assign the geometry a geographic CRS.
 ```{r}
