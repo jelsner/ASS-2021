@@ -14,7 +14,7 @@ I'm making this Friday a mid-semester wellness day. No lesson and no assignment!
 
 ## Using other neighborhood definitions to estimate autocorrelation
 
-Last time we learned how to compute autocorrelation using areal aggregated data. The procedure involves a weights matrix, which we created using the default neighborhood definition and the weighting scheme in the {spdep} package. We saw that the magnitude of autocorrelation depends on the weighting scheme used. Other neighborhood definitions are also possible and will influence the magnitude of the autocorrelation.
+Last time we learned how to compute autocorrelation using areal aggregated data. The procedure involves a weights matrix, which we created using the default neighborhood definition and the weighting scheme in the {spdep} package. We saw that the magnitude of autocorrelation depends on the weighting scheme used. Other neighborhood definitions are possible and they will also influence the magnitude of the autocorrelation.
 
 Let's consider the historical demographic data in Mississippi counties that we used in Assignment 5. Import the data as a simple feature data frame and assign the geometry a geographic CRS.
 ```{r}
@@ -145,11 +145,11 @@ If the values of Moran I and Geary C result in different interpretations about t
 
 Attribute values randomly placed across a spatial domain will result in some autocorrelation. Statistical tests provide a way to guard against being fooled by this randomness. For example, claiming a 'hot spot' when none exists. In statistical parlance, is the value of Moran I significant with respect to the null hypothesis of no autocorrelation? 
 
-One way to answer this question is to draw an uncertainty band on the regression line in a Moran scatter plot. If a horizontal line can be placed entire within the band then the slope (Moran I) is not significant against the null hypothesis of no autocorrelation.
+One way to answer this question is to draw an uncertainty band on the regression line in a Moran scatter plot. If a horizontal line can be placed entirely within the band then the slope (Moran I) is not significant against the null hypothesis of no autocorrelation.
 
-More formally the question is answered by comparing the standard deviate ($z$ value) of I to the appropriate value from a standard normal distribution. This is done using the `moran.test()` function, where the $z$ value is the difference between I and the expected value of I divided by the square root of the variance of I.
+More formally the question is answered by comparing the standard deviate ($z$ value) of the I statistic to the appropriate value from a standard normal distribution. This is done using the `moran.test()` function, where the $z$ value is the difference between I and the expected value of I divided by the square root of the variance of I.
 
-The function takes a variable name or numeric vector and a spatial weights list object in that order. The argument `randomisation = FALSE` means the variance of I is computed under the assumption of normally distributed unemployment rates.
+The function takes a variable name or numeric vector and a spatial weights list object in that order. The argument `randomisation = FALSE` means the variance of I is computed under the assumption of normally distributed unemployment (`UNEMP`) rates.
 ```{r}
 ( mt <- moran.test(PE.sf$UNEMP, 
                    listw = wts,
@@ -170,7 +170,7 @@ The $z$ value is the difference between I and it's expected value divided by the
 ( mt$estimate[1] - mt$estimate[2] ) / sqrt(mt$estimate[3])
 ```
 
-The $p$-value is the area under a standard normal distribution curve to the right (`lower.tail = FALSE`) of 2.3438 (`mt$statistic`).
+The $p$-value is the area under a standard normal distribution curve to the right (`lower.tail = FALSE`) of 3.4102 (`mt$statistic`).
 ```{r}
 pnorm(mt$statistic, 
       lower.tail = FALSE)
@@ -265,8 +265,10 @@ cor.test(police, crime)
 
 We find a significant (direct) correlation ($p$-value < .01) between these two variables under the null hypothesis that they are uncorrelated. But we also note some spatial autocorrelation in these variables.
 ```{r}
-moran.test(police, listw = wts)
-moran.test(crime, listw = wts)
+moran.test(police, 
+           listw = wts)
+moran.test(crime, 
+           listw = wts)
 ```
 
 The Lee statistic integrates the Pearson correlation as an aspatial bi-variate association metric and Moran I as a uni-variate spatial autocorrelation metric. The formula is
@@ -305,7 +307,7 @@ The Moran I statistic was first used in the 1950s. Localization of this statisti
 
 We saw the `MoranLocal()` function from the {raster} package returns a raster of local Moran I values.
 
-Local I is a deconstruction of global I where geographic proximity is used in two ways. (1) to define and weight neighbors and (2) to determine the spatial scale over which I is computed. Illustrate on the board.
+Local I is a deconstruction of global I where geographic proximity is used in two ways. (1) to define and weight neighbors and (2) to determine the spatial scale over which I is computed.
 
 Using queen's contiguity we determined the neighborhood topology and the weights for the police expenditure data from Mississippi. Here we print them in the full matrix form with the `list2mat()` function.
 ```{r}
@@ -414,6 +416,8 @@ This returns a simple feature data frame with county borders as multi-polygons. 
 
 Now get the tornado locations and compute the annual tornado occurrence rate for each county. Start by determining the intersections of the county polygons and the tornado points. The join the counts to the simple feature data frame.
 ```{r}
+library(tidyverse)
+
 if(!"1950-2018-torn-initpoint" %in% list.files()) {
 download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-initpoint.zip",
               destfile = "1950-2018-torn-initpoint.zip")
@@ -424,8 +428,6 @@ Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint",
                    layer = "1950-2018-torn-initpoint") %>%
   st_transform(crs = st_crs(Counties.sf)) %>%
   filter(yr >= 2013)
-
-library(tidyverse)
 
 TorCounts.df <- Torn.sf %>%
   st_intersection(Counties.sf) %>%
