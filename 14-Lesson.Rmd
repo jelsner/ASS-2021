@@ -300,3 +300,5 @@ tm_shape(SH.sf) +
 ```
 
 When we use a regression model to fit data that vary spatially we are assuming an underlying stationary process. This means we believe the explanatory variables 'provoke' the same statistical response across the entire domain. If this is not the case then it shows up in a map of correlated residuals. One approach to investigate things further is to use geographic regression. Another approach is to use a single spatial regression model.
+
+

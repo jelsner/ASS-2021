@@ -1,0 +1,438 @@
+---
+title: "Lesson 15"
+author: "James B. Elsner"
+date: "March 1, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+## Standardized incidence ratios
+
+This material is derived from Chapters 5 & 6 of @Moraga2020. We make use of simple features and mapping with {ggplot2} and {tmap}. https://www.paulamoraga.com/book-geospatial/sec-geostatisticaldataexamplespatial.html
+
+The standardized incidence ratio (SIR) is defined as the ratio of the observed to the expected number of disease cases. But, small areas may present extreme SIRs due to low population sizes or small samples. In these situations, SIRs may be misleading and unreliable for reporting. In these cases it is better to estimate disease risk using a spatial statistical model. Models can incorporate information from neighboring areas and covariate information resulting in smoothing (shrinking) of extreme values.
+
+The Besag-York-Mollié (BYM) model [@BesagEtAl1991] is a popular way to account for spatial autocorrelation. The model smooths the data according to a neighborhood structure. In spatio-temporal settings where disease counts are observed over time, spatio-temporal models that account for spatial structure and temporal correlations and their interactions are used.
+
+The example here is based on data of lung cancer in Pennsylvania counties, US, obtained from the {SpatialEpi} package [@KimWakefield2018], and show results with maps created with the {ggplot2} package [@Wickham2016].
+
+The county boundaries for the state are in the list object `pennLC` with element name `spatial.polygon`. We change the native spatial polygons S4 object to an S3 simple feature data frame using the `st_as_sf()` function from the {sf} package [@Pebesma2018]. We use the `plot()` method on the `geometry` column to make a simple map.
+```{r}
+library(SpatialEpi)
+library(sf)
+
+spdf <- pennLC$spatial.polygon
+sfdf <- st_as_sf(spdf)
+plot(sfdf$geometry)
+```
+
+We obtain the neighbors of each county using the `poly2nb()` function from the {spdep} package [@BivandEtAl2008]. This function returns a neighbors list, here saved as `nb`, based on counties with contiguous boundaries. Each element of the list `nb` represents one county and contains the indices of its neighbors. For example, `nb[[2]]` contains the neighbors of county 2.
+```{r}
+library(spdep)
+
+nb <- poly2nb(sfdf)
+head(nb)
+```
+
+We show the neighbors of each county on a map highlighting neighbors of counties 2, 44 and 58. First, we create a `SpatialPolygonsDataFrame` object with the map of Pennsylvania, and data that contains a variable called county with the county names, and a dummy variable called `neigh` that indicates the neighbors of counties 2, 44 and 58. neigh is equal to 1 for counties that are neighbors of counties 2, 44 and 58, and 0 otherwise.
+```{r}
+df <- data.frame(county = names(spdf), 
+                 neigh = rep(0, length(spdf)))
+rownames(df) <- names(spdf)
+
+spdf <- SpatialPolygonsDataFrame(spdf, df, match.ID = TRUE)
+
+# to highlight neighbors of counties 2, 44, and 58
+spdf$neigh[nb[[2]]] <- 1
+spdf$neigh[nb[[44]]] <- 1
+spdf$neigh[nb[[58]]] <- 1
+```
+
+Then, we add variables called `long` and `lat` with the centroid coordinates for each county, and a variable `ID` identifying each county.
+```{r}
+coord <- st_coordinates(st_centroid(sfdf))
+
+sfdf$neigh <- spdf$neigh
+sfdf$long <- coord[, 1]
+sfdf$lat <- coord[, 2]
+sfdf$ID <- 1:nrow(coord)
+```
+
+We create the map with the `ggplot()` function from {ggplot2}.
+```{r}
+library(ggplot2)
+
+ggplot(sfdf) + 
+  geom_sf(aes(fill = as.factor(neigh))) +
+  geom_text(aes(long, lat, label = ID), color = "white") +
+  theme_minimal() + 
+  guides(fill = FALSE)
+```
+
+We see that county number 2 has counties 3, 4, 10, 63, and 62 as neighbors. County 44 has counties 14, 31, 34, 55, and 60 as neighbors. 
+
+Other neighborhood definitions can be considered (see Chapter 4).
+
+A simple measure of disease risk is the standardized incidence ratio (SIR). For each region $i$, $i = 1, \ldots, n$ the SIR is defined as the ratio of observed counts to the expected counts
+$$
+\hbox{SIR}_i = Y_i/E_i.
+$$
+
+The expected count $E_i$ is the total number of cases that one would expect if the population of area $i$ behaves the way the standard population behaves. If we ignore differences in rates for different stratum (e.g., age groups) then we compute the expected counts as
+$$
+E_i = r^{(s)} n^{(i)},
+$$
+where $r^{(s)}$ is the rate in the standard population (total number of cases divided by the total population across all regions), amd $n^{(i)}$ is the population of region $i$.
+
+$\hbox{SIR}_i$ indicates whether region $i$ has higher ($\hbox{SIR}_i > 1$), equal ($\hbox{SIR}_i = 1$) or lower ($\hbox{SIR}_i < 1$) risk than expected relative to the standard population.
+
+When applied to mortality data, the ratio is known as the standardized mortality ratio (SMR).
+
+### Example 1: Lung cancer in Pennsylvania
+
+The data frame `pennLC$data` from the {SpatialEpi} package contains the number of lung cancer cases and the population of Pennsylvania at county level, stratified on race (white and non-white), gender (female and male) and age (under 40, 40-59, 60-69 and 70+). 
+
+We obtain the number of cases for all the strata together in each county, Y, by aggregating the rows of `pennLC$data` by county and adding up the number of cases.
+```{r}
+library(dplyr)
+
+County.df <- pennLC$data %>%
+  group_by(county) %>%
+  summarize(Y = sum(cases))
+head(County.df)
+```
+
+We calculate the expected number of cases in each county using indirect standardization. The expected counts in each county represent the total number of disease cases one would expect if the population in the county behaved the way the population of Pennsylvania behaves. We can do this by using the `expected()` function from the {SpatialEpi} package. This function has three arguments, namely,
+
+* `population`: vector of population counts for each strata in each area,
+* `cases`: vector with the number of cases for each strata in each area,
+* `n.strata`: number of strata.
+
+The vectors `population` and `cases` need to be sorted by area first and then, within each area, the counts for all strata need to be listed in the same order. All strata need to be included in the vectors, including strata with 0 cases. Here we use the `arrange()` function from the {dplyr} package.
+```{r}
+Strata.df <- pennLC$data %>%
+  arrange(county, race, gender, age)
+head(Strata.df)
+```
+
+Then, we obtain the expected counts E in each county by calling the `expected()` function where we set population equal to Strata.df$population and cases equal to Strata.df$cases. There are 2 races, 2 genders and 4 age groups for each county, so number of strata is set to 2 x 2 x 4 = 16.
+```{r}
+( E <- expected(
+  population = Strata.df$population,
+  cases = Strata.df$cases, 
+  n.strata = 16
+) )
+```
+
+Now we add the observed count `Y`, the expected count `E` the computed SIR to `sfdf` and make a map of SIR.
+```{r}
+sfdf <- sfdf %>%
+  mutate(Y = County.df$Y,
+         E = E,
+         SIR = Y/E)
+
+ggplot(sfdf) + 
+  geom_sf(aes(fill = SIR)) +
+  scale_fill_gradient2(midpoint = 1, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red") +
+  theme_minimal()
+```
+
+Counties with SIR = 1 (color white) the number of lung cancer cases observed is the same as the number of expected cases. In counties where SIR > 1 (color red), the number of lung cancer cases observed is higher than the expected cases. Counties where SIR < 1 (color blue) have fewer lung cancer cases observed than expected.
+
+### Estimating disease risk in small areas
+
+With rare diseases in regions with few people, the expected counts may be very low and SIRs may be misleading. Therefore, it is preferred to estimate disease risk by using models that borrow information from neighboring areas, and incorporate covariate information. This results in smoothing (shrinkage) of extreme values.
+
+Let the observed counts $Y_i$ be modeled with a Poisson distribution having a mean $E_i\theta_i$, where $E_i$ are the expected counts and $\theta_i$ are the relative risks. The logarithm of the relative risk is expressed as the sum of an intercept that models the overall disease risk level, and random effects to account for local variability.
+
+The relative risk quantifies whether an area has a higher ($\theta_i > 1$) or lower ($\theta_i < 1$) risk than the average risk in the population. For example if $\theta_i = 2$, then the risk in area $i$ is twice the average risk in the population.
+
+The model is expressed as
+$$
+Y_i \sim \hbox{Poisson}(E_i\theta_i), i = 1, \ldots, n, \\
+\log(\theta_i) = \alpha + u_i + v_i
+$$
+
+The parameter $\alpha$ represents the overall risk in the region of study, $u_i$ is the spatially structured random effect respresenting the dependency in risk across neighboring areas (spatial autocorrelation), and $v_i$ is the uncorrelated random noise modeled as $v_i \sim N(0, \sigma_v^2)$.
+
+It is common to include covariates to quantify risk factors (e.g., distance to nearest coal plant). Thus the log($\theta_i$) is expressed as
+$$
+\log(\theta_i) = \alpha + \beta x_i + u_i + v_i
+$$
+where $x_i$ is the covariate value in area $i$ and $\beta$ is the associated coefficient. The coefficient is interpreted such that a one-unit increase in $x$ changes the relative risk by a factor $\exp(\beta)$, holding the other parameters constant.
+
+A popular form for the combined spatially structured random effect and the uncorrelated random effect is the Besag-York-Mollié (BYM) model which assigns a conditional autoregressive distribution to $u_i$ as
+$$
+u_i | {\bf u_{j \ne i}} \sim N(\bar u_{\delta_i}, \frac{\sigma_u^2}{n_{\delta_i}})
+$$
+where $\bar  u_{\delta_i} = \Sigma_{j \in \delta_i} u_j/n_{\delta_i}$ and where $\delta_i$ is the set of neighbors of area $i$ and $n_{\delta_i}$ is the number of neighbors of area $i$.
+
+In words, the logarithm of the disease incidence rate in area $i$ conditional on the incidence rates in the neighborhood of $i$ is modeled with a normal distribution centered on the neighborhood average ($\bar  u_{\delta_i}$) with a variance scaled by the number of neighbors. This is called the conditional autoregressive (CAR) distribution.
+
+The syntax for the BYM model in INLA is given as
+```{r eval=FALSE}
+formula <- Y ~
+  f(ID_u, model = "besag", graph = g, scale.model = TRUE) +
+  f(ID_v, model = "iid")
+```
+
+The formula includes the response in the left-hand side, and the fixed and random effects on the right-hand side. By default, the formula includes an intercept. 
+
+The random effects are set using `f()` with parameters equal to the name of the index variable, the model, and other options. The BYM formula includes a spatially structured random effect with index variable with name `ID_u` and equal to c(1, 2, ..., I), and model `"besag"` with a CAR distribution and with neighborhood structure given by the graph `g`. The option `scale.model = TRUE` is used to make the precision parameter of models with different CAR priors comparable (Freni-Sterrantino, Ventrucci, and Rue 2018). 
+
+The formula also includes an uncorrelated random effect with index variable with name `ID_v` again equal to c(1, 2, ..., I), and model "iid". This is an independent and identically distributed zero-mean normally distributed random effect. Note that both the `ID` variables are identical but need to be specified as two different objects since R-INLA does not allow to include two effects with `f()` that use the same index variable. 
+
+The BYM model can also be specified with the model "bym" which defines both the spatially structured random effect and the uncorrelated random effect ($u_i$ and $v_i$).
+
+Simpson et al. (2017) proposed a parametrization of the BYM model called BYM2 which makes parameters interpretable and facilitates the assignment of meaningful penalized complexity (PC) priors. The BYM2 model combines the scaled spatially structured random effect ${\bf u_*}$ with a scaled unstructured effect ${\bf v_*}$ as
+$$
+{\bf b} = \frac{1}{\sqrt{\tau_b}}(\sqrt{1 - \phi}{\bf v_*} + \sqrt{\phi}{\bf u_*}).
+$$
+
+Here the precision parameter $\tau_b > 0$ controls the marginal variance contribution of the weighted sum of ${\bf u_*}$ and ${\bf v_*}$. The mixing parameter $0 \le \phi \le 1$ measures the proportion of the marginal variance explained by the structured random effect. Thus the BYM2 model is equal to a spatial only model when $\phi = 1$ and to an random noise when $\phi = 0$.
+
+In INLA we specify the BYM2 model as follows:
+```{r}
+formula <- Y ~ f(ID, model = "bym2", graph = g)
+```
+again where `ID` is an index for the areas and `g` is the graph of the neighborhood structure.
+
+The priors for the BYM2 model penalize for model complexity in terms of deviation from the base model which has a constant relative risk over all areas. To define the prior for the marginal precision $\tau_b$ we use the probability statement $P[(1/\sqrt{\tau_b}) > U] = \alpha$. A prior for $\phi$ is defined using $P(\phi < U) = \alpha$.
+
+### Example 1 continued
+
+Here we continue with the example to calculate the relative risks of lung cancer in the Pennsylvania counties using the BYM2 random effects term. Moraga (2018) analyzes the same data by using a BYM model that includes a covariate related to the proportion of smokers. 
+
+First we define the formula that includes the response variable `Y` on the left and the random effect `"bym2"` on the right. Note that we do not need to include an intercept as it is included by default. In the random effect, we specify the index variable `id_area` with the indices of the random effect. This variable is equal to c(1, 2, ..., I) where I is the number of counties (67). The number of counties is obtained with the number of rows in the simple feature data frame `sfdf`.
+
+We define the prior for the marginal precision $\tau_b$ by considering a standard deviation of .5 as a reasonable upper bound. We use the rule of thumb describe in Simpson et al. (2017) and set $U = .5/.31$ and $\alpha = .01$.
+
+We define the prior for the mixing parameter $\phi$ as 2/3 which is a conservative choice that assumes that the unstructured random effect accounts for more variability than the spatially structured random effect.
+```{r}
+prior <- list(
+  prec = list(
+    prior = "pc.prec",
+    param = c(.5/.31, .01)),
+  phi = list(
+    prior = "pc",
+    param = c(.5, 2/3))
+  )
+```
+
+We also need to compute the graph object `g` with the neighborhood matrix that will be used in the spatially structured random effect. We use the `nb2INLA()` function to convert the neighborhood list object `nb` into an external file with the representation of the neighborhood matrix as required by R-INLA. Then we read this file using the `inla.read.graph()` function and assign it to the object `g`.
+```{r}
+library(INLA)
+
+nb2INLA("adj", nb)
+g <- inla.read.graph(filename = "adj")
+```
+
+Next we specify the full formula.
+```{r}
+formula <- Y ~ f(ID, model = "bym2", graph = g, hyper = prior)
+```
+
+Finally we fit the model with the `inla()` function specifying the formula, the family, the data, the expected counts.
+```{r}
+fit <- inla(formula,
+            family = "poisson", 
+            data = sfdf,
+            E = E, 
+            control.predictor = list(compute = TRUE)
+)
+```
+
+We obtain a summary of the model fit with the `summary()` method.
+```{r}
+summary(fit)
+```
+
+Object `fit$summary.fitted.values` contains summaries of the relative risks including the mean posterior and the lower and upper limits of 95% credible intervals of the relative risks. Specifically, column `mean` is the mean posterior and `0.025quant` and `0.975quant` are the 2.5 and 97.5 percentiles, respectively.
+```{r}
+head(fit$summary.fitted.values)
+```
+
+The correlation between the raw SIRs and the posterior means is
+```{r}
+cor(sfdf$SIR, fit$summary.fitted.values$mean)
+```
+
+To map the results we add columns to our `sfdf` and then use `ggplot()`.
+```{r}
+sfdf <- sfdf %>%
+  mutate(RRmean = fit$summary.fitted.values$mean,
+         RRlo = fit$summary.fitted.values$"0.025quant",
+         RRhi = fit$summary.fitted.values$"0.975quant")
+
+gRRmean <- ggplot(sfdf) + 
+  geom_sf(aes(fill = RRmean)) +
+  scale_fill_gradient2(midpoint = 1, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red",
+                       limits = c(.7, 1.5)) +
+  theme_minimal()
+
+gRRlo <- ggplot(sfdf) + 
+  geom_sf(aes(fill = RRlo)) +
+  scale_fill_gradient2(midpoint = 1, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red",
+                       limits = c(.7, 1.5)) +
+  theme_minimal()
+
+gRRhi <- ggplot(sfdf) + 
+  geom_sf(aes(fill = RRhi)) +
+  scale_fill_gradient2(midpoint = 1, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red",
+                       limits = c(.7, 1.5)) +
+  theme_minimal()
+
+library(patchwork)
+
+gRRmean / gRRlo /gRRhi
+```
+
+A data frame with the summary of the BYM2 random effects is in `fit$summary.random$ID`. This has the number of rows equal to 2 times the number of areas (2 * 67) where the first 67 rows correspond to the combined spatially structured and unstructured random effects (${\bf b}$) and the the second 67 rows to the spatially structured random effect (${\bf u_*}$).
+```{r}
+head(fit$summary.random$ID)
+```
+
+We make a map of the posterior mean of the ${\bf b}$ term.
+```{r}
+sfdf <- sfdf %>%
+  mutate(bmean = fit$summary.random$ID[1:67, "mean"])
+
+ggplot(sfdf) + 
+  geom_sf(aes(fill = bmean)) +
+  scale_fill_gradient2(midpoint = 0, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red") +
+  theme_minimal()
+```
+
+### Example 2: Lip cancers in Scotland
+
+As another example here we estimate the risk of lip cancer in men in Scotland, UK. We use data on the number of observed and expected lip cancer cases, and the proportion of population engaged in agriculture, fishing, or forestry (AFF) for each of the Scotland counties. These data are obtained from the {SpatialEpi} package [@KimWakefield2018].
+
+We examine the data in the list object `scotland` from the {SpatialEpi} package.
+```{r}
+data(scotland)
+names(scotland)
+
+names(scotland$data)
+```
+
+Create a simple feature data frame with a geometry column and data as attributes.
+```{r}
+spdf <- scotland$spatial.polygon
+sfdf <- st_as_sf(spdf) %>%
+  st_make_valid() %>%
+  cbind(scotland$data) %>%
+  mutate(SIR = cases/expected)
+head(sfdf)
+```
+
+Map the SIRs.
+```{r}
+library(tmap)
+
+tm_shape(sfdf) +
+  tm_polygons(col = "SIR")
+```
+
+Note the correlation between SIR and AFF.
+```{r}
+cor(sfdf$AFF, sfdf$SIR)
+```
+
+As before, the model is expressed as
+$$
+Y_i \sim \hbox{Poisson}(E_i\theta_i), i = 1, \ldots, n, \\
+\log(\theta_i) = \alpha + \beta_{\hbox{AFF}} \times \hbox{AFF}_i +  u_i + v_i,
+$$
+
+where $E_i$ is the expected count and $\theta_i$ is the relative risk in area $i$. The logarithm of $\theta_i$ is logically related to the overall risk $\alpha$, the covariate (AFF) through the term $\beta_{\hbox{AFF}} \times \hbox{AFF}_i$ and the spatial structured and unstructured random terms.
+
+The term $u_i$ is the spatial structured random effect and is modeled using a conditional autoregressive distribution that requires a neighborhood matrix.
+```{r}
+nb <- poly2nb(sfdf)
+head(nb)
+
+nb2INLA("adj", nb)
+g <- inla.read.graph(filename = "adj")
+```
+
+We need specify IDs for $u_i$ and $v_i$.
+```{r}
+sfdf$IDu <- 1:nrow(sfdf)
+sfdf$IDv <- 1:nrow(sfdf)
+```
+
+We specify the model formula by including the response in the left-hand side, and the fixed and random effects in the right-hand side. The response variable is `cases` and we use the covariate `AFF`. Random effects are defined using `f()` with parameters equal to the name of the index variable and the chosen model. For $u_i$ we use `model = "besag"` with neighborhood matrix given by `g`. We also use option `scale.model = TRUE` to make the precision parameter of models with different CAR priors comparable. For $v_i$ we use `model = "iid"`.
+```{r}
+formula <- cases ~ AFF +
+  f(IDu, model = "besag", graph = g, scale.model = TRUE) +
+  f(IDv, model = "iid")
+```
+
+We fit the model by calling the `inla()` function. We specify the formula, `family = "poisson"`, data, and the expected counts (`expected`). We also set `control.predictor = list(compute = TRUE)` to compute the posteriors of the predictions.
+```{r}
+fit <- inla(formula,
+            family = "poisson", 
+            data = sfdf,
+            E = expected, 
+            control.predictor = list(compute = TRUE))
+
+summary(fit)
+```
+
+We observed the intercept has a value of -.305 with a 95% credible interval of (-.539, -.068). The coefficient on AFF has a value of 4.330 with a 95% credible interval of (1.744, 6.770) indicating that lip cancer rates increase with the percentage of workers in this category.
+
+We plot the marginal density of this coefficient
+```{r}
+marginal <- inla.smarginal(fit$marginals.fixed$AFF) %>%
+   data.frame()
+ggplot(marginal, aes(x = x, y = y)) + 
+  geom_line() +
+  labs(x = expression(beta[AFF]), y = "Density") +
+  geom_vline(xintercept = 0, col = "black") + 
+  theme_minimal()
+```
+
+We map the posterior mean relative risks as follows.
+```{r}
+sfdf <- sfdf %>%
+  mutate(RRmean = fit$summary.fitted.values$mean)
+
+tm_shape(sfdf) +
+  tm_polygons(col = "RRmean")
+```
+
+We can  calculate the probabilities of relative risk estimates being greater than a given threshold value. These probabilities are called exceedance probabilities and are useful to assess unusual elevation of disease risk. The probability that the relative risk of area $i$ is higher than a value $c$ is $P(\theta_i > c)$. In INLA $P(\theta_i \le c)$ is computed with `inla.pmarginal()`.
+
+The probability that the first county has a relative risk exceeding 2 is
+```{r}
+1 - inla.pmarginal(q = 2, marginal = fit$marginals.fitted.values[[1]])
+```
+
+To calculate the exceedance probabilities for all counties, we can use the `sapply()` function passing as arguments the list with the marginals of all counties (`fit$marginals.fitted.values`), and the function to calculate the exceedance probabilities (`1- inla.pmarginal()`). The `sapply()` function returns a vector of the same length as the list `fit$marginals.fitted.values` which we add to the simple feature data frame before making a map.
+```{r}
+exc <- sapply(fit$marginals.fitted.values, 
+              FUN = function(marg){1 - inla.pmarginal(q = 2, marginal = marg)})
+sfdf$exc <- exc
+
+tm_shape(sfdf) +
+  tm_polygons(col = "exc", title = "Probability\nRelative Risk > 2")
+```
+
+This map provides evidence of excess risk within individual areas. In areas with probabilities close to 1, it is very likely that the relative risk exceeds 2, and areas with probabilities close to 0 correspond to areas where it is very unlikely that the relative risk exceeds 2. Areas with probabilities around 0.5 have the highest uncertainty, and correspond to areas where the relative risk is below or above 2 with equal probability. We observe that the counties in the north of Scotland are the counties where it is most likely that relative risk exceeds 2.
