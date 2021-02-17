@@ -305,7 +305,8 @@ To determine I on the residuals we use the `lm.morantest()` function, passing th
 nbs <- poly2nb(CC.sf)
 wts <- nb2listw(nbs)
 
-lm.morantest(model, wts)
+lm.morantest(model, 
+             listw = wts)
 ```
 
 Moran I on the model residuals is .222. This compares with the value of .5 on the value of crime alone. Part of the autocorrelation in the crime rates is statistically 'absorbed' by the explanatory factors.
@@ -416,3 +417,4 @@ Here the error model has a large $p$-value and the lag model has a $p$-value tha
 A decision tree (from Luc Anselin) shows the sequence of tests for making a choice about which type of spatial model to use [Decision Tree](http://myweb.fsu.edu/jelsner/temp/SpatialRegressionDecisionTree.png)
 
 If both tests show significance for both models, then we can fit both models and check which one results in the lowest information criteria (AIC). Another options is to include both a spatial lag term and a spatial error term. 
+
