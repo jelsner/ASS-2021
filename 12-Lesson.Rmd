@@ -3,6 +3,7 @@ title: "Lesson 12"
 author: "James B. Elsner"
 date: "February 17, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -12,27 +13,28 @@ editor_options:
 
 Friday is a mid-semester wellness day. No lesson and no assignment!
 
-## Review of autocorrelation: Population and tornadoes
+## Reviewing autocorrelation through an extended example: Population and tornadoes
 
 Tornado reports, not tornadoes.
 
 Is the frequency of tornado reports correlated with the number of people in a region? Might this correlation extend to the number of people in neighboring region?
 
-To answer these questions we quantify the non-spatial correlation and the bi-variate spatial autocorrelation between tornado occurrences and population. To keep this manageable in terms of computational time we restrict the focus to the state of Iowa.
+To answer these questions we quantify the aspatial correlation and the bi-variate spatial autocorrelation between tornado occurrences and population. To keep this manageable in terms of computational time we restrict the focus to the state of Iowa.
 
-We start by getting the U.S. Census data with functions from the {tidycensus} package. The `get_decennial()` function grants access to the 1990, 2000, and 2010 decennial US Census data and the `get_acs()` function grants access to the 5-year American Community Survey data. For example, here is how we get county-level population for Iowa.
+We start by getting the U.S. Census data with functions from the {tidycensus} package. The `get_decennial()` function grants access to the 1990, 2000, and 2010 decennial US Census data and the `get_acs()` function grants access to the 5-year American Community Survey data. For example, here is how we get county-level population for Iowa. The variable `B02001_001E` is the 2015 (mid year of the 5-year period 2013-2017) population in each county.
 ```{r}
 library(tidycensus)
+library(sf)
 
-Counties.sf <- get_acs(geography = "county", 
+( Counties.sf <- get_acs(geography = "county", 
                        variables = "B02001_001E", 
                        state = "IA", 
-                       geometry = TRUE)
+                       geometry = TRUE) )
 ```
 
-This returns a simple feature data frame with county borders as multi-polygons. The variable `B02001_001E` is the 2015 (mid year of the 5-year period 2013-2017) population in each county.
+This returns a simple feature data frame with 99 rows (one row for each  of the 99 counties in the state) and the county borders as a multi-polygon simple feature column in the column labeled `geometry`. The variable `GEOID` is unique for each county. And the variable `estimate` is the population.
 
-Now get the tornado locations and compute the annual tornado occurrence rate for each county. Start by determining the intersections of the county polygons and the tornado points. The join the counts to the simple feature data frame.
+Next we get the tornado report (initial) locations filtering by year greater or equal to 2013.
 ```{r}
 library(tidyverse)
 
@@ -42,30 +44,38 @@ download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-initp
 unzip("1950-2018-torn-aspath.zip")
 }
 
-Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint", 
+( Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint", 
                    layer = "1950-2018-torn-initpoint") %>%
   st_transform(crs = st_crs(Counties.sf)) %>%
-  filter(yr >= 2013)
+  filter(yr >= 2013) )
+```
 
-TorCounts.df <- Torn.sf %>%
+Then we determine the intersections of tornado point geometries with the county polygon geometries and count the number of intersections grouped by `GEOID`.
+```{r}
+( TorCounts.df <- Torn.sf %>%
   st_intersection(Counties.sf) %>%
   st_drop_geometry() %>%
   group_by(GEOID) %>%
-  summarize(nT = n()) 
+  summarize(nT = n()) )
+```
 
-Counties.sf <- Counties.sf %>%
+The result is a two-column data frame containing the `GEOID` and the number of tornadoes (`nT`). Note that there are only 86 rows indicating that some counties did not experience a tornado genesis over this time period.
+
+Then we join the counts to the simple feature data frame by `GEOID`. Counties without tornadoes are given a value of `NA` in the column `nT`. We replace those with 0 with the `replace_nt()` function inside the `mutate()` function. We then compute the county area (in square meters), the annual tornado rate (in 100 square kilometers-10^10), and the logarithm (base 10) of the population estimate.
+```{r}
+( Counties.sf <- Counties.sf %>%
   left_join(TorCounts.df,
             by = "GEOID") %>%
   mutate(nT = replace_na(nT, 0)) %>%
   mutate(Area = st_area(Counties.sf),
          rate = nT/Area/(2018 - 2013 + 1) * 10^10,
-         lpop = log10(estimate))
+         lpop = log10(estimate)) )
 ```
-
-Note that some counties have no tornadoes and the `left_join()` returns a value of `NA` for those. We use `mutate()` with `replace_na()` to turn those counts to a value of 0.
 
 Make a two-panel map displaying the log of the population and the tornado rates.
 ```{r}
+library(tmap)
+
 map1 <- tm_shape(Counties.sf) +
   tm_borders(col = "gray70") +
   tm_fill(col = "lpop",
@@ -83,7 +93,7 @@ map2 <- tm_shape(Counties.sf) +
 tmap_arrange(map1, map2)
 ```
 
-There appears some relationship. The non-spatial correlation between the two variables is obtained with the `cor.test()` function.
+There appears to be some relationship. Counties with more people tend to have more tornado reports. This is quantified with the aspatial correlation between the two variables obtained with the `cor.test()` function.
 ```{r}
 lpop <- Counties.sf$lpop
 rate <- as.numeric(Counties.sf$rate)
@@ -91,8 +101,12 @@ rate <- as.numeric(Counties.sf$rate)
 cor.test(lpop, rate)
 ```
 
-The bi-variate spatial autocorrelation is assessed using the Lee statistic. A formal non-parametric test under the null hypothesis of no bi-variate spatial autocorrelation is done using a Monte Carlo simulation.
+The value of .35 is small, but statistically significant ($p$-value < .01) against the null hypothesis of no correlation.
+
+The bi-variate spatial autocorrelation is estimated using the Lee statistic. A formal non-parametric test under the null hypothesis of no correlation is done using a Monte Carlo simulation.
 ```{r}
+library(spdep)
+
 nbs <- poly2nb(Counties.sf)
 wts <- nb2listw(nbs)
 
@@ -101,7 +115,9 @@ lee_stat <- lee(lpop, rate,
                 n = length(nbs))
 lee_stat$L
 
-lee.mc(lpop, rate, listw = wts, nsim = 9999)
+lee.mc(lpop, rate, 
+       listw = wts, 
+       nsim = 9999)
 ```
 
 Finally we map out the local variation in the bi-variate spatial autocorrelation.
@@ -110,14 +126,14 @@ Counties.sf$localL <- lee_stat$localL
 
 tm_shape(Counties.sf) +
   tm_fill("localL",
-          title = "Local Bivariate\nSpatial Autocorrelation") +
+          title = "Local bi-variate\nspatial autocorrelation") +
   tm_borders(col = "gray70") +
   tm_layout(legend.outside = TRUE)
 ```
 
 What might cause this? Compare with Kansas.
 
-Also, compare local Lee with local Moran.
+Also, compare local Lee with local Moran I.
 ```{r}
 Ii_stats <- localmoran(rate, 
                        listw = wts)
@@ -126,26 +142,26 @@ Counties.sf$localI = Ii_stats[, 1]
 tm_shape(Counties.sf) +
   tm_borders(col = "gray70") +
   tm_fill(col = "localI",
-          title = "Local Autocorrelation",
+          title = "Local autocorrelation",
           palette = "Purples") +
   tm_layout(legend.outside = "TRUE")
 ```
 
 ## Constraining group membership based on autocorrelation
 
-From: https://www.dshkol.com/post/spatially-constrained-clustering-and-regionalization/
+We often face the situation where we have a large number of variables and we want to group them in a way that minimizes inter-group variation but maximizes between-group variation. This grouping or 'clustering' is important in data analysis and data mining. Traditional clustering methods include K-means and hierarchical.
 
-The advantage of spatially constrained clustering methods is that it has a hard requirement that spatial objects in the same cluster are also geographically linked. 
+With spatial data we want the additional constraint that groups be geographically linked. In fact there are many situations that require separating geographies into discrete but contiguous regions (regionalization) such as designing communities, planning areas, amenity zones, logistical units, or even for the purpose of setting up experiments with real world geographic constraints.
 
-There are a lot of cases that require separating geographies into discrete but contiguous regions (regionalization) such as designing communities, planning areas, amenity zones, logistical units, or even for the purpose of setting up experiments with real world geographic constraints. 
+There are many situations where the optimal grouping using traditional cluster metrics is sub-optimal in practice because of these geographic constraints.
 
-There are many situations where the optimal grouping, if solely using traditional cluster evaluation measures, is sub-optimal in practice because of real-world constraints.
+Unconstrained grouping on data with spatial characteristics will result in contiguous regions because of autocorrelation, but if we want to ensure that all groups are spatially-contiguous we need a method specifically designed for the task. The 'skater' algorithm available in the {spdep} package is well-implemented and well-documented.
 
-Unconstrained grouping on data with spatial characteristics will result in contiguous regions because of autocorrelation, but if we want to ensure that all objects are in entirely spatially-contiguous groups we need a method specifically designed for the task. The 'skater' algorithm available in R via the {spdep} package is well-implemented and well-documented.
+The 'skater' algorithm (spatial 'k'luster analysis by tree edge removal) builds a connectivity graph to represent spatial relationships between neighboring areas, where each area is represented by a node and edges represent connections between areas. Edge costs are calculated by evaluating the dissimilarity in attribute space between neighboring areas. The connectivity graph is reduced by pruning edges with higher dissimilarity.
 
-The 'skater' (spatial ’k’luster analysis by tree edge removal) builds a connectivity graph to represent spatial relationships between neighboring areas, where each area is represented by a node and edges represent connections between areas (see https://www.tandfonline.com/doi/abs/10.1080/13658810600665111). Edge costs are calculated by evaluating the dissimilarity between neighboring areas. The connectivity graph is reduced by pruning edges with higher dissimilarity until we are left with n nodes and n−1 edges. At this point any further pruning would create subgraphs and these subgraphs become cluster candidates.
+More information: https://www.tandfonline.com/doi/abs/10.1080/13658810600665111
 
-Consider crime data at the tract level in the city of Columbus, Ohio (Anselin, 1988: Spatial Econometrics. Boston, Kluwer Academic). The tract polygons are projected with arbitrary spatial coordinates.
+Consider again the crime data at the tract level in the city of Columbus, Ohio. The tract polygons are projected with arbitrary spatial coordinates.
 ```{r}
 if(!"columbus" %in% list.files()) {
 download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/columbus.zip",
@@ -156,14 +172,15 @@ unzip("columbus.zip")
 ( CC.sf <- read_sf(dsn = "columbus") )
 ```
 
-We check if there is a clear spatial pattern to this data.
+We create choropleth maps of housing value, income, and crime.
 ```{r}
-plot(CC.sf[,7:9])
+tm_shape(CC.sf) +
+  tm_fill(col = c("HOVAL", "INC", "CRIME"))
 ```
 
-Promising start as there looks to be some fairly distinct regional patterns happening. 
+The maps indicate distinct regional patterns.
 
-Next, scale variable values and center them. This is done regardless of clustering approach.
+Next we scale the values and center them using the `scale()` function. This should always be done even with aspatial clustering approaches.
 ```{r}
 ( CCs.df <- CC.sf %>% 
     mutate(HOVAL = scale(HOVAL),
@@ -173,7 +190,7 @@ Next, scale variable values and center them. This is done regardless of clusteri
     st_drop_geometry() )
 ```
 
-Next create the adjacency neighbor structure using rook contiguity.
+Next create adjacency neighborhoods using queen contiguity.
 ```{r}
 nbs <- poly2nb(CC.sf, 
                queen = TRUE)
@@ -184,7 +201,7 @@ plot(nbs,
      add = TRUE)
 ```
 
-Next we combine the contiguity graph with our scaled attribute data to calculate edge costs based on the statistical distance between each node. The function `nbcosts()` from the {spdep} package provides distance methods for Euclidian, Manhattan, Canberra, binary, Minkowski, and Mahalanobis, and defaults to Euclidean if not specified.
+Next we combine the contiguity graph with our scaled attribute data to calculate edge costs based on the distance between each node. The function `nbcosts()` from the {spdep} package provides distance methods for Euclidian, Manhattan, Canberra, binary, Minkowski, and Mahalanobis, and defaults to Euclidean if not specified.
 ```{r}
 costs <- nbcosts(nbs, 
                  data = CC.sf)
@@ -197,14 +214,14 @@ wts <- nb2listw(nbs,
                 style = "B")
 mst <- mstree(wts)
 
-plot(mst, 
-     coordinates(as_Spatial(CC.sf)), 
-     col = "blue")
+head(mst)
 ```
 
-Edges with higher dissimilarity are removed sequentially until left with a spanning tree that takes the minimum sum of dissimilarities across all edges of the tree, hence minimum spanning tree. At this point, any further reduction in edges would create disconnected sub-graphs which then lead to the resulting spatial clusters.
+Edges with higher dissimilarity are removed leaving a set of nodes and edges that take the minimum sum of dissimilarities across all edges of the tree (a minimum spanning tree).
 
-Once the minimum spanning tree is in place, the SKATER algorithm comes in to partition the MST. It partitions the graph identifying which edge to remove to maximize the quality of resulting clusters as measured by the sum of the inter-cluster square deviations SSD. Regions that are similar to one another have lower values. This is implemented with the `skater` function and the `ncuts =` argument indicates the number of partitions to make, resulting in ncuts + 1 groups.
+The edge connecting node 23 with node 32 has a dissimilarity of 15.7 units. The edge connection node 32 with node 41 has a dissimilarity of 14.1 units.
+
+Finally, the `skater()` function partitions the graph by identifying which edges to remove based on dissimilarity while maximizing the between-group variation. The `ncuts =` argument specifies the number of partitions to make, resulting in `ncuts` + 1 groups.
 ```{r}
 clus5 <- skater(edges = mst[,1:2], 
                 data = CCs.df, 
@@ -221,7 +238,7 @@ ggplot() +
           mapping = aes(fill = factor(Group)))
 ```
 
-Hierarchical clustering
+As a comparison, here is the result of grouping the same three variables using hierarchical clustering using the method of minimum variance (Ward) and without regard to spatial contiguity.
 ```{r}
 dd <- dist(CCs.df)
 hc <- hclust(dd, 
@@ -233,16 +250,15 @@ CC.sf <- CC.sf %>%
 ggplot() +
   geom_sf(data = CC.sf,
           mapping = aes(fill = factor(hcGroup)))
-
 ```
 
-## Autocorrelation in model residuals
+## Estimating autocorrelation in the model residuals
 
-Knowledge of significant autocorrelation by itself is not typically useful. But knowledge of significant autocorrelation in the residuals from some statistical model can help us build a more precise model.
+Knowledge of autocorrelation by itself is not typically useful. But autocorrelation in the residuals can help us build a more precise model.
 
-A spatial regression model may be needed whenever the residuals resulting from a aspatial regression model exhibit significant spatial autocorrelation. So a common way to proceed is to first regress the response variable onto the explanatory variables and check for spatial autocorrelation in the residuals.
+A spatial regression model should be considered whenever the residuals resulting from a aspatial regression model exhibit spatial autocorrelation. A common way to proceed is to first regress the response variable onto the explanatory variables and check for autocorrelation in the residuals.
 
-If the explanatory variables remove the spatial autocorrelation then a spatial regression model is not needed.
+If the explanatory variables remove the autocorrelation then a spatial regression model is not needed.
 
 Let's continue with the Columbus crime data and fit a linear regression model with `CRIME` as the response variable and `INC` and `HOVAL` as the explanatory variables.
 ```{r}
@@ -251,52 +267,56 @@ model <- lm(CRIME ~ INC + HOVAL,
 summary(model)
 ```
 
-The model statistically explains 55% of the variation in crime. As income and housing values increase crime goes down. 
+The model statistically explains 55% of the variation in crime as can be seen by the multiple R-squared value. Looking at the coefficients (values under the `Estimate` column), we see that _higher_ incomes are associated with lower values of crime (negative coefficient) and _higher_ housing values are associated with lower crime. For every one unit increase in income, crime values decrease by 1.6 units.
 
 We use the `residuals()` method to extract the vector of residuals from the model.
 ```{r}
-res <- residuals(model)
+( res <- residuals(model) )
 ```
 
-We then check on the distribution of the residuals relative to a normal distribution.
+There are 49 residuals one for each tract. The residuals are the difference between the observed crime rates and the predicted crime rates (observed - predicted). A residual that is greater than 0 indicates that the model _under_ predicts the observed crime rate in that tract and a residual less than 0 indicates that the model _over_ predicts the observed crime rate.
+
+The aspatial variability of the residuals should follow a normal distribution. We check this with the `sm.density()` function from the {sm} package with the first argument the vector of residuals (`res`) and the argument `model =` set to "Normal".
 ```{r}
 sm::sm.density(res, 
                model = "Normal")
 ```
 
-The next step is to create a choropleth map of the model residuals. Are the residuals clustered?
+We see that density curve of the residuals (black line) fits completely within the blue ribbon that defines a normal distribution.
+
+Next we create a choropleth map of the model residuals. Do the residuals show any spatial pattern of clustering? Since the values in the vector of residuals are arranged in the same order as the rows in the simple feature data frame we simply create a new column in the data frame using the `$` syntax.
 ```{r}
 CC.sf$res <- res
 
-library(tmap)
 tm_shape(CC.sf) +
   tm_fill("res") +
   tm_borders(col = "gray70") +
-  tm_layout(title = "Linear Model Residuals")
+  tm_layout(title = "Linear model residuals")
 ```
 
-Yes. There are clustered regions where the model over predicts crime conditional on household income and housing values and where it under predicts crime.
+The map shows contiguous tracts of negative residuals across the southwestern and southern part of the city and a group of contiguous tracts of positive residuals toward the center. 
 
-The amount of clustering is less than before. That is, after accounting for regional factors related to crime the spatial autocorrelation is reduced.
+These groups indicate some clustering but it appears to be less than the clustering we saw with the crime values themselves. That is, after accounting for regional factors related to crime the autocorrelation appears to be reduced.
 
-To determine I on the residuals we use the `lm.morantest()` function and pass the regression model object and the weights object to it.
+To determine I on the residuals we use the `lm.morantest()` function, passing the regression model object and the weights object to it. Note that we use the default neighborhoods and weighting scheme.
 ```{r}
 nbs <- poly2nb(CC.sf)
 wts <- nb2listw(nbs)
+
 lm.morantest(model, wts)
 ```
 
-Moran I on the model residuals is .222.  This compares with the value of .5 on crime alone. Part of the spatial autocorrelation is absorbed by the explanatory factors.
+Moran I on the model residuals is .222. This compares with the value of .5 on the value of crime alone. Part of the autocorrelation in the crime rates is statistically 'absorbed' by the explanatory factors.
 
-Do we need a spatial regression model?  The output gives a $p$-value on I of .002, thus we reject the null hypothesis of no spatial autocorrelation in the residuals and conclude that a spatial regression model would improve the fit.  
+But do we need a spatial regression model? The output gives a $p$-value on I of .002, thus we reject the null hypothesis of no spatial autocorrelation in the residuals and conclude that a spatial regression model would improve the fit.  
 
 The $z$-value takes into account the fact that these are residuals so the variance is adjusted accordingly.
 
 The next step is to choose a spatial regression model.
 
-## Choosing a spatial regression model
+## Choosing the type of spatial regression model
 
-Ordinary regression models fit to spatially aggregated data can lead to improper inference because observations are not independent. Thus it's necessary to check the residuals from an aspatial model for spatial autocorrelation. If the residuals are strongly correlated the model is mis-specified. 
+Ordinary regression models fit to spatial data can lead to improper inference because observations are not independent. Thus it's necessary to check the residuals from an aspatial model for autocorrelation. If the residuals are strongly correlated the model is not specified properly. 
 
 In this case we can try to improve the model by adding variables. If that's not possible (no additional data, or no clue as to what variable to include), we can try a spatial regression model. Spatial regression models are widely used in econometrics and epidemiology.
 
@@ -304,21 +324,21 @@ The equation for a regression model in vector notation is
 $$
 y = X \beta + \varepsilon
 $$
-where $y$ is a $n \times 1$ vector of response variable values, $X$ is a $n$ $\times$ $p+1$ matrix containing the explanatory variables and augmented by a column of ones for the intercept term, $\beta$ is a $p+1$ $\times$ 1 vector of model coefficients and $\varepsilon$ is a $n \times 1$ vector of residuals (iid).
+where $y$ is a $n$ by 1 vector of response variable values, $X$ is a $n$ by $p+1$ matrix containing the explanatory variables and augmented by a column of ones for the intercept term, $\beta$ is a $p+1$ $\times$ 1 vector of model coefficients and $\varepsilon$ is a $n$ by 1 vector of residuals (iid).
 
-Two options exist if the elements of the vector $\varepsilon$ are spatially correlated. The first is to rewrite the model adding a spatial lag term as
+A couple options exist if the elements of the vector $\varepsilon$ are correlated. One is to include a spatial lag term so the model becomes
 $$
 y = \rho W y + X \beta + \varepsilon
 $$
-where $Wy$ is the weighted average of the neighborhood response values with $W$ the spatial weights matrix, and $\rho$ is the autoregression coefficient. This is called a spatial autoregressive (SAR) model.
+where $Wy$ is the weighted average of the neighborhood response values (spatial lag variable) with $W$ the spatial weights matrix, and $\rho$ is the autoregression coefficient. This is called a spatial autoregressive (SAR) model.
 
 Note: $Wy$ is the spatial lag variable we compute with the `lag.listw()` function and $\rho$ is Moran I. Thus the model is also called a spatial lag model (SLM).
 
-Justification for the spatial lag model is motivated by a diffusion process. The response variable $y_i$ is influenced by the explanatory variables at location $i$ and by explanatory variables at locations $j$.
+Justification for the spatial lag model is domain specific but motivated by a diffusion process. The response variable $y_i$ is influenced by the explanatory variables at location $i$ and by explanatory variables at locations $j$.
 
-$\rho Wy$ is called the spatial signal term and $\beta X$ is called the trend term.
+$\rho Wy$ is called the _spatial signal_ term and $\beta X$ is called the _trend_ term.
 
-The second option is to rewrite the model by adding a spatial error term as
+Another option is to include a spatial error term so the model becomes
 $$
 y = X\beta + \lambda W \epsilon + u
 $$
@@ -326,11 +346,12 @@ where $\lambda$ is the autoregression coefficient, $W\epsilon$ is the spatial er
 
 Here the lag term is computed using the residuals rather the response variable.
 
-Application of the spatial error model is motivated by the omitted variable bias. Suppose the $y$ is statistically described by two variables $x$ and $z$ each centered on zero and independent. Then
+Application of the spatial error model is motivated by the omitted variable bias. Suppose the variable $y$ is statistically described by two variables $x$ and $z$ each centered on zero and independent. Then
 $$
 y = \beta x + \theta z
 $$
-If $z$ is not observed, the vector $\theta z$ is nested in the error term $\epsilon$.
+
+If $z$ is not observed, then the vector $\theta z$ is nested in the error term $\epsilon$.
 $$
 y = \beta x + \epsilon
 $$
@@ -348,7 +369,7 @@ y = \beta x + (I - \lambda W)^{-1} \varepsilon
 $$
 where $\varepsilon = \theta r$.
 
-Another reason for fitting a spatial error model is spatial heterogeneity. Suppose we have multiple observations for each unit. If we want our model to incorporate individual effects we can include a $n \times 1$ vector $a$ of individual intercepts for each unit.
+Another motivation for considering a spatial error model is heterogeneity. Suppose we have multiple observations for each unit. If we want our model to incorporate individual effects we can include a $n \times 1$ vector $a$ of individual intercepts for each unit.
 $$
 y = a + X\beta
 $$
@@ -366,22 +387,24 @@ $$
 y = X\beta + (I - \lambda W)^{-1} \epsilon
 $$
 
-To help decide between the two spatial regression models described above we run a sequence of statistical tests on our linear model object. The tests are the Lagrange multiplier (LM) tests. LM refers to a technique to determine the coefficients on the explanatory variables while simultaneously determining the coefficient on the spatial regression term.
+In the absence of domain-specific knowledge of the process that might be responsible for the autocorrelated residuals, we can run some statistical tests on the linear model.
 
-The tests are performed with the `lm.LMtests()` function. The test type is specified as a character string. The tests should be considered in order. Start with the standard version of both the spatial error model and spatial lag model LM tests.
+The tests are performed with the `lm.LMtests()` function. The `LM` stands for 'Lagrange multiplier' indicating that the technique simultaneously determines the coefficients on the explanatory variables AND the coefficient on the spatial lag variable.
 
-For example, to perform a LM test for the spatial error and spatial lag model on the Columbus crime model we type
+The test type is specified as a character string. The tests should be considered in a sequence starting with the standard versions and moving to the 'robust' versions if the choice remains ambiguous.
+
+To perform LM tests we specify the model object, the weights matrix, and the two model types using the `test =` argument. The model types are specified as character strings `"LMerr"` and `"LMlag"` for the spatial error and lag models, respectively.
 ```{r}
-lm.LMtests(model.lm, 
+lm.LMtests(model, 
            listw = wts, 
            test = c("LMerr", "LMlag"))
 ```
 
-The output shows that both the spatial error and spatial lag model terms are significant ($p$-value < .15). Ideally one term is significant and the other is not and we choose the model with the significant term.
+The output shows that both the spatial error and spatial lag models are significant ($p$-value < .15). Ideally one model is significant and the other is not, and we choose the model that is significant.
 
-Since both are significant we should test again. This time we use the robust forms of the statistics.
+Since both are significant, we should test again. This time we use the robust forms of the statistics. We do this by using the character strings `"RLMerr"` and `"RLMlag"` in the `test =` argument.
 ```{r}
-lm.LMtests(model.lm, 
+lm.LMtests(model, 
            listw = wts, 
            test = c("RLMerr", "RLMlag"))
 ```
@@ -390,4 +413,4 @@ Here the error model has a large $p$-value and the lag model has a $p$-value tha
 
 A decision tree (from Luc Anselin) shows the sequence of tests for making a choice about which type of spatial model to use [Decision Tree](http://myweb.fsu.edu/jelsner/temp/SpatialRegressionDecisionTree.png)
 
-If both tests show significance for both models, then we can fit both models and check which one results in the lowest AIC.
+If both tests show significance for both models, then we can fit both models and check which one results in the lowest information criteria (AIC). Another options is to include both a spatial lag term and a spatial error term. 
