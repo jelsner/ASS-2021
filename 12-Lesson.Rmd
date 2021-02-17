@@ -13,7 +13,9 @@ editor_options:
 
 Friday is a mid-semester wellness day. No lesson and no assignment!
 
-## Reviewing autocorrelation through an extended example: Population and tornadoes
+Today: start with a review of local bi-variate autocorrelation, using neighborhoods to constrain clustering, autocorrelation in model residuals, choosing a spatial regression model
+
+## Reviewing local bi-variate spatial autocorrelation: Population and tornadoes
 
 Tornado reports, not tornadoes.
 
@@ -61,7 +63,7 @@ Then we determine the intersections of tornado point geometries with the county 
 
 The result is a two-column data frame containing the `GEOID` and the number of tornadoes (`nT`). Note that there are only 86 rows indicating that some counties did not experience a tornado genesis over this time period.
 
-Then we join the counts to the simple feature data frame by `GEOID`. Counties without tornadoes are given a value of `NA` in the column `nT`. We replace those with 0 with the `replace_nt()` function inside the `mutate()` function. We then compute the county area (in square meters), the annual tornado rate (in 100 square kilometers-10^10), and the logarithm (base 10) of the population estimate.
+Then we join the counts to the simple feature data frame by `GEOID`. Counties without tornadoes are given a value of `NA` in the column `nT`. We replace those with 0 with the `replace_na()` function inside the `mutate()` function. We then compute the county area (in square meters), the annual tornado rate (in 100 square kilometers-10^10), and the logarithm (base 10) of the population estimate.
 ```{r}
 ( Counties.sf <- Counties.sf %>%
   left_join(TorCounts.df,
@@ -180,7 +182,7 @@ tm_shape(CC.sf) +
 
 The maps indicate distinct regional patterns.
 
-Next we scale the values and center them using the `scale()` function. This should always be done even with aspatial clustering approaches.
+Next we scale the attribute values and center them using the `scale()` function. This should always be done even with aspatial clustering approaches.
 ```{r}
 ( CCs.df <- CC.sf %>% 
     mutate(HOVAL = scale(HOVAL),
@@ -204,10 +206,10 @@ plot(nbs,
 Next we combine the contiguity graph with our scaled attribute data to calculate edge costs based on the distance between each node. The function `nbcosts()` from the {spdep} package provides distance methods for Euclidian, Manhattan, Canberra, binary, Minkowski, and Mahalanobis, and defaults to Euclidean if not specified.
 ```{r}
 costs <- nbcosts(nbs, 
-                 data = CC.sf)
+                 data = CCs.df)
 ```
 
-Next we transform the edge costs into spatial weights using the `nb2list2()` function before constructing the minimum spanning tree with the weights list.
+Next we transform the edge costs into spatial weights using the `nb2listw()` function before constructing the minimum spanning tree with the weights list.
 ```{r}
 wts <- nb2listw(nbs,
                 glist = costs,
@@ -219,7 +221,7 @@ head(mst)
 
 Edges with higher dissimilarity are removed leaving a set of nodes and edges that take the minimum sum of dissimilarities across all edges of the tree (a minimum spanning tree).
 
-The edge connecting node 23 with node 32 has a dissimilarity of 15.7 units. The edge connection node 32 with node 41 has a dissimilarity of 14.1 units.
+The edge connecting node 37 with node 43 has a dissimilarity of 1.19 units. The edge connection node 43 with node 35 has a dissimilarity of .19 units.
 
 Finally, the `skater()` function partitions the graph by identifying which edges to remove based on dissimilarity while maximizing the between-group variation. The `ncuts =` argument specifies the number of partitions to make, resulting in `ncuts` + 1 groups.
 ```{r}
@@ -289,7 +291,7 @@ Next we create a choropleth map of the model residuals. Do the residuals show an
 CC.sf$res <- res
 
 tm_shape(CC.sf) +
-  tm_fill("res") +
+  tm_fill(col = "res") +
   tm_borders(col = "gray70") +
   tm_layout(title = "Linear model residuals")
 ```
@@ -314,7 +316,7 @@ The $z$-value takes into account the fact that these are residuals so the varian
 
 The next step is to choose a spatial regression model.
 
-## Choosing the type of spatial regression model
+## Choosing a spatial regression model
 
 Ordinary regression models fit to spatial data can lead to improper inference because observations are not independent. Thus it's necessary to check the residuals from an aspatial model for autocorrelation. If the residuals are strongly correlated the model is not specified properly. 
 
