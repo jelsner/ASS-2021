@@ -10,19 +10,142 @@ editor_options:
 
 **"We build our computer systems the way we build or cities; over time, without plan, on top of ruins."** – Ellen Ullman
 
-## Geographic regression
+## Fitting and interpreting geographic regressions
 
-If the residuals from a statistical model have significant autocorrelation then a spatial modeling approach is called for. One approach is to assume that the relationships between the response variable and the explanatory variables are modified by contextual factors. 
+Another approach to modeling spatial data is to assume that the relationships between the response variable and the explanatory variables are modified by contextual factors that depend on location. We fit a separate regression model at each geographic location. This is similar to local measures of spatial autocorrelation where we estimate the statistic at each location.
 
-Like with local variants of spatial autocorrelation metrics, which use only neighbors for estimates, we can fit separate regression models for each polygon using only values in neighborhoods. This approach is useful for exploratory analysis (e.g., to show where the explanatory variables are most strongly related to the response variable). This approach is called geographically weighted regression (GWR) or geographic regression.
+This approach is useful for exploratory analysis (e.g., to show where the explanatory variables are most strongly related to the response variable) and is called geographically weighted regression (GWR) or geographic regression.
 
-GWR fits a separate regression model for every location in the dataset. Thus it is not a single model but rather a procedure for fitting a set of models. It fits the models by using the response and explanatory variables only from locations that fall within some prescribed distance (bandwidth). The bandwidth is pre-specified or determined by a cross-validation procedure. GWR is used in epidemiology, particularly for research on infectious diseases and for evaluating health policies or health programs.
+Since GWR fits a separate regression model to every spatial location in the dataset, it is not a single model but rather a procedure for fitting a set of models. All observations contribute to the fit but they are weighted inversely by their distance to the location. At short distances observations are given the largest weights based on a Gaussian function and a bandwidth. The bandwidth is specified or determined by cross-validation. 
 
-Let's see how GWR works with an example.
+GWR is used in epidemiology, particularly for research on infectious diseases and for evaluating health policies or health programs.
 
-The file `south.zip` contains shapefiles with homicide rates and explanatory variables for counties in the southern United States. Download the file from my website and unzip it in your working directory. 
+Linear regression is a model for the conditional mean. The mean of the response variable depends on the explanatory variable(s). Geographic regressions show how this dependency varies by location. It is an exploratory technique intended to indicate where local regression coefficients are different from the global values.
 
-Import the data using the `read_sf()` from the {sf} package. The data have latitude/longitude coordinates but there is no projection so we set the CRS to long-lat with the `st_crs()` function.
+Let's see how this works on the Columbus crime data.
+```{r}
+library(sf)
+if(!"columbus" %in% list.files()){
+download.file("http://myweb.fsu.edu/jelsner/temp/data/columbus.zip",
+              "columbus.zip")
+unzip("columbus.zip")
+}
+
+CC.sf <- read_sf(dsn = "columbus", 
+                 layer = "columbus")
+```
+
+We start by fitting a 'global' regression for the crime rates using income and housing values.
+```{r}
+f <- CRIME ~ INC + HOVAL
+( model.lm <- lm(formula = f,
+               data = CC.sf) )
+```
+
+We use functions from the {spgwr} package to fit geographic regressions.
+```{r}
+if(!require(spgwr)) install.packages(pkgs = "spgwr", repos = "http://cran.us.r-project.org")
+
+library(spgwr)
+```
+
+The `sp` part of the package name indicates that the functions were developed to work with S4 spatial objects. We can use S3 simple features by specifying the locations as a matrix.
+```{r}
+Locations <- st_coordinates(st_centroid(CC.sf))
+
+head(Locations)
+```
+
+We determine the optimal bandwidth for the Gaussian kernel (weighting function) using the `gwr.sel()` function. We need to specify the model formula, the data, and the coordinates.
+```{r}
+( bw <- gwr.sel(formula = f, 
+               data = CC.sf,
+               coords = Locations) )
+```
+
+Note: The argument `coords =` is the matrix of coordinates of points representing the spatial positions of the observations. It can be omitted if the data is an S4 spatial data frame from the {sp} package.
+
+The procedure makes an initial guess at the optimal bandwidth distance and then fits local regression models at each location using weights that decay defined by the kernel and that bandwidth (distance).
+
+We see that the first bandwidth was 2.22 distance units. The resulting prediction skill from fitting the regression models with that bandwidth is 7474 units. The resulting CV score is based on cross validation whereby skill is computed at each location when data from that location is not used to fit the regression models.
+
+The procedure continues by increasing the bandwidth distance (to 3.59) and then computing a new CV score from refitting the regression models. Since the new CV score is higher (7480) than the initial CV score, the bandwidth is changed in the other direction (to 1.37) and the models again refit. With that bandwidth, the CV score is 7404, which is lower than the initial bandwidth so the bandwidth is shortened again. The procedure continues until no additional improvement in prediction skill occurs. 
+
+This occurs at a bandwidth distance of .404 units, and this single value is assigned to the object we call `bw`.
+
+After determining the optimal bandwidth distance we use the `gwr()` function to get the results from the regression using that bandwidth. The arguments are the same as with the `gwr.sel()` function but includes the `bandwith =` argument where we specify the object `bw`.
+```{r}
+model.gwr <- gwr(formula = f, 
+                 data = CC.sf, 
+                 coords = Locations,
+                 bandwidth = bw)
+```
+
+The model and observed data are assigned to a list object with element names extracted using the `names()` function.
+```{r}
+names(model.gwr)
+```
+
+The first element is `SDF` containing the model output as a S4 spatial class data frame.
+```{r}
+class(model.gwr$SDF)
+```
+
+The structure of the S4 spatial class is obtained with the `str()` function and by setting the `max.level` argument to 2.
+```{r}
+str(model.gwr$SDF, max.level = 2)
+```
+
+Here we see there are 5 slots with the first slot being the attribute table labeled `@data`. The dimension of the attribute table is retrieved with the `dim()` function.
+```{r}
+dim(model.gwr$SDF)
+```
+
+There are 49 rows and 7 columns. Each row corresponds to a tract and information about the regression localized to the tract is given in the columns. The attribute names are extracted with the `names()` function.
+```{r}
+names(model.gwr$SDF)
+```
+
+They include the sum of the weights `sum.w` (the larger the sum the more often the tract is included in the local regressions--favoring smaller counties and ones farther from the borders of the spatial domain), the three regression coefficients one for each of the  explanatory variables (`INC` and `HOVAL`) and an intercept term, the residual (`gwr.e`), the predicted value (`pred`) and the local goodness-of-fit (`localR2`).
+
+Importantly we can map where income has the most and least influence on crime.
+```{r}
+CC.sf$INCcoef <- model.gwr$SDF$INC
+
+library(ggplot2)
+
+ggplot(CC.sf) +
+  geom_sf(aes(fill = INCcoef)) +
+  scale_fill_viridis_c()
+```
+
+Most tracts have coefficients below zero, but areas in yellow indicate where income and crime values move in the same direction.
+
+How about the coefficients on housing values?
+```{r}
+CC.sf$HOVALcoef <- model.gwr$SDF$HOVAL
+
+ggplot(CC.sf) +
+  geom_sf(aes(fill = HOVALcoef)) +
+  scale_fill_viridis_c()
+```
+
+While the global coefficient is negative indicating crime rates tend to be lower in areas with higher housing values, the opposite is the case over much of city.
+
+We put the vector of predictions into the `CC.sf` simple feature data frame giving it the column name `predGWR`.
+```{r}
+CC.sf$predGWR <- model.gwr$SDF$pred
+
+tm_shape(CC.sf) +
+  tm_fill("predGWR", title = "Predicted crimes\nper 1000") +
+  tm_layout(legend.outside = TRUE)
+```
+
+The geographic regressions similarly capture the spatial pattern of homicides across the south. The spread of predicted values matches the observed spread better than the linear model. The pattern is also a smoother.
+
+## Another example: Southern homicides
+
+The file `south.zip` contains shapefiles with homicide rates and explanatory variables for counties in the southern United States. Download and unzip the file, then import the data using the `read_sf()` from the {sf} package. The data have latitude/longitude coordinates but there is no projection so we set the CRS to long-lat with the `st_crs()` function.
 ```{r}
 download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/south.zip",
               destfile = "south.zip")
@@ -31,9 +154,8 @@ unzip("south.zip")
 library(sf)
 
 SH.sf <- st_read(dsn = "south", 
-                 layer = "south", 
-                 stringsAsFactors = FALSE)
-st_crs(SH.sf) <- 4326
+                 layer = "south") %>%
+  st_set_crs(4326)
 names(SH.sf)
 ```
 
@@ -41,14 +163,17 @@ Each row is a separate U.S. county in the southeast. There are 1412 counties.
 
 We are interested in predicting homicide rates (`HR`) given as the number of homicides per 100,000 people. And we consider five explanatory variables including `RD`: resource deprivation index, `PS`: population structure index, `MA`: marriage age, `DV`: divorce rate, and `UE`: unemployment rate. The two digit number appended to the column names is the census year from the 20th century.
 
-First use the `plot()` method on the `geometry` column to see the extent of the data and the spatial geometries.
+To see the extent of the data and the spatial geometries make a plot of the county borders.
 ```{r}
-plot(SH.sf$geometry, col = "gray70")
+library(ggplot2)
+
+ggplot(SH.sf) +
+  geom_sf()
 ```
 
-Next we reduce the number of variables in the data frame keeping only the ones of interest using the `select()` function from {dplyr}.
+We reduce the number of variables in the data frame keeping only the ones of interest using the `select()` function from the {dplyr} package.
 ```{r}
-library(dplyr)
+library(tidyverse)
 
 SH.sf <- SH.sf %>%
   dplyr::select(HR90, RD90, PS90, MA90, DV90, UE90)
@@ -104,8 +229,6 @@ The first column printed to the console is the actual homicide rates in the firs
 
 A scatter plot of the observed versus the predicted shows this clearly.
 ```{r}
-library(ggplot2)
-
 ggplot(SH.sf, aes(x = HR90, y = predLM2)) +
   geom_point() +
   geom_abline(slope = 1) +
@@ -168,10 +291,6 @@ There are small clusters of counties with positive residuals and other small clu
 
 This suggests that the _relationships_ between homicide rates and the socioeconomic factors might vary across the domain. GWR is a procedure to fit local regression models.
 
-Linear regression is a model for the conditional mean. The mean of the response variable depends on the explanatory variable(s). Geographic regression might show how this dependency varies by location. It is an exploratory technique intended to indicate where local regression coefficients are different from the global values.
-
-A model is fit at each location. All observations contribute to the fit but they are weighted inversely by their distance to the location. At the shortest distances observations are given the largest weights based on a Gaussian function. The process results in a set of regression coefficients for each observation.
-
 We do this with functions from the {spgwr} package. The geometry information in simple feature data frames is not accessible by functions in this package so we need to create a new S4 spatial data frame.
 ```{r}
 SH.sp <- as(SH.sf, "Spatial")
@@ -190,20 +309,16 @@ bw <- gwr.sel(formula = logHR90 ~ RD90 + PS90 + DV90 + UE90,
               longlat = TRUE)
 ```
 
-The automatic selection procedure makes an initial guess at the bandwidth distance then fits local regression models in each county using neighbors defined by that distance. A cross-validated (CV) skill score is computed as the root mean square prediction error. The cross-validation procedures successively removes one county from the modeling and that county's homicide rate is predicted. Each county takes turn getting removed.
-
-The selection procedure continues by changing the initial guess at the bandwidth and computing the CV score. If the CV score is higher than wih the initial guess the bandwidth is changed in the other direction. If it is lower than the bandwidth is changed in the same direction. The entire procedure continues until no additional improvement is made to the CV score. This results in a minimum bandwith distance. In this case it is 165.5 km.
-
 The bandwidth is assigned to the object `bw` as a single value.
 
-Unfortunately we cannot use neighborhoods defined by contiquity. But to get a sense of what this bandwidth distance means in terms of the average number of neighbors per county we note that one-half the distance squared times pi is the area captured by the bandwidth.
+Unfortunately we cannot use neighborhoods defined by contiguity. But to get a sense of what this bandwidth distance means in terms of the average number of neighbors per county we note that one-half the distance squared times pi is the area captured by the bandwidth.
 ```{r}
 ( bwA <- pi * (bw * 1000 /2)^2 ) 
 ```
 
-In units of square meters. Or 21,519 square kilomenters.
+In units of square meters. Or 21,519 square kilometers.
 
-County areas are computed using the `st_area()` function. The average size of the countys and the ratio of the bandwidth area to the average county area is also computed.
+County areas are computed using the `st_area()` function. The average size of the counties and the ratio of the bandwidth area to the average county area is also computed.
 ```{r}
 areas <- st_area(SH.sf)
 ctyA <- mean(areas)
@@ -241,8 +356,6 @@ There are 1412 rows and 9 columns. Each row corresponds to a county and informat
 names(model.gwr$SDF)
 ```
 
-They include the sum of the weights `sum.w` (the larger the sum the more often the county was included in the local regressions--favoring smaller counties and ones farther from the borders of the spatial domain), the five regression coefficients (one for each of the 4 explanatory variables and an intercept term), the residual (`gwr.e`), the predicted value (`pred`) and the local goodness-of-fit (`localR2`).
-
 We put the predictions into the `SH.sf` simple feature data frame with the column name `predGWR`.
 ```{r}
 SH.sf$predGWR <- exp(model.gwr$SDF$pred)
@@ -268,7 +381,7 @@ range(model.gwr$SDF$RD90)
 
 The global regression coefficient is .51 but locally the coefficients range from 0.08 to .98.
 
-Importantly we can map where resource deprevation has the most influence on the response variable.
+Importantly we can map where resource deprivation has the most influence on the response variable.
 ```{r}
 SH.sf$RDcoef <- model.gwr$SDF$RD90
 
@@ -300,5 +413,3 @@ tm_shape(SH.sf) +
 ```
 
 When we use a regression model to fit data that vary spatially we are assuming an underlying stationary process. This means we believe the explanatory variables 'provoke' the same statistical response across the entire domain. If this is not the case then it shows up in a map of correlated residuals. One approach to investigate things further is to use geographic regression. Another approach is to use a single spatial regression model.
-
-
