@@ -143,6 +143,17 @@ tm_shape(CC.sf) +
 
 The geographic regressions similarly capture the spatial pattern of homicides across the south. The spread of predicted values matches the observed spread better than the linear model. The pattern is also a smoother.
 
+Where is the relationship the tightest?
+```{r}
+CC.sf$localR2 <- model.gwr$SDF$localR2
+
+ggplot(CC.sf) +
+  geom_sf(aes(fill = localR2)) +
+  scale_fill_viridis_c()
+```
+
+Although crime rates are highest in the center of the city, the relationship between crime and income and housing values is largest across the eastern part of the city.
+
 ## Another example: Southern homicides
 
 The file `south.zip` contains shapefiles with homicide rates and explanatory variables for counties in the southern United States. Download and unzip the file, then import the data using the `read_sf()` from the {sf} package. The data have latitude/longitude coordinates but there is no projection so we set the CRS to long-lat with the `st_crs()` function.

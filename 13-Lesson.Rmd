@@ -20,11 +20,11 @@ census_api_key("YOUR API KEY GOES HERE")
 
 ## Choosing between a spatial lag and a spatial error regression model
 
-Regression models fit to spatial data can lead to improper inference because observations are not statistically independent. Thus we need to check model residuals for autocorrelation. If the residuals are strongly correlated the model is not specified properly.
+Regression models fit to spatial data can lead to improper inference (and thus poor decisions) because observations are not statistically independent. Thus we always need to check the residuals from our model for autocorrelation. If the residuals are correlated the model is not specified properly.
 
-In this case we can try to improve the model by adding explanatory variables. If that's not possible (no additional data, or no clue as to what variable to include), we can try a spatial regression model. 
+We can try improving model specification by adding explanatory variables. If that's not possible (no additional data, or we have no clue as to what variable to include), we need a spatial regression model. There are quite a few choices.
 
-Returning once again to the Columbus crime data, we import the data, fit a linear regression model to statistically explain crime rates using income and housing values. Further, we first need to check whether a spatial model is warranted by testing whether there is significant autocorrelation in the residuals of a regression model.
+Returning again to the Columbus crime data, we import the data, fit a linear regression model to statistically explain crime rates using income and housing values and then check the residuals from the model for autocorrelation.
 
 Get the data and create a map of the explanatory variable.
 ```{r}
@@ -43,7 +43,7 @@ ggplot(CC.sf) +
   geom_sf(mapping = aes(fill = CRIME))
 ```
 
-Create a weights matrix and estimate Moran I on the variable `CRIME`.
+Create a weights matrix and estimate Moran I on the response variable `CRIME`.
 ```{r}
 library(spdep)
 nbs <- poly2nb(CC.sf)
@@ -52,23 +52,28 @@ moran.test(CC.sf$CRIME,
            listw = wts)
 ```
 
-Fit a linear regression model for crime using income and housing values and check the marginal effects.
+There is significant autocorrelation ($p$-value is very small) in the values of crime at the tract level as measured by Moran I.
+
+Next we fit an ordinary least square (OLS) linear regression model to the crime values using income and housing values as explanatory variables, and check the marginal effects. Here we save the model formula as a character string labeled `f` so we can reuse it later with our spatial models.
 ```{r}
 f <- CRIME ~ INC + HOVAL
-model.lm <- lm(formula = f, 
-               data = CC.sf)
-summary(model.lm)
+model.ols <- lm(formula = f, 
+                data = CC.sf)
+summary(model.ols)
 ```
 
-Add the model residuals to the simple feature data frame and compute the residual autocorrelation.
+Tracts with higher income and housing values have lower crime rates. The marginal effect of income on crime holding housing values constant is -1.60 and the marginal effect of housing values holding income constant is -.27. The effects are statistically significant ($p$-values < .15).
+
+Add the vector of model residuals to the simple feature data frame as a column labeled `residuals` and compute the residual autocorrelation using the `lm.morantest()` function.
 ```{r}
-CC.sf$residuals <- residuals(model.lm)
-lm.morantest(model.lm, wts)
+CC.sf$residuals <- residuals(model.ols)
+lm.morantest(model.ols, 
+             listw = wts)
 ```
 
-Moran I on the model residuals is .222. This compares with the value of .5 on the value of crime alone. Part of the autocorrelation in the crime rates is statistically 'absorbed' by the explanatory factors.
+Moran I on the model residuals is .222. This compares with the value of .5 on the value of crime alone. Part of the autocorrelation in the crime rates is 'absorbed' by the explanatory factors.
 
-Autocorrelation in the residuals indicates that a spatial regression model is needed to provide a more precise interpretation of the marginal effects.
+Autocorrelation in the residuals indicates that a spatial regression model is needed to provide a more precise interpretation of the effects of income and housing value on crime in Columbus.
 
 The equation for a regression model in vector notation is
 $$
@@ -76,15 +81,17 @@ y = X \beta + \varepsilon
 $$
 where $y$ is a $n$ by 1 vector of response variable values, $X$ is a $n$ by $p+1$ matrix containing the explanatory variables and augmented by a column of ones for the intercept term, $\beta$ is a $p+1$ $\times$ 1 vector of model coefficients and $\varepsilon$ is a $n$ by 1 vector of residuals (iid).
 
-A couple options exist if the elements of the vector $\varepsilon$ are autocorrelated. One is to include a spatial lag term so the model becomes
+Several options exist if the elements of the vector $\varepsilon$ are autocorrelated. We start by considering the three simplest options.
+
+One is to include a spatial lag term so the model becomes
 $$
 y = \rho W y + X \beta + \varepsilon
 $$
-where $Wy$ is the weighted average of the neighborhood response values (spatial lag variable) with $W$ the spatial weights matrix, and $\rho$ is the autoregression coefficient. This is called a spatial autoregressive (SAR) model.
+where $Wy$ is the weighted average of the neighborhood response values (spatial lag variable) with $W$ the spatial weights matrix, and $\rho$ is the autoregression coefficient. This is sometimes called a spatial autoregressive (SAR) model.
 
-Note: $Wy$ is the spatial lag variable we compute with the `lag.listw()` function and $\rho$ is Moran I. Thus the model is also called a spatial lag model (SLM).
+Note: $Wy$ is the spatial lag variable we compute with the `lag.listw()` function and $\rho$ is Moran I. Thus this model is also called a spatial lag Y model (SLYM).
 
-Justification for the spatial lag model is domain specific but motivated by a diffusion process. The response variable $y_i$ is influenced by the explanatory variables at location $i$ and by explanatory variables at locations $j$.
+Justification for the spatial lag model is motivated by a diffusion process. The response variable $y_i$ is influenced by the explanatory variables at location $i$ and by explanatory variables at locations $j$.
 
 $\rho Wy$ is called the _spatial signal_ term and $\beta X$ is called the _trend_ term.
 
@@ -111,7 +118,9 @@ $$
 z = \lambda W z + r\\
 z = (I - \lambda W)^{-1} r
 $$
-where $r$ is a vector of random independent residuals (e.g., culture is similar but not identical), $W$ is the spatial weights matrix and $\lambda$ is a scalar spatial correlation parameter. Substituting into the equation above
+where $r$ is a vector of random independent residuals (e.g., culture is similar but not identical), $W$ is the spatial weights matrix and $\lambda$ is a scalar spatial correlation parameter. 
+
+Then substituting for $z$ above
 $$
 y = \beta x + \theta z \\
 y = \beta x +   \theta (I - \lambda W)^{-1} r\\
@@ -137,54 +146,54 @@ $$
 y = X\beta + (I - \lambda W)^{-1} \epsilon
 $$
 
-In the absence of domain-specific knowledge of the process that might be responsible for the autocorrelated residuals, we can run some statistical tests on the linear model.
+The choice between a spatial lag model and a spatial error model should be made using domain-specific knowledge. Absent that we can run some statistical tests to help us decide.
 
 The tests are performed with the `lm.LMtests()` function. The `LM` stands for 'Lagrange multiplier' indicating that the technique simultaneously determines the coefficients on the explanatory variables AND the coefficient on the spatial lag variable.
 
 The test type is specified as a character string. The tests should be considered in a sequence starting with the standard versions and moving to the 'robust' versions if the choice remains ambiguous.
 
-To perform LM tests we specify the model object, the weights matrix, and the two model types using the `test =` argument. The model types are specified as character strings `"LMerr"` and `"LMlag"` for the spatial error and lag models, respectively.
+To perform LM tests we specify the model object as the first argument, the weights matrix using the `listw =` argument, and the two model types using the `test =` argument. The model types are specified as character strings `"LMerr"` and `"LMlag"` for the spatial error and lag models, respectively.
 ```{r}
-lm.LMtests(model.lm, 
+lm.LMtests(model.ols, 
            listw = wts, 
            test = c("LMerr", "LMlag"))
 ```
 
 The output shows that both the spatial error and spatial lag models are significant ($p$-value < .15). Ideally one model is significant and the other is not, and we choose the model that is significant.
 
-Since both are significant, we should test again. This time we use the robust forms of the statistics. We do this by using the character strings `"RLMerr"` and `"RLMlag"` in the `test =` argument.
+Since both are significant, we test again this time using the robust forms of the statistics. We do this by using the character strings `"RLMerr"` and `"RLMlag"` in the `test =` argument.
 ```{r}
-lm.LMtests(model.lm, 
+lm.LMtests(model.ols, 
            listw = wts, 
            test = c("RLMerr", "RLMlag"))
 ```
 
-Here the error model has a large $p$-value and the lag model has a $p$-value that is less than .15 so we choose the lag model for our spatial regression.
+Here the error model has a large $p$-value and the lag model has a small $p$-value so we choose the lag model for our spatial regression.
 
-A decision tree (from Luc Anselin) shows the sequence of tests for making a choice about which type of spatial model to use [Decision Tree](http://myweb.fsu.edu/jelsner/temp/SpatialRegressionDecisionTree.png)
+A decision tree shows the sequence of tests for making a choice about which type of spatial model to use [Decision Tree](http://myweb.fsu.edu/jelsner/temp/SpatialRegressionDecisionTree.png)
 
-If both tests show significance for both models, then we can fit both models and check which one results in the lowest information criteria (AIC). Another options is to include both a spatial lag term and a spatial error term.
+## Fitting and interpreting a spatial lag Y model
 
-## Fitting and interpreting a spatial lag model
-
-To fit a spatial lag model to the crime data we use the `lagsarlm()` function. The value for $\rho$ is found first using the `optimize()` function and then the $\beta$'s are obtained using generalized least squares. These functions are now in the {spatialreg} package.
+To fit a spatial lag model to the crime data we use the `lagsarlm()` function. The value for $\rho$ is found first using the `optimize()` function and then the $\beta$'s are obtained using generalized least squares. These functions are in the {spatialreg} package. We save the model object as `model.slym`.
 ```{r}
 if(!require(spatialreg)) install.packages(pkgs = "spatialreg", repos = "http://cran.us.r-project.org")
 
-model.lag <- spatialreg::lagsarlm(formula = f, 
-                                  data = CC.sf, 
-                                  listw = wts)
+model.slym <- spatialreg::lagsarlm(formula = f, 
+                                   data = CC.sf, 
+                                   listw = wts)
 
-summary(model.lag)
+summary(model.slym)
 ```
 
 The first batch of output concerns the model residuals and the coefficients on the explanatory variables. The model residuals are the observed crime rates minus the predicted crime rates.
 
-The coefficients on income and housing have the same sign (negative) and they remain statistically significant. But we these cannot be interpreted as the marginal effects.
+The coefficients on income and housing have the same sign (negative) and they remain statistically significant. But we can not interpret these coefficients as the marginal effects.
 
-The spatial lag model allows for 'spillover'. That is a change in an explanatory variable anywhere in the study domain will affect the value of the response variable everywhere. Spillover occurs even when the neighborhood weights matrix represents simple (1st-order) local contiguity. The spillover makes interpreting the coefficients more complicated.
+The spatial lag model allows for 'spillover'. That is a change in an explanatory variable anywhere in the study domain will affect the value of the response variable _everywhere_. Spillover occurs even when the neighborhood weights matrix represents local contiguity. The spillover makes interpreting the coefficients more complicated.
 
-The spatial lag model implies that for a change in the value of an explanatory variable there are direct and indirect effects on the response variable.
+Note: In _any_ spatial model that contains a lagged response term, the coefficients are not marginal effects.
+
+With a spatial lag model a change in the value of an explanatory variable results in both _direct_ and _indirect_ effects on the response variable.
 
 For example, the direct effect gives the impact a change in income has on crime averaged over all tracts. It takes into account the effects that occur from a change in the $i$th tract's income on crime across neighboring tracts.
 
@@ -194,17 +203,16 @@ The total effect (TE) is the sum of the direct and indirect effects. It measures
 $$
 \hbox{TE} = \left(\frac{\beta_k}{1-\rho^2}\right)\left(1 + \rho\right)
 $$
-where $\beta_k$ is the marginal effect of variable $k$ and $\rho$ is the spatial autocorrelation. With $\rho = 0$ TE is $\beta_k$.
+where $\beta_k$ is the marginal effect of variable $k$ and $\rho$ is the spatial autocorrelation coefficient. With $\rho = 0$ TE is $\beta_k$.
 
-Here $\beta_{INC}$ is -1.0487 so the total effect is
+Here $\beta_{INC}$ is -1.0487 and $\rho$ is .4233, so the total effect is
 ```{r}
 ( TE_INC <- -1.0487 / (1 - .4233^2) * (1 + .4233) )
 ```
-where .4233 is the value for $\rho$.
 
 The direct, indirect, and total effects are shown using the `impacts()` function from the {spatialreg} package.
 ```{r}
-spatialreg::impacts(model.lag, 
+spatialreg::impacts(model.slym, 
                     listw = wts)
 ```
 
@@ -212,98 +220,122 @@ The direct effects are the changes in the response variable of a particular regi
 
 The indirect effects are the changes in the response variable of a particular region arising from a one unit increase in an explanatory variable in another region. For example, due to spatial autocorrelation, a one-unit change in the income variable in region 1 affects the crime rate in regions 2 and 3.
 
-Interpreting the coefficient rho
-
-The next set of output is about the estimate of spatial autocorrelation ($\rho$).  The value is .4233 and a likelihood ratio test gives a value of 9.41 which translates to a $p$-value of .002.  The null hypothesis is the autocorrelation is zero, so we confidently reject it. This is consistent with the significant Moran I value that we found in the linear model residuals.
+The next set of output is about the coefficient of spatial autocorrelation ($\rho$). The value is .4233 and a likelihood ratio test gives a value of 9.41 which translates to a $p$-value of .002.  The null hypothesis is the autocorrelation is zero, so we confidently reject it. This is consistent with the significant Moran I value that we found in the linear model residuals.
 
 Two other tests are performed on the value of $\rho$ including a z-test (t-test) using the asymptotic standard error and a Wald test. Both tests confirm that the lag term should be included in the model.
-
-Overall model fit
 
 The next set of output concerns the overall model fit. It includes the log likelihood value and the AIC (Akaike Information Criterion). The AIC value for the linear model is included. Here it is clear that the spatial lag model is an improvement (smaller AIC) over the aspatial model.
 
 The larger the likelihood, the better the model and two times the difference in log likelihoods from two competing models divided by the number of observations gives a scale for how much improvement.
 ```{r}
-x <- 2 * (logLik(model.lag) - logLik(model.lm))/49
+x <- 2 * (logLik(model.slym) - logLik(model.ols))/49
 x[1]
 ```
+
+Improvement table
 
    1 | huge,
   .1 | large,
  .01 | good,
 .001 | okay
 
-Residual spatial autocorrelation
-
-The final bit of output is a Lagrange multiplier test for residual autocorrelation. The null hypothesis is there is no remaining autocorrelation since we have a lag term in the model. We find a high $p$-value so you are satisfied that the lag term takes care of the autocorrelation.
+The final bit of output is a Lagrange multiplier test for remaining autocorrelation. The null hypothesis is there is no remaining autocorrelation since we have a lag term in the model. We find a high $p$-value so we are satisfied that the lag term takes care of the autocorrelation.
 
 Compare with a spatial error model. Here we use the `errorsarlm()` function.
 ```{r}
-model.error <- errorsarlm(CRIME ~ INC + HOVAL, 
-                          data = CC.sf, 
-                          listw = wts)
-summary(model.error)
+model.sem <- spatialreg::errorsarlm(formula = f, 
+                                    data = CC.sf, 
+                                    listw = wts)
+summary(model.sem)
 ```
 
-Here we find the spatial autoregression ($\lambda$) is significant, but the log likelihood value from the model is smaller (-183.7) and the AIC value is larger (377.5) compared with corresponding values from the lag model. This is consistent with the LM tests indicating the spatial lag model is more appropriate.
+Here we find the coefficient of spatial autocorrelation ($\lambda$) is significant, but the log likelihood value from the model is smaller (-183.7) and the AIC value is larger (377.5) compared with corresponding values from the lag model. This is consistent with the LM tests indicating the spatial lag model is more appropriate.
 
-We compare the log likelihoods from the two spatial regression models and find that the lag model is a good improvement over the error model. This result is consistent with our above decision to use the lag model.
+Also we compare the log likelihoods from the two spatial regression models.
 ```{r}
-x <- 2 * (logLik(model.lag) - logLik(model.error))/49
+x <- 2 * (logLik(model.slym) - logLik(model.sem))/49
 x[1]
 ```
 
-Predictions
+With a value of .04 we conclude that there is good improvement of the lag model over the error model. Again, this is consistent with our above decision to use the lag model.
+
+With the SEM the coefficients can be interpreted as marginal effects like we do with the OLS. 
+
+If there are large differences between the coefficient estimate from SEM and OLS suggests that neither is yielding parameters estimates matching the underlying parameters of the data generating process and calls into question the use of either OLS or SEM for these data.
+
+We test whether there is a significant difference in coefficient estimates with the Hausman test under the hypothesis of no difference.
+```{r}
+Hausman.test(model.sem)
+```
+
+The $p$-value gives suggestive, but inconclusive evidence that the coefficients are different and that maybe the SEM is not the right way to proceed with these data.
 
 The `predict()` method implements the `predict.sarlm()` function to calculate predictions from the spatial regression model. The prediction is decomposed into a "trend" term (explanatory variable effect) and a "signal" term (spatial smoother). The predicted fit is the sum of the trend and the signal terms when using the spatial lag model.
 
 We make predictions with the `predict()` method under the assumption that the mean response is known. We examine the structure of the corresponding predict object.
 ```{r}
-pre <- predict(model.lag)
-str(pre)
+( predictedValues <- predict(model.slym) )
+```
 
+The predicted values are in the column labeled `fit`. They are decomposed into a trend term ($X\beta$) and signal ($\rho W y$) term. The predicted values are the sum of the trend and signal values.
+
+We compare the first five predicted values with the corresponding observed values.
+```{r}
+predictedValues[1:5]
 CC.sf$CRIME[1:5]
 ```
 
-The trend term is $X\beta$ and the signal term is $\rho W y$.
+Some predicted values are lower than the corresponding observed values and some are higher.
 
 The predictions are added to the simple features data frame.
 ```{r}
-CC.sf$fit <- as.numeric(pre)
-CC.sf$trend <- attr(pre, "trend")
-CC.sf$signal <- attr(pre, "signal")
+CC.sf$fit <- as.numeric(predictedValues)
+CC.sf$trend <- attr(predictedValues, "trend")
+CC.sf$signal <- attr(predictedValues, "signal")
 ```
 
 The components of the predictions are mapped and placed on the same page.
 ```{r}
-( g3 <- ggplot() +
+( g1 <- ggplot() +
     geom_sf(data = CC.sf, aes(fill = fit)) +
-    scale_fill_gradient(low = "white", high = "green") +
+    scale_fill_viridis_c() +
     ggtitle("Predicted Crime") )
 
-( g4 <- ggplot() +
+( g2 <- ggplot() +
     geom_sf(data = CC.sf, aes(fill = trend)) +
-    scale_fill_gradient(low = "white", high = "orange") +
-    ggtitle("Trend (Covariate)") )
+    scale_fill_viridis_c() +
+    ggtitle("Trend (Explanatory Variables)") )
 
-( g5 <- ggplot() +
+( g3 <- ggplot() +
     geom_sf(data = CC.sf, aes(fill = signal)) +
-    scale_fill_gradient(low = "white", high = "blue") +
+    scale_fill_viridis_c() +
     ggtitle("Signal") )
 
 library(patchwork)
-g3 + g4 + g5
+g1 + g2 + g3
 ```
 
-The values in the map at the top are the sum of the values in the two maps below. The spatial smoother (signal) is about the same size as the explanatory variable effect especially for the most centrally located tracts.
+The trend term and the spatial smoother terms have similar ranges indicating nearly equal contributions to the predictions. The largest difference between the two terms occurs in the city's east side.
 
-Compare model residuals. How many tracts have a smaller residual when using the lag model versus the aspatial model?
+A map of the difference makes this clear.
 ```{r}
-CC.sf <- CC.sf %>%
-  mutate(residualsL = CRIME - fit,
-         lagWins = abs(residuals) > abs(residualsL))
+library(tmap)
 
-sum(CC.sf$lagWins)
+CC.sf <- CC.sf %>%
+  mutate(CovMinusSmooth = trend - signal)
+
+tm_shape(CC.sf) +
+  tm_fill(col = "CovMinusSmooth")
+```
+
+How many tracts have a smaller residual when using the lag model versus the aspatial model?
+```{r}
+CC.sf %>%
+  mutate(residualsL = CRIME - fit,
+         lagWins = abs(residuals) > abs(residualsL),
+         CovMinusSmooth = trend - signal) %>%
+  st_drop_geometry() %>%
+  summarize(N = sum(lagWins))
 ```
 
 In 32 out of the 49 tracts the residuals from the spatial model are smaller than the residuals from the aspatial model.
@@ -315,25 +347,75 @@ $$
 y = X \beta + WX \theta + \varepsilon
 $$
 
-Now the weights matrix is post multiplied by the matrix of X variables. This is the spatially lagged X model (Durbin model). Here $W$ is again the weights matrix and $\theta$ is a vector of coefficients for each lagged explanatory variable.
+Now the weights matrix is post multiplied by the matrix of X variables. This is called the spatially lagged X model. Here $W$ is again the weights matrix and $\theta$ is a vector of coefficients for each lagged explanatory variable.
 
-We fit the model using the `lmSLX()` function from the {spatialreg} package.
+We fit the model using the `lmSLX()` function from the {spatialreg} package and save the model object as `model.slxm`.
 ```{r}
-( model.slx <- spatialreg::lmSLX(formula = f, 
-                               data = CC.sf, 
-                               listw = wts) )
+( model.slxm <- spatialreg::lmSLX(formula = f, 
+                                  data = CC.sf, 
+                                  listw = wts) )
 ```
 
-Now beside the direct marginal effects of income and housing value on crime we have the spatially lagged indirect effects.
+Now, beside the direct marginal effects of income and housing value on crime, we also have the spatially lagged indirect effects.
 
-In this case, the total effect of income on crime is the sum of the direct effect and indirect effect. Again, using the `impacts()` function we see this.
+The total effect of income on crime is the sum of the direct effect and indirect effect. And again, using the `impacts()` function we see this.
 ```{r}
-spatialreg::impacts(model.slx, listw = wts)
+spatialreg::impacts(model.slxm, listw = wts)
 ```
 
 We get the impact measures and their standard errors, z-values and $p$-values with the `summary()` method applied to the output of the `impacts()` function.
 ```{r}
-summary(spatialreg::impacts(model.slx, listw = wts))
+summary(spatialreg::impacts(model.slxm, listw = wts))
 ```
 
-See also: https://youtu.be/b3HtV2Mhmvk
+We see that income has a significant direct _and_ indirect effect on crime rates, but housing values only a significant direct effect.
+
+Compare R squared values.
+```{r}
+summary(model.ols)$r.squared
+summary(model.slxm)$r.squared
+```
+
+The spatially lagged model has an R squared value that is higher than the R squared value from the linear regression.
+
+## Fitting other spatial models
+
+An updated thinking on how to proceed with finding the correct spatial model is to consider both the spatial Durbin error model (SDEM) and the spatial Durbin model (SDM). 
+
+The SDEM is a SEM with a spatial lag X term added. To fit a SDEM we use the `errorsarlm()` function but include the argument `etype = "emixed"` to ensure that the spatially lagged X variables are added and the lagged intercept term is dropped when the weights style is row standardized (`"W"`).
+```{r}
+( model.sdem <- spatialreg::errorsarlm(formula = f, 
+                                       data = CC.sf, 
+                                       listw = wts,
+                                       etype = "emixed") )
+```
+
+To SDM is a SLYM with a spatial lag X term added. To fit a SDM we use the `lagsarlm()` function but include the argument `type = "mixed"` to ensure that the spatially lagged X variables are added and the lagged intercept term is dropped when the weights style is row standardized (`"W"`).
+```{r}
+( model.sdm <- spatialreg::lagsarlm(formula = f, 
+                                    data = CC.sf, 
+                                    listw = wts,
+                                    type = "mixed") )
+```
+
+How to do we choose between these two? Is the relationship between crime and income and housing values a global or local effect? Is there any reason to think that if something happens in one tract it will spillover across the entire city?  If crime happens in one tract does it influence crime across the entire city? If so, then it is a global relationship. Or should it be a more local effect? If there is more crime in one tract then maybe that influences crime in the neighboring tract but not tracts farther away. If so, then it is a local relationship.
+
+We might think it is a more local relationship. So we start with the spatial Durbin error model and we look at the $p$-values on the direct and indirect effects.
+```{r}
+summary(impacts(model.sdem, listw = wts, R = 500), 
+        zstats = TRUE)
+```
+
+We see that income has is statistically significant direct and indirect effect on crime. Tracts with higher income have lower crime and higher income in neighboring tracts also reduce crime. 
+
+On the other hand, housing values only have a statistically significant direct effect on crime. Tracts with more expensive houses have lower crime but more expensive houses in neighboring tracts do not mean higher (or lower) crime. And the total effect of housing values on crime across the city is not significant. So if housing values go up citywide, there is no statistical evidence that crime will go down (or up).
+
+Likelihood ratio tests. Null hypothesis is that we should restrict the model.
+```{r}
+LR.sarlm(model.sdem, 
+         model.slxm)
+```
+
+The relatively small $p$-values suggests we should NOT restrict the spatial Durbin model to just the spatial lag X model.
+
+See also: https://youtu.be/b3HtV2Mhmvk and https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2420725
