@@ -1,0 +1,502 @@
+---
+title: "Lesson 16"
+author: "James B. Elsner"
+date: "March 3, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+### Example 2: Kansas tornadoes
+
+Let's return to the Kansas tornadoes. One of the first issues I encountered in the field of tornado climatology was reporting 'bias'.
+
+Here we are interested in the intensity of tornado genesis locations in Kansas. Import the data as a simple features data frame and transform the geographic CRS to a web Mercator.
+
+We did this to start the class but here we get all the tornadoes.
+```{r}
+library(sf)
+library(dplyr)
+
+Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
+  st_transform(crs = 3857) %>%
+  filter(st == "KS", mag >= 0) %>%
+  mutate(EF = as.factor(mag)) %>%
+  dplyr::select(EF)
+```
+
+Plot them.
+```{r}
+plot(Torn.sf)
+```
+
+Q: What is wrong?
+
+Instead of filtering by column name we should subset by geometry. We saw how to do this in Lesson 6 with the `st_contains()` (`st_intersection()`) function. Here since we are using the functions in the {spatstat} package we do this by defining the window.
+
+Import the data again, this time keeping all the events with an EF rating. Here we project the geographic CRS to a Lambert conic conformal centered on Kansas (EPSG:6922).
+```{r}
+Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
+  st_transform(crs = 6922) %>%
+  filter(mag >= 0) %>%
+  mutate(EF = as.factor(mag)) %>%
+  dplyr::select(EF)
+```
+
+Next create a spatial window as an `owin` object. We first obtain the Kansas border as a simple feature data frame from the {USAboundaries} package and transform the CRS to that of the tornadoes. We then convert the simple feature object to an S4 `SpatialPolygons` object before converting it to an `owin` object with the `as.owin()` function. Make sure functions from the {maptools} package are available to the current session.
+```{r}
+library(USAboundaries)
+library(maptools)
+
+KS.sf <- us_states(states = "Kansas") %>%
+  st_transform(crs = st_crs(Torn.sf))
+
+KS.sp <- as(KS.sf, "Spatial")
+KS.win <- as(KS.sp, 'owin')
+```
+
+Next convert the tornado simple feature data frame to a `ppp` object with the EF rating as the marks. Again we need to first convert to an S4 class spatial object.
+```{r}
+Torn.sp <- as(Torn.sf, "Spatial")
+
+T.ppp <- as(Torn.sp["EF"], "ppp")
+plot(T.ppp)
+```
+
+Finally subset the event locations by the Kansas border using the subset operator (`[]`).
+```{r}
+T.ppp <- T.ppp[KS.win]
+plot(T.ppp)
+```
+
+Rescale the units from meters to kilometers. Recall that the spatial unit is given in the CRS of the simple feature.
+```{r}
+T.ppp <- spatstat::rescale(T.ppp, 
+                           s = 1000, 
+                           unitname = "km")
+summary(T.ppp)
+```
+
+Caution here about recycling names. If we rerun the above code chunk the scale will change again!
+
+There are 4234 tornado reports with an average intensity of .02 tornadoes per square km over this time period. Nearly 60% of all Kansas tornadoes have been EF0. Only about 1% of tornadoes in Kansas have been 'violent' (EF4 or EF5). The area of the state is 213,168 square km.
+
+We plot the events by magnitude using the `plot()` method together with the `split()` function.
+```{r}
+plot(split(T.ppp))
+```
+
+The number of events varies across the state (see EF4 events for example) but it's difficult to say whether this is due to sampling variation. 
+
+To illustrate this here we compare the EF1 tornado locations with a sample of events generated under the null hypothesis of CSR. 
+
+We first create `Y` as an unmarked `ppp` object of our tornadoes. We do this by subsetting on the marks and using the `unmark()` function. The spatial intensity of the EF1 tornado events is obtained from the `summary()` method. Make a plot to check if things look correct.
+```{r}
+Y <- unmark(T.ppp[T.ppp$marks == 1])
+summary(Y)
+plot(Y)
+```
+
+There are 1044 EF1 tornadoes over the state.
+
+Let `X` be a set of events generated from a homogeneous Poisson process (a model for CSR). Let the intensity of the events be equal to that of the data. Here we use the `rpoispp()` function to generate the event locations and we set `lambda` equal to the intensity of the object `Y` using the same window as `Y`.
+```{r}
+X <- rpoispp(lambda = summary(Y)$intensity, 
+             win = window(Y))
+summary(X)$intensity
+plot(X)
+```
+
+There appears to be some difference.
+
+The `superimpose()` function is used to create a single `ppp` object with marks `Y` and `X`.
+```{r}
+Z <- superimpose(Y = Y, X = X)
+plot(density(split(Z)))
+```
+
+The range of local intensity variations is similar. So we don't have much evidence against the null model of CSR as defined by a homogeneous Poisson process.
+
+### Tornado reports as a function of distance from nearest town
+
+We know that tornado reports are more common near cities and towns. This is especially true in the earlier years of the record. This knowledge is available from the literature on tornadoes (not from the data). It is a well-known artifact of the data set, but it had never been quantified until we did it in 2013 http://myweb.fsu.edu/jelsner/PDF/Research/ElsnerMichaelsScheitlinElsner2013.pdf. 
+
+Here we estimate the intensity as a function of distance from nearest town. 
+
+Import the spatial data frame of city locations. Set and convert the CRS. Filter to exclude cities with fewer than 1000 people.
+```{r}
+download.file("http://myweb.fsu.edu/jelsner/temp/data/ci08au12.zip",
+              "ci08au12.zip")
+unzip("ci08au12.zip")
+
+C.sf <- st_read(dsn = ".",
+                layer = "ci08au12",
+                quiet = TRUE) %>%
+  st_set_crs(4326) %>%
+  st_transform(crs = st_crs(Torn.sf)) %>%
+  filter(POP_1990 >= 1000)
+```
+
+Or instead from the {USAboundariesData} package.
+```{r}
+C.sf <- USAboundaries::us_cities() %>%
+  filter(population >= 1000) %>%
+  st_transform(crs = st_crs(Torn.sf))
+```
+
+Create a `ppp` object of events from the city/town locations given in the `SpatialPointsDataFrame`. Remove the marks and include only events inside the window object (`KS.own`). Convert the spatial units from meters to kilometers.
+```{r}
+C.sp <- as(C.sf, "Spatial")
+
+C.ppp <- as(C.sp, "ppp") 
+C.ppp <- unmark(C.ppp[KS.win])
+C.ppp <- spatstat::rescale(C.ppp, 
+                           s = 1000, 
+                           unitname = "km")
+plot(C.ppp)
+```
+
+Next we compute a 'distance map'. A distance map of a set of events A is the function f whose value f(x) is defined for any point x as the shortest distance from x to any event in A. 
+
+This is done with the `distmap()` function and the points are the intersections of a 128 x 128 regular grid (default).
+```{r}
+Zc <- distmap(C.ppp)
+plot(Zc)
+```
+
+The result is an object of class image (`im`). Distances are in kilometers. Distance-to-nearest town can be used to quantify the population bias in the tornado data.
+
+Other distance functions include `pairdist()`, which is the pairwise distance between all event pairs and `crossdist()`, which is the distance between events from two point patterns. The `nndist()` computes the distance between an event and its nearest neighbor event.
+
+Compute a smoothed estimate of the tornado report intensity as a function of distance to nearest city with the `rhohat()` method. The method assumes the events are a realization from a Poisson process with intensity function $\lambda(u)$ of the form
+$$
+\lambda(u) = \rho[Z(u)]
+$$
+where $Z$ is the spatial explanatory variable (covariate) function (with continuous values) and $\rho(z)$ is a function to be estimated.
+
+The function `rhohat()` estimates the relationship between the point process intensity and a given spatial explanatory variable. Such a relationship is sometimes called a 'resource selection' function (if the events are organisms and the variable is a descriptor of habitat) or a 'prospectivity index' (if the events are mineral deposits and the variable is a geological variable). 
+
+The function does not assume a particular form for the relationship between the point pattern and the variable (thus it is said to be 'non-parametric').
+
+The first argument in `rhohat()` is the `ppp` object for which we want the intensity estimate and the second argument is the spatial variable (`covariate`), here as object of class `im`. By default, smoothing is done using kernel density. 
+
+With `method = "transform"` the smoothing method is variable-bandwidth kernel smoothing, implemented by applying the Probability Integral Transform to the covariate values, yielding values in the range 0 to 1, then applying edge-corrected density estimation on the interval [0, 1], and back-transforming. The `adjust =` argument increases the amount of smoothing when it's greater than one.
+```{r}
+rhat <- rhohat(Y, 
+               covariate = Zc,
+               adjust = 2,
+               method = "transform")
+```
+
+The resulting object (`rhat`) has three classes including a data frame. The data frame contains the explanatory variable as a single vector (`Zc`), an estimate of the intensity at the distances (`rho`), the variance (`var`) and upper (`hi`) and lower (`lo`) uncertainty values (point-wise). 
+```{r}
+head(data.frame(rhat))
+```
+
+Here we put these into a new data frame (`df`) multiplying the intensities by 10,000 (so units are in 100 sq. km) then use `ggplot()` method with a `geom_ribbon()` layer for the uncertainty band.
+```{r}
+df <- data.frame(dist = rhat$Zc, 
+                 rho = rhat$rho * 10000, 
+                 hi = rhat$hi * 10000, 
+                 lo = rhat$lo * 10000)
+
+ggplot(df) +
+  geom_ribbon(aes(x = dist, ymin = lo , ymax = hi), alpha = .3) +
+  geom_line(aes(x = dist, y = rho), color = "red") +  
+  geom_hline(yintercept = 49, color = "blue") +
+  scale_y_continuous(limits = c(0, 100)) +
+  ylab("Tornado Reports (EF1) per 100 sq. km") +
+  xlab("Distance from Nearest Town Center (km)") +
+  theme_minimal()
+```
+
+The vertical axis is the tornado report intensity in units of number per 100 square kilometer. Intensity is greatest nearest to towns as anticipated. 
+
+Compare the functional intensity with the statewide rate of 1044/213168 = .0049 (or 49 tornadoes per 100 sq. km). At zero distance from a town, this number is more than 1.5 times higher (76 tornadoes per 100 sq. km). At distances greater than 30 km from the nearest town the tornado report rate is about 36 tornadoes per 100 sq. km.
+
+The 95% uncertainty band is shown in gray.
+
+The spatial scale is about 10 km (distance along the spatial axis where the red line falls below the blue line).
+
+At this point in our analysis we need to think. The plot look reasonable based on our expectations of a population bias in the tornado reports, but could this result be an artifact of the smoothing algorithm? This is where critical thinking comes in. 
+
+We need to know how to apply statistical tools to accomplish specific tasks. But we also need to question the legitimacy of the results from the tool. This allows us to interpret results in a critical and analytical fashion.
+
+For example, the method should give us a different answer on events that are randomly generated. What would you expect to find?
+
+We've already generated a set of events from a homogeneous Poisson model so we can check simply by applying the `rhohat()` function to these events using the same set of city/town locations.
+```{r}
+rhat0 <- rhohat(X, 
+               covariate = Zc,
+               adjust = 2,
+               method = "transform")
+df <- data.frame(dist = rhat0$Zc, 
+                 rho = rhat0$rho * 10000, 
+                 hi = rhat0$hi * 10000, 
+                 lo = rhat0$lo * 10000)
+ggplot(df) +
+  geom_ribbon(aes(x = dist, ymin = lo , ymax = hi), alpha = .3) +
+  geom_line(aes(x = dist, y = rho), color = "red") +  
+  geom_hline(yintercept = 49, color = "blue") +
+  scale_y_continuous(limits = c(0, 100)) +
+  ylab("Tornado Reports (EF1) per 100 sq. km") +
+  xlab("Distance from Nearest Town Center (km)") +
+  theme_minimal()
+```
+
+The difference between the two point pattern data sets can be explained by the clustering of reports in the vicinity of towns.
+
+### Challenge problem: Tornado reports as a function of distance to nearest city/town
+
+Repeat for another state of your choice. (1) Determine the average EF1+ (EF1 or more damaging) tornado intensity per square kilometer over the state during the period 1950-2017. (2) Plot the spatial varying intensity of these tornadoes using (a) quadrats (10 x 10) and (b) a kernel density smoother. (3) Plot the spatial intensity as a smoothed function of distance to nearest town or city (with populations exceeding 500). Is there a significant population bias in tornado reports? If so, what is the spatial scale of this bias?
+
+## Conditional probability
+
+### Texas tornadoes
+
+Consider EF1 or worse tornadoes occurring over the state of Texas. The EPSG code is for a Texas centric Lambert conic conformal.
+```{r}
+library(sf)
+library(dplyr)
+library(spatstat)
+library(maptools)
+
+Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
+  st_transform(crs = 3082) %>%
+  dplyr::filter(mag >= 0) %>%
+  dplyr::mutate(EF = as.factor(mag)) %>%
+  dplyr::select(EF)
+
+Torn.sp <- as(Torn.sf, "Spatial")
+T.ppp <- as(Torn.sp["EF"], "ppp")
+```
+
+Create the spatial domain (called a 'window' in the {spatstat} parlance) over which the analysis will be done. Here we use the state border of Texas as a simple feature data frame from the {USAboundaries} package. 
+
+We transform the CRS accordingly and convert the simple feature object to an S4 `SpatialPolygons` object before converting it to an `owin` object with the `as.owin()` function. We then subset the tornado events by the `owin` object.
+```{r}
+library(USAboundaries)
+
+W.sf <- us_states(states = "Texas") %>%
+  st_transform(crs = st_crs(Torn.sf))
+
+W.sp <- as(W.sf, "Spatial")
+W <- as(W.sp, 'owin')
+
+T.ppp <- T.ppp[W]
+summary(T.ppp)
+```
+
+There are 8,736 Texas tornadoes of which 368 are EF3+ on the damage-rating scale. 
+
+The spatial unit is one meter. The average intensity is 1.2647e-08 (.000000012647) events per square meter. There are 1e+09 (1 million) square meters in a square kilometer so this works out to 12.6 tornadoes per square kilometer over this 69-year period (1950-2018).
+
+Next we plot the spatial varying intensity using a kernel smoother.
+```{r}
+T.int <- density(T.ppp)
+plot(T.int)
+```
+
+It is clear from this map that the averge spatial intensity of 12.6 tornadoes per square km is too high in southwestern parts of the state and too low in the northern parts. Recall from Lesson 13 that there was not much a spatial trend in tornadoes across Kansas.
+
+Next we compute and plot the spatial intensity as a smoothed function of distance to nearest town or city. 
+
+We start by removing the marks on the tornado events.
+```{r}
+Tum.ppp <- unmark(T.ppp)
+```
+
+Then we use of the spatial data frame of city locations. Import the data, set the CRS, and transform the CRS to match that of the tornadoes. Exclude cities with fewer than 3000 people.
+```{r}
+download.file("http://myweb.fsu.edu/jelsner/temp/data/ci08au12.zip",
+              "ci08au12.zip")
+unzip("ci08au12.zip")
+
+C.sf <- st_read(dsn = ".",
+                layer = "ci08au12",
+                quiet = TRUE) %>%
+  st_set_crs(4326) %>%
+  st_transform(crs = st_crs(Torn.sf)) %>%
+  dplyr::filter(POP_1990 >= 3000)
+```
+
+Then create a `ppp` object of events from the city/town locations. First create an S4 class spatial data frame and convert this data frame to a `ppp` object before removing the marks. Then subset the events by the window.
+```{r}
+C.sp <- as(C.sf, "Spatial")
+C.ppp <- as(C.sp, "ppp")
+C.ppp <- unmark(C.ppp[W])
+plot(C.ppp)
+```
+
+Next create a distance map of the city/town locations using the `distmap()` function.
+```{r}
+Zc <- distmap(C.ppp)
+plot(Zc)
+```
+
+The resulting object an `im` class indicating a pixeled image. Pixel values are distances is meters. Blue indicates locations that are less than 20 km from a city or town with a population of at least 3000.
+
+Finally we compute the spatial varying intensity of tornadoes as a smoothed function of distance to nearest town/city with the `rhohat()` function. We then prepare the output and make a plot.
+```{r}
+library(ggplot2)
+
+rhat <- rhohat(Tum.ppp, 
+               covariate = Zc,
+               adjust = 1.3,
+               method = "transform")
+
+data.frame(dist = rhat$Zc / 1000, 
+           rho = rhat$rho * 10^9, 
+           hi = rhat$hi * 10^9, 
+           lo = rhat$lo * 10^9) %>%
+ggplot() +
+  geom_ribbon(aes(x = dist, ymin = lo , ymax = hi), alpha = .3) +
+  geom_line(aes(x = dist, y = rho), color = "red") +  
+  scale_y_continuous(limits = c(0, NA)) +
+  geom_hline(yintercept = summary(Tum.ppp)$intensity * 10^9, color = "blue") +
+  ylab("Tornado Reports per sq. km") +
+  xlab("Distance from Nearest Town Center (km)") +
+  theme_minimal()
+```
+
+We see that tornado reports are higher than the overall mean in the vicinity of towns and cities. 
+
+However this result is confounded by the trend we saw above. The increasing trend of tornadoes moving from southwest to northeast across the state mirrors the trend in the occurrence of cities/towns.
+
+We can quantify this effect by using a function as the covariate. Here we specify a plane with `x,y` as arguments and `x + y` inside the function.
+```{r}
+plot(rhohat(T.ppp, 
+            covariate = function(x,y){x + y},
+            adjust = 2,
+            method = "transform"))
+```
+
+The spatial varying tornado event intensity increases nonlinearly along the functional axis labeled `X` starting at a value of 7,400,000. At value of `X` equal to about 8,200,000 the spatial intensity stops increasing.
+
+Units along the horizontal axis are meters but the reference (intercept) distance is at the far left. So we interpret the increase in spatial intensity going from southwest to northeast as a change across about 800 km (8200000 - 7400000)/1000).
+
+The spatial varying intensity of cities has the same property (increasing from southwest to northeast then leveling off).
+```{r}
+plot(rhohat(C.ppp, 
+            covariate = function(x,y){x + y},
+            adjust = 2,
+            method = "transform"))
+```
+
+So the population bias towards more reports near towns/cities is confounded by the fact that there tends to be more cities and towns in areas that have conditions more favorable for tornadoes.
+
+Thus we can only get so far by examining intensity estimates if our interest lies in inferring the cause of spatial variation in the intensity. We will need to look at second order properties of the events.
+
+### Conditional probability
+
+Even if we can't use a map showing the spatial varying intensity of event to make inferences about causes, combining such maps allow us to map estimates of relative risks of events. More generally the relative risk is a conditional probability. 
+
+For example given a tornado occurring in Texas what is the chance that it will cause EF3 or worse damage? How can we answer that? For the state as a whole we have the answer from our summary of the `ppp` object.
+```{r}
+summary(T.ppp)
+```
+
+The chance that a tornado anywhere in Texas will be at least EF3 or worse is the sum of the proportions for these types: .03594 + .00549 + .00069 = .042 (or 4.2\%). Or the sum of the intensities for these types divided by the overall intensity (1.264744e-08). 
+
+But as we saw the intensity varies spatially.
+
+We create two `ppp` objects the first one being the set of all tornado locations with damage ratings 0, 1, or 2 and the other the set of all tornado locations with damage ratings 3, 4, or 5.
+
+First we split the object then merge them and assign names as marks.
+```{r}
+H.ppp <- unmark(T.ppp[T.ppp$marks == 2 | T.ppp$marks == 1 | T.ppp$marks == 0])
+I.ppp <- unmark(T.ppp[T.ppp$marks == 3 | T.ppp$marks == 4 | T.ppp$marks == 5])
+T2.ppp <- superimpose(H = H.ppp, I = I.ppp)
+```
+
+The probability that a tornado picked at random is intense (EF3+) is 4%. Plot touchdown locations for the set of intense tornadoes.
+```{r}
+plot(I.ppp, pch = 25, cols = "red", main="")
+plot(T.ppp, add=TRUE, lwd = .1)
+```
+
+To obtain the relative risk we use the `relrisk()` function. If X is a bivariate point pattern (a multitype point pattern consisting of two types of events) then by default, the events of the first type (the first level of `marks(X)`) are treated as controls or non-events, and events of the second type are treated as cases. 
+
+Then the function `relrisk()` computes the spatially-varying probability of a case, (i.e. the probability $p(u)$ that a point at location $u$ will be a case). If `relative = TRUE`, it computes the spatially-varying relative risk of a case relative to a control, $r(u) = p(u)/(1 - p(u))$.
+
+Here we compute the relative risk on a 128 by 128 grid. It takes a few seconds.
+```{r}
+rr <- relrisk(T2.ppp, 
+              dimyx = c(128, 128))
+```
+
+The result is again an object of class `im` (a pixel object with values we can interpret as the conditional probability of an 'intense' tornado, see https://en.wikipedia.org/wiki/Enhanced_Fujita_scale).
+
+We retrieve the range of probabilities with the `range()` function. Note that many of the values are `NA` corresponding pixels that are outside the window so we set `na.rm = TRUE`.
+```{r}
+range(rr, na.rm = TRUE)
+```
+
+The probabilities range from a low of .77% to a high of 6.1%.
+
+County borders from the {map} package (automatically installed with {ggplot2}). It provides maps of the USA, with state and county borders, that can be retrieved and converted as sf objects.
+```{r}
+library(maps)
+
+TX.sf <- map("county", regions = "Texas", plot = FALSE, fill = TRUE) %>%
+  st_as_sf() %>%
+  st_buffer(dist = 0)
+``` 
+
+Create a map. To facilitate plotting the results we convert the resulting `im` object to a raster and set the CRS accordingly.
+```{r}
+library(raster)
+
+rr.r <- raster(rr)
+crs(rr.r) <- st_crs(Torn.sf)$proj4string
+
+library(tmap)
+
+tm_shape(rr.r) +
+  tm_raster(title = "Probability") +
+tm_shape(TX.sf) +
+  tm_borders(col = "gray70") +
+tm_layout(frame = FALSE) +
+  tm_credits(text = "Chance that a random tornado\ndoes at least EF3 damage",
+             size = 1,
+             position = c("left", "bottom")) 
+```
+
+It is of considerable interest to extract these probabilities for specific cities.
+
+Here we use the data frame `us.cities` from the {map} package has a list of US cities with population greater than about 40,000. Also included are state capitals of any population size.
+```{r}
+Cities.sf <- st_as_sf(us.cities, 
+                      coords = c("long", "lat"),
+                      crs = 4326) %>%
+  st_transform(crs = st_crs(Torn.sf)) %>%
+  dplyr::filter(country.etc == "TX")
+```
+
+We use the `extract()` function from the {raster} package to get a single value for each city. We put these values into the simple feature data frame. 
+```{r}
+Cities.sf$rr <- raster::extract(rr.r, Cities.sf)
+
+Cities.sf %>%
+  dplyr::arrange(desc(rr)) 
+```
+
+To put the finishing touch on this analysis we create a chart using the `geom_lollipop()` function from the {ggalt} package.
+```{r}
+library(ggalt)
+library(scales)
+
+Cities.sf <- Cities.sf %>%
+  dplyr::filter(rr > .042)
+
+ggplot(Cities.sf, aes(x = reorder(name, rr), y = rr)) +
+    geom_lollipop(point.colour = "steelblue", point.size = 3) +
+    scale_y_continuous(labels = percent) +
+    coord_flip() +
+    labs(x = "", y = NULL, 
+         title = "Chance that a random tornado will do at least EF3 damage",
+         subtitle = "Cities in Texas with a 2010 population > 40,000",
+         caption = "Data from SPC") +
+  theme_minimal()
+```

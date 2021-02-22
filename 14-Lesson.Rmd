@@ -10,6 +10,107 @@ editor_options:
 
 **"We build our computer systems the way we build or cities; over time, without plan, on top of ruins."** – Ellen Ullman
 
+## Fitting other spatial regression models
+
+```{r}
+library(sf)
+if(!"columbus" %in% list.files()){
+download.file("http://myweb.fsu.edu/jelsner/temp/data/columbus.zip",
+              "columbus.zip")
+unzip("columbus.zip")
+}
+
+CC.sf <- read_sf(dsn = "columbus", 
+                 layer = "columbus")
+
+f <- CRIME ~ INC + HOVAL
+model.ols <- lm(formula = f, 
+                data = CC.sf)
+```
+
+Tracts with higher income and housing values have lower crime rates. The marginal effect of income on crime holding housing values constant is -1.60 and the marginal effect of housing values holding income constant is -.27. The effects are statistically significant ($p$-values < .15).
+
+We considered the spatial lag Y model and the spatial error model last time. Another option is to include spatially-lagged explanatory variables.
+$$
+y = X \beta + WX \theta + \varepsilon
+$$
+
+Now the weights matrix is post multiplied by the matrix of X variables. This is called the spatially lagged X model. Here $W$ is again the weights matrix and $\theta$ is a vector of coefficients for each lagged explanatory variable.
+
+We fit the model using the `lmSLX()` function from the {spatialreg} package and save the model object as `model.slxm`.
+```{r}
+library(spatialreg)
+
+nbs <- poly2nb(CC.sf)
+wts <- nb2listw(nbs)
+
+( model.slxm <- spatialreg::lmSLX(formula = f, 
+                                  data = CC.sf, 
+                                  listw = wts) )
+```
+
+Now, beside the direct marginal effects of income and housing value on crime, we also have the spatially lagged indirect effects.
+
+The total effect of income on crime is the sum of the direct effect and indirect effect. And again, using the `impacts()` function we see this.
+```{r}
+spatialreg::impacts(model.slxm, listw = wts)
+```
+
+We get the impact measures and their standard errors, z-values and $p$-values with the `summary()` method applied to the output of the `impacts()` function.
+```{r}
+summary(spatialreg::impacts(model.slxm, listw = wts))
+```
+
+We see that income has a significant direct _and_ indirect effect on crime rates, but housing values only a significant direct effect.
+
+Compare R squared values.
+```{r}
+summary(model.ols)$r.squared
+summary(model.slxm)$r.squared
+```
+
+The spatially lagged model has an R squared value that is higher than the R squared value from the linear regression.
+
+Updated thinking on how to proceed with finding the correct spatial model is to consider both the spatial Durbin error model (SDEM) and the spatial Durbin model (SDM). 
+
+The SDEM is a SEM with a spatial lag X term added. To fit a SDEM we use the `errorsarlm()` function but include the argument `etype = "emixed"` to ensure that the spatially lagged X variables are added and the lagged intercept term is dropped when the weights style is row standardized (`"W"`).
+```{r}
+( model.sdem <- spatialreg::errorsarlm(formula = f, 
+                                       data = CC.sf, 
+                                       listw = wts,
+                                       etype = "emixed") )
+```
+
+To SDM is a SLYM with a spatial lag X term added. To fit a SDM we use the `lagsarlm()` function but include the argument `type = "mixed"` to ensure that the spatially lagged X variables are added and the lagged intercept term is dropped when the weights style is row standardized (`"W"`).
+```{r}
+( model.sdm <- spatialreg::lagsarlm(formula = f, 
+                                    data = CC.sf, 
+                                    listw = wts,
+                                    type = "mixed") )
+```
+
+How to do we choose between these two? Is the relationship between crime and income and housing values a global or local effect? Is there any reason to think that if something happens in one tract it will spillover across the entire city?  If crime happens in one tract does it influence crime across the entire city? If so, then it is a global relationship. Or should it be a more local effect? If there is more crime in one tract then maybe that influences crime in the neighboring tract but not tracts farther away. If so, then it is a local relationship.
+
+We might think it is a more local relationship. So we start with the spatial Durbin error model and we look at the $p$-values on the direct and indirect effects.
+```{r}
+summary(impacts(model.sdem, listw = wts, R = 500), 
+        zstats = TRUE)
+```
+
+We see that income has a statistically significant direct and indirect effect on crime. This means that tracts with higher income have lower crime and tracts whose _neighboring tracts_ have higher income also have lower crime. 
+
+On the other hand, housing values have only a statistically significant direct effect on crime. Tracts with more expensive houses have lower crime but tracts whose neighboring tracts have more expensive houses do not imply lower crime. And the total effect of housing values on crime across the city is not significant. So if housing values go up in tracts citywide, there is no statistical evidence that crime will go down (or up).
+
+Likelihood ratio tests. Null hypothesis is that we should restrict the model.
+```{r}
+LR.sarlm(model.sdem, 
+         model.slxm)
+```
+
+The relatively small $p$-value suggests we should NOT restrict the spatial Durbin model to just the spatial lag X model.
+
+See also: https://youtu.be/b3HtV2Mhmvk and https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2420725
+
 ## Fitting and interpreting geographic regressions
 
 Another approach to modeling spatial data is to assume that the relationships between the response variable and the explanatory variables are modified by contextual factors that depend on location. We fit a separate regression model at each geographic location. This is similar to local measures of spatial autocorrelation where we estimate the statistic at each location.
@@ -22,20 +123,7 @@ GWR is used in epidemiology, particularly for research on infectious diseases an
 
 Linear regression is a model for the conditional mean. The mean of the response variable depends on the explanatory variable(s). Geographic regressions show how this dependency varies by location. It is an exploratory technique intended to indicate where local regression coefficients are different from the global values.
 
-Let's see how this works on the Columbus crime data.
-```{r}
-library(sf)
-if(!"columbus" %in% list.files()){
-download.file("http://myweb.fsu.edu/jelsner/temp/data/columbus.zip",
-              "columbus.zip")
-unzip("columbus.zip")
-}
-
-CC.sf <- read_sf(dsn = "columbus", 
-                 layer = "columbus")
-```
-
-We start by fitting a 'global' regression for the crime rates using income and housing values.
+Continuing wit the Columbus crime data, we start by fitting a 'global' regression for the crime rates using income and housing values.
 ```{r}
 f <- CRIME ~ INC + HOVAL
 ( model.lm <- lm(formula = f,
@@ -154,273 +242,131 @@ ggplot(CC.sf) +
 
 Although crime rates are highest in the center of the city, the relationship between crime and income and housing values is largest across the eastern part of the city.
 
-## Another example: Southern homicides
+When we use a regression model to fit data that vary spatially we are assuming an underlying stationary process. This means we believe the explanatory variables 'provoke' the same statistical response across the entire domain. If this is not the case then it shows up in a map of correlated residuals. One approach to investigate things further is to use geographic regression.
 
-The file `south.zip` contains shapefiles with homicide rates and explanatory variables for counties in the southern United States. Download and unzip the file, then import the data using the `read_sf()` from the {sf} package. The data have latitude/longitude coordinates but there is no projection so we set the CRS to long-lat with the `st_crs()` function.
+## Disease mapping
+
+Spatial regression models are often used to map the spread of diseases. It is typical to use a standardized incidence ratio (SIR) defined as the ratio of the observed to the _expected_ number of disease cases. Small areas can give extreme SIRs due to low population sizes or small samples. Extreme values of SIRs may be misleading and unreliable for reporting.
+
+In these cases it is better to estimate disease risk using a spatial regression model. Models can incorporate information from neighboring areas and covariate information resulting in smoothing (shrinking) of extreme values.
+
+Consider data of lung cancer cases in Pennsylvania counties from the {SpatialEpi} package. The county boundaries for the state are in the list object `pennLC` with element name `spatial.polygon`. We change the native spatial polygons S4 object to an S3 simple feature data frame using the `st_as_sf()` function from the {sf} package and display a map of the counties.
 ```{r}
-download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/south.zip",
-              destfile = "south.zip")
-unzip("south.zip")
+if(!require(SpatialEpi)) install.packages("SpatialEpi", repos = "http://cran.us.r-project.org")
+library(SpatialEpi)
 
-library(sf)
+LC.sp <- pennLC$spatial.polygon
+LC.sf <- st_as_sf(LC.sp)
 
-SH.sf <- st_read(dsn = "south", 
-                 layer = "south") %>%
-  st_set_crs(4326)
-names(SH.sf)
-```
-
-Each row is a separate U.S. county in the southeast. There are 1412 counties.
-
-We are interested in predicting homicide rates (`HR`) given as the number of homicides per 100,000 people. And we consider five explanatory variables including `RD`: resource deprivation index, `PS`: population structure index, `MA`: marriage age, `DV`: divorce rate, and `UE`: unemployment rate. The two digit number appended to the column names is the census year from the 20th century.
-
-To see the extent of the data and the spatial geometries make a plot of the county borders.
-```{r}
-library(ggplot2)
-
-ggplot(SH.sf) +
+ggplot(LC.sf) +
   geom_sf()
 ```
 
-We reduce the number of variables in the data frame keeping only the ones of interest using the `select()` function from the {dplyr} package.
-```{r}
-library(tidyverse)
+For each region $i$, $i = 1, \ldots, n$ the SIR is defined as the ratio of observed counts to the expected counts
+$$
+\hbox{SIR}_i = Y_i/E_i.
+$$
 
-SH.sf <- SH.sf %>%
-  dplyr::select(HR90, RD90, PS90, MA90, DV90, UE90)
+The expected count $E_i$ is the total number of cases that one would expect if the population of area $i$ behaves the way the standard population behaves. If we ignore differences in rates for different stratum (e.g., age groups) then we compute the expected counts as
+$$
+E_i = r^{(s)} n^{(i)},
+$$
+where $r^{(s)}$ is the rate in the standard population (total number of cases divided by the total population across all regions), amd $n^{(i)}$ is the population of region $i$.
+
+Then $\hbox{SIR}_i$ indicates whether region $i$ has higher ($\hbox{SIR}_i > 1$), equal ($\hbox{SIR}_i = 1$) or lower ($\hbox{SIR}_i < 1$) risk than expected relative to the standard population.
+
+When applied to mortality data, the ratio is known as the standardized mortality ratio (SMR).
+
+The data frame `pennLC$data` from the {SpatialEpi} package contains the number of lung cancer cases and the population of Pennsylvania at county level, stratified on race (white and non-white), gender (female and male) and age (under 40, 40-59, 60-69 and 70+). 
+
+We obtain the number of cases for all the strata together in each county by aggregating the rows of `pennLC$data` by county and adding up the number of cases.
+```{r}
+County.df <- pennLC$data %>%
+  group_by(county) %>%
+  summarize(Y = sum(cases))
+head(County.df)
 ```
 
-We create a thematic map of the homicide rates from the 1990 census (`HR90`).
-```{r}
-library(tmap)
+We calculate the expected number of cases in each county using indirect standardization. The expected counts in each county represent the total number of disease cases one would expect if the population in the county behaved the way the population of Pennsylvania behaves. We can do this by using the `expected()` function from the {SpatialEpi} package. This function has three arguments, namely,
 
-tm_shape(SH.sf) +
-  tm_fill("HR90", title = "1990\nHomicide Rates\n[/100,000]") +
-  tm_layout(legend.outside = TRUE)
+* `population`: vector of population counts for each strata in each area,
+* `cases`: vector with the number of cases for each strata in each area,
+* `n.strata`: number of strata.
+
+The vectors `population` and `cases` need to be sorted by area first and then, within each area, the counts for all strata need to be listed in the same order. All strata need to be included in the vectors, including strata with 0 cases. Here we use the `arrange()` function from the {dplyr} package.
+```{r}
+Strata.df <- pennLC$data %>%
+  arrange(county, race, gender, age)
+head(Strata.df)
 ```
 
-We start with a linear regression model where we regress homicide rate onto resource deprivation, population structure, marriage age, divorce rate, and unemployment rate.
+Then, we obtain the expected counts E in each county by calling the `expected()` function from the {SpatialEpi} package where we set population equal to `Strata.df$population` and cases equal to `Strata.df$cases`. There are 2 races, 2 genders and 4 age groups for each county, so number of strata is set to 2 x 2 x 4 = 16.
 ```{r}
-model.lm <- lm(HR90 ~ RD90 + PS90 + MA90 + DV90 + UE90, 
-               data = SH.sf)
-summary(model.lm)
+( E <- expected(
+  population = Strata.df$population,
+  cases = Strata.df$cases, 
+  n.strata = 16
+) )
 ```
 
-We see that RD, PS, and DV have a positive relationship to HR while MA and UE have a negative relationship. 
-
-Based on the $p$-values on the coefficients we suspect the model can be simplified by removing marriage age (MA). We check this supposition with the `drop1()` function.
+Now we add the observed count `Y`, the expected count `E` the computed SIR to `sfdf` and make a map of SIR.
 ```{r}
-drop1(model.lm)
+LC.sf <- LC.sf %>%
+  mutate(Y = County.df$Y,
+         E = E,
+         SIR = Y/E)
+
+ggplot(LC.sf) + 
+  geom_sf(aes(fill = SIR)) +
+  scale_fill_gradient2(midpoint = 1, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red") +
+  theme_minimal()
 ```
 
-The single term delection table shows that when marriage age (`MA90`) is removed from the model the RSS (residual sum of squares) value increases by 35.2 units. This increase is not sufficient to justify the loss in the degrees of freedom by keeping it in the model. This is seen by an AIC value that is lower (4998.7) than the AIC when all terms are retained (4999.7) (see the row labeled `<none>`). 
+Counties with SIR = 1 (color white) the number of lung cancer cases observed is the same as the number of expected cases. In counties where SIR > 1 (color red), the number of lung cancer cases observed is higher than the expected cases. Counties where SIR < 1 (color blue) have fewer lung cancer cases observed than expected.
 
-Recall: The AIC is a way to balance the tradeoff between bias and variance. Choose a model that has the lowest AIC. A model may have too much bias (toward the particular dataset) if it has too many parameters and a model may have too much residual variance if there are too few parameters.
+With rare diseases in regions with few people, the expected counts may be very low and SIRs may be misleading. Therefore, it is preferred to estimate disease risk by using models that borrow information from neighboring areas, and incorporate covariate information. This results in smoothing (shrinkage) of extreme values.
 
-We therefore remove marriage age and refit the mode.
-```{r}
-model.lm2 <- lm(HR90 ~ RD90 + PS90 + DV90 + UE90, 
-               data = SH.sf)
+Let the observed counts $Y$ be modeled with a Poisson distribution having a mean $E\theta$, where $E$ are the expected counts and $\theta$ are the relative risks. The logarithm of the relative risk is expressed as the sum of an intercept that models the overall disease risk level, and random effects to account for local variability.
+
+The relative risk quantifies whether an area has a higher ($\theta > 1$) or lower ($\theta < 1$) risk than the average risk in the population. For example if $\theta_i = 2$, then the risk in area $i$ is twice the average risk in the population.
+
+The model is expressed as
+$$
+Y \sim \hbox{Poisson}(E\theta) \\
+\log(\theta) = \alpha + u + v
+$$
+
+The parameter $\alpha$ represents the overall risk in the region of study, $u$ is the spatially structured random effect representing the dependency in risk across neighboring areas (spatial autocorrelation), and $v$ is the uncorrelated random noise modeled as $v \sim N(0, \sigma_v^2)$.
+
+It is common to include explanatory variables to quantify risk factors (e.g., distance to nearest coal plant). Thus the log($\theta$) is expressed as
+$$
+\log(\theta) = \alpha + X\beta + u + v
+$$
+where $X$ are the explanatory variables and $\beta$ are the associated coefficients. A coefficient is interpreted such that a one-unit increase in the explanatory variable value changes the relative risk by a factor $\exp(\beta)$, holding the other variables constant.
+
+A popular form for the combined spatially structured random effect and the uncorrelated random effect is the Besag-York-Mollié (BYM) model which assigns a conditional autoregressive distribution to $u$ as
+$$
+u | u_{j \ne i} \sim N(\bar u_{\delta}, \frac{\sigma_u^2}{n_{\delta}})
+$$
+where $\bar  u_{\delta_i} = \Sigma_{j \in \delta_i} u_j/n_{\delta_i}$ and where $\delta_i$ is the set of neighbors of area $i$ and $n_{\delta_i}$ is the number of neighbors of area $i$.
+
+In words, the logarithm of the disease incidence rate in area $i$ conditional on the incidence rates in the neighborhood of $i$ is modeled with a normal distribution centered on the neighborhood average ($\bar  u_{\delta_i}$) with a variance scaled by the number of neighbors. This is called the conditional autoregressive (CAR) distribution.
+
+More info: https://www.paulamoraga.com/book-geospatial/sec-geostatisticaldataexamplespatial.html
+
+The syntax for the BYM model in INLA is given as
+```{r eval=FALSE}
+formula <- Y ~
+  f(ID_u, model = "besag", graph = g, scale.model = TRUE) +
+  f(ID_v, model = "iid")
 ```
 
-The new model (`model.lm2`) can't be simplified further using this criteria.
-```{r}
-drop1(model.lm2)
-```
+The formula includes the response in the left-hand side, and the fixed and random effects on the right-hand side. By default, the formula includes an intercept. 
 
-All the AIC values below the first row are above those in the first row.
+The random effects are set using `f()` with parameters equal to the name of the index variable, the model, and other options. The BYM formula includes a spatially structured random effect with index variable with name `ID_u` and equal to c(1, 2, ..., I), and model `"besag"` with a CAR distribution and with neighborhood structure given by the graph `g`. The option `scale.model = TRUE` is used to make the precision parameter of models with different CAR priors comparable. 
+The formula also includes an uncorrelated random effect with index variable with name `ID_v` again equal to c(1, 2, ..., I), and model "iid". This is an independent and identically distributed zero-mean normally distributed random effect. Note that both the `ID` variables are identical but need to be specified as two different objects since R-INLA does not allow to include two effects with `f()` that use the same index variable. 
 
-Next we map the predicted values after adding them to the simple features data frame. The predicted values from the model object are extracted with the `predict()` method.
-```{r}
-SH.sf$predLM2 <- predict(model.lm2)
-head(cbind(SH.sf$HR90, SH.sf$predLM))
-```
-
-The first column printed to the console is the actual homicide rates in the first six counties and the second column printed is the predicted homicide rate from the linear regression model. The predictions do not appear to be very good.
-
-A scatter plot of the observed versus the predicted shows this clearly.
-```{r}
-ggplot(SH.sf, aes(x = HR90, y = predLM2)) +
-  geom_point() +
-  geom_abline(slope = 1) +
-  geom_smooth(method = lm, se = FALSE)
-```
-
-Since the homicide rates are non-negative, transforming them to logarithms is a good idea.
-
-We create a new column in the `homicides.sf` data from called `logHR90`. Since there are some counties with no homicides we change that to the minimum observed value before taking logarithms. Here we first create a logical vector `x` corresponding to the rows with non-zero homicide rates. We then find the minimum non-zero rate and assign it to `e`. Next we subset on this value for all rates equal to zero and finally we create a new column as the logarithm of the non-zero rates.
-```{r}
-x <- SH.sf$HR90 != 0
-e <- min(SH.sf$HR90[x])
-SH.sf$HR90[!x] <- e
-SH.sf$logHR90 <- log(SH.sf$HR90)
-```
-
-We then fit a model with `logHR90` as our response variable.
-```{r}
-model.lm3 <- lm(logHR90 ~ RD90 + PS90 + DV90 + UE90, 
-                data = SH.sf)
-summary(model.lm3)
-```
-
-We again compute the predicted values and include them in the data frame as `predLM3`. The predictions are on the natural logarithm scale so we use the exponential function `exp()`. We then create a scatter plot of the observed versus predicted as before.
-```{r}
-SH.sf$predLM3 <- exp(predict(model.lm3))
-
-ggplot(SH.sf, aes(x = HR90, y = predLM3)) +
-  geom_point() +
-  geom_abline(slope = 1) +
-  geom_smooth(method = lm, se = FALSE)
-```
-
-The range of predicted values is much better.
-
-It is likely that homicide rates are similiar in neighboring counties. It also might be the case that the similarity is statistically explained by the  variables in the model.
-
-So our next step it to test for significant autocorrelation in the model residuals. We create a weights matrix using the functions from the {spdep} package and then use the `lm.morantest()` function.
-```{r}
-library(spdep)
-
-nbs <- poly2nb(SH.sf)
-wts <- nb2listw(nbs)
-
-lm.morantest(model.lm3, wts)
-```
-
-Moran I is .11 but significant ($p$-value < .001).
-
-Put the residuals on a map. First add the residuals as a column in the simple feature data frame.
-```{r}
-SH.sf$res3 <- residuals(model.lm3)
-
-tm_shape(SH.sf) +
-  tm_fill("res3", title = "Model\nResiduals") +
-  tm_layout(legend.outside = TRUE)
-```
-
-There are small clusters of counties with positive residuals and other small clusters of negative residuals. Interestingly the pattern of these clusters appears to be different over western and northern areas compared to the deep South.
-
-This suggests that the _relationships_ between homicide rates and the socioeconomic factors might vary across the domain. GWR is a procedure to fit local regression models.
-
-We do this with functions from the {spgwr} package. The geometry information in simple feature data frames is not accessible by functions in this package so we need to create a new S4 spatial data frame.
-```{r}
-SH.sp <- as(SH.sf, "Spatial")
-```
-
-The spatial information in the `SH.sp` is separated from the data frame (attribute table) but accessible by the functions `gwr.sel()` and `gwr()`. The variables remain the same.
-
-We obtain the optimal bandwidth with the `gwr.sel()` function specifying the model and the data object. Since the CRS is geographic we use the argument `longlat = TRUE` to get the distances in kilometers.
-```{r}
-if(!require(spgwr)) install.packages(pkgs = "spgwr", repos = "http://cran.us.r-project.org")
-
-library(spgwr)
-
-bw <- gwr.sel(formula = logHR90 ~ RD90 + PS90 + DV90 + UE90, 
-              data = SH.sp,
-              longlat = TRUE)
-```
-
-The bandwidth is assigned to the object `bw` as a single value.
-
-Unfortunately we cannot use neighborhoods defined by contiguity. But to get a sense of what this bandwidth distance means in terms of the average number of neighbors per county we note that one-half the distance squared times pi is the area captured by the bandwidth.
-```{r}
-( bwA <- pi * (bw * 1000 /2)^2 ) 
-```
-
-In units of square meters. Or 21,519 square kilometers.
-
-County areas are computed using the `st_area()` function. The average size of the counties and the ratio of the bandwidth area to the average county area is also computed.
-```{r}
-areas <- st_area(SH.sf)
-ctyA <- mean(areas)
-bwA/ctyA
-```
-
-The ratio indicates that, on average, a neighborhood consists of 13 counties. For comparison, on a raster there are 8 first-order neighboring cells (queen contiguity) and 16 second-order neighboring cells (neighbors of neighbors) or a total of 24 neighbors.
-
-We then use the `gwr()` function to includes the formula, data, and the `bandwith =` argument.
-```{r}
-model.gwr <- gwr(formula = logHR90 ~ RD90 + PS90 + DV90 + UE90, 
-                 data = SH.sp, 
-                 bandwidth = bw)
-```
-
-The model and observed data are assigned to list object with element names extracted with the `names()` function.
-```{r}
-names(model.gwr)
-```
-
-The first element of the list named `SDF` contains the model output as a S4 spatial class data frame. The geometry of the spatial data frame is inherited from the type of data frame specified in the `data = ` argument.
-
-The structure of the S4 spatial class is obtained with the `str()` function and by setting the `max.level` argument to 2.
-```{r}
-str(model.gwr$SDF, max.level = 2)
-```
-
-Here we see there are 5 slots with the first slot being the attribute table labeled `@data`. The dimension of the attribute table is retrieved with the `dim()` function.
-```{r}
-dim(model.gwr$SDF)
-```
-
-There are 1412 rows and 9 columns. Each row corresponds to a county and information about the regression localized to the county is given in the columns. The attribute names are extracted with the `names()` function.
-```{r}
-names(model.gwr$SDF)
-```
-
-We put the predictions into the `SH.sf` simple feature data frame with the column name `predGWR`.
-```{r}
-SH.sf$predGWR <- exp(model.gwr$SDF$pred)
-
-tm_shape(SH.sf) +
-  tm_fill("predGWR", title = "Predicted\nHomicide Rates\n[/100,000]") +
-  tm_layout(legend.outside = TRUE)
-```
-
-The geographic regressions similarly capture the spatial pattern of homicides across the south. The spread of predicted values matches the observed spread better than the linear model. The pattern is also a smoother.
-
-With many more model parameters metrics of predictive skill will favor the geographic regression. For example, the root mean-square-error is lower for GWR.
-```{r}
-sqrt(sum(residuals(model.lm3)^2))
-sqrt(sum(model.gwr$SDF$gwr.e^2))
-```
-
-Geographic regression is valuable for generating hypothesis. From the linear model we saw that homicide rates increased with resource deprivation. How does this relationship vary across the South.
-```{r}
-coef(model.lm3)[2]
-range(model.gwr$SDF$RD90)
-```
-
-The global regression coefficient is .51 but locally the coefficients range from 0.08 to .98.
-
-Importantly we can map where resource deprivation has the most influence on the response variable.
-```{r}
-SH.sf$RDcoef <- model.gwr$SDF$RD90
-
-tm_shape(SH.sf) +
-  tm_fill("RDcoef", title = "Resource\nDeprivation\nCoefficient", palette = 'Blues') +
-  tm_layout(legend.outside = TRUE)
-```
-
-All values are above zero, but areas in darker blue indicate where resource deprivation plays a stronger role in explaining homicide rates.
-
-How about the unemployment rate?
-```{r}
-SH.sf$UEcoef <- model.gwr$SDF$UE90
-
-tm_shape(SH.sf) +
-  tm_fill("UEcoef", title = "Unemployment\nCoefficient", palette = 'PiYG') +
-  tm_layout(legend.outside = TRUE)
-```
-
-While the global coefficient is negative indicating homicide rates tend to be lower in areas with more unemployment, the opposite is the case over much of Texas into Oklahoma.
-
-Where does the model for homicide rates provide the best fit to the data? This is answered with a map of local R squared values (`localR2`).
-```{r}
-SH.sf$localR2 <- model.gwr$SDF$localR2
-
-tm_shape(SH.sf) +
-  tm_fill("localR2", title = "Local\nR Squared", palette = 'Purples') +
-  tm_layout(legend.outside = TRUE)
-```
-
-When we use a regression model to fit data that vary spatially we are assuming an underlying stationary process. This means we believe the explanatory variables 'provoke' the same statistical response across the entire domain. If this is not the case then it shows up in a map of correlated residuals. One approach to investigate things further is to use geographic regression. Another approach is to use a single spatial regression model.
+The BYM model can also be specified with the model "bym" which defines both the spatially structured random effect and the uncorrelated random effect ($u$ and $v$).

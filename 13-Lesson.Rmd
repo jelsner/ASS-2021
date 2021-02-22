@@ -271,7 +271,7 @@ Hausman.test(model.sem)
 
 The $p$-value gives suggestive, but inconclusive evidence that the coefficients are different and that maybe the SEM is not the right way to proceed with these data.
 
-The `predict()` method implements the `predict.sarlm()` function to calculate predictions from the spatial regression model. The prediction is decomposed into a "trend" term (explanatory variable effect) and a "signal" term (spatial smoother). The predicted fit is the sum of the trend and the signal terms when using the spatial lag model.
+The `predict()` method implements the `predict.sarlm()` function to calculate predictions from the spatial regression model. The prediction on a spatial lag Y model is decomposed into a "trend" term (explanatory variable effect) and a "signal" term (spatial smoother). The predicted fit is the sum of the trend and the signal terms when using the spatial lag model.
 
 We make predictions with the `predict()` method under the assumption that the mean response is known. We examine the structure of the corresponding predict object.
 ```{r}
