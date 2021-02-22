@@ -3,6 +3,7 @@ title: "Lesson 13"
 author: "James B. Elsner"
 date: "February 22, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -10,7 +11,7 @@ editor_options:
 
 **"When I'm explaining some of the tidy verse principles and philosophy in R statistics, I often break down a home baked chunk of code and illustrate that 'it says what it does and it does what it says.'** --- Diane Beldame
 
-To get started working with {tidycensus}, load the package along with the {tidyverse} package, and set your Census API key. A key can be obtained from http://api.census.gov/data/key_signup.html.
+Last week it came to my attention that I forgot to tell you that downloading U.S. census data using functions from the {tidycensus} package requires you register with the Census Bureau. You can get an API key from http://api.census.gov/data/key_signup.html. Then use the `census_api_key()` function and put your key in quotes.
 ```{r}
 library(tidycensus)
 library(tidyverse)
@@ -20,13 +21,13 @@ census_api_key("YOUR API KEY GOES HERE")
 
 ## Choosing between a spatial lag and a spatial error regression model
 
-Regression models fit to spatial data can lead to improper inference (and thus poor decisions) because observations are not statistically independent. Thus we always need to check the residuals from our model for autocorrelation. If the residuals are correlated the model is not specified properly.
+Regression models fit to spatial data can lead to improper inference (which might lead to poor policy decisions) because observations are not statistically independent. Thus we always need to check the residuals from our model for autocorrelation. If the residuals are correlated the model is not specified properly.
 
-We can try improving model specification by adding explanatory variables. If that's not possible (no additional data, or we have no clue as to what variable to include), we need a spatial regression model. There are quite a few choices.
+We can try to improve the model specification with additional explanatory variables. If that's not possible (no additional data, or we have no clue what variable to include), we need a spatial regression model. There are several choices.
 
-Returning again to the Columbus crime data, we import the data, fit a linear regression model to statistically explain crime rates using income and housing values and then check the residuals from the model for autocorrelation.
+Let's return to the Columbus crime data. We import the data, fit a linear regression model to statistically explain crime rates using income and housing values and then check the residuals from the model for autocorrelation.
 
-Get the data and create a map of the explanatory variable.
+First, get the data and create a map of the explanatory variable.
 ```{r}
 library(sf)
 if(!"columbus" %in% list.files()){
@@ -43,7 +44,7 @@ ggplot(CC.sf) +
   geom_sf(mapping = aes(fill = CRIME))
 ```
 
-Create a weights matrix and estimate Moran I on the response variable `CRIME`.
+The create a weights matrix and estimate Moran I on the response variable `CRIME`.
 ```{r}
 library(spdep)
 nbs <- poly2nb(CC.sf)
@@ -54,7 +55,7 @@ moran.test(CC.sf$CRIME,
 
 There is significant autocorrelation ($p$-value is very small) in the values of crime at the tract level as measured by Moran I.
 
-Next we fit an ordinary least square (OLS) linear regression model to the crime values using income and housing values as explanatory variables, and check the marginal effects. Here we save the model formula as a character string labeled `f` so we can reuse it later with our spatial models.
+Next fit an ordinary least square (OLS) linear regression model to the crime values using income and housing values as explanatory variables, and check the marginal effects. Here we save the model formula as a character string labeled `f` so we can reuse it later with our spatial models.
 ```{r}
 f <- CRIME ~ INC + HOVAL
 model.ols <- lm(formula = f, 
@@ -83,39 +84,39 @@ where $y$ is a $n$ by 1 vector of response variable values, $X$ is a $n$ by $p+1
 
 Several options exist if the elements of the vector $\varepsilon$ are autocorrelated. We start by considering the three simplest options.
 
-One is to include a spatial lag term so the model becomes
+One option is to add a spatial lag term to the above regression model. 
 $$
 y = \rho W y + X \beta + \varepsilon
 $$
-where $Wy$ is the weighted average of the neighborhood response values (spatial lag variable) with $W$ the spatial weights matrix, and $\rho$ is the autoregression coefficient. This is sometimes called a spatial autoregressive (SAR) model.
+Here $Wy$ is the weighted average of the neighborhood response values (spatial lag variable) with $W$ the spatial weights matrix, and $\rho$ is the autoregression coefficient. This is sometimes called a spatial autoregressive (SAR) model.
 
 Note: $Wy$ is the spatial lag variable we compute with the `lag.listw()` function and $\rho$ is Moran I. Thus this model is also called a spatial lag Y model (SLYM).
 
-Justification for the spatial lag model is motivated by a diffusion process. The response variable $y_i$ is influenced by the explanatory variables at location $i$ and by explanatory variables at locations $j$.
+Justification for the spatial lag Y model is motivated by a diffusion process. The response variable $y_i$ is influenced by the explanatory variables at location $i$ and by explanatory variables at locations $j$.
 
-$\rho Wy$ is called the _spatial signal_ term and $\beta X$ is called the _trend_ term.
+In this case $\rho Wy$ is called the _spatial signal_ term and $\beta X$ is called the _trend_ term.
 
-Another option is to include a spatial error term so the model becomes
+Another option is to include a spatial error term.
 $$
-y = X\beta + \lambda W \epsilon + u
+y = X \beta + \lambda W \epsilon + u
 $$
-where $\lambda$ is the autoregression coefficient, $W\epsilon$ is the spatial error term representing the weighted average of the neighborhood residuals, and $u$ are the overall residuals assumed to be iid. This is called a spatial error model (SEM).
+Here $W\epsilon$ is the spatial error term representing the weighted average of the neighborhood residuals, $\lambda$ is the autoregression coefficient, and $u$ are the residuals assumed to be iid. This is called a spatial error model (SEM).
 
-Here the lag term is computed using the residuals rather the response variable.
-
-Application of the spatial error model is motivated by the omitted variable bias. Suppose the variable $y$ is statistically described by two variables $x$ and $z$ each centered on zero and independent. Then
+Application of the spatial error model is motivated by a bias that occurs when an important explanatory variable is missing. Suppose the variable $y$ is statistically described by two variables $x$ and $z$ each centered on zero and independent. Then
 $$
 y = \beta x + \theta z
 $$
 
-If $z$ is not observed, then the vector $\theta z$ is nested in the error term $\epsilon$.
+If $z$ is not observed, then the vector $\theta z$ is part of the error term $\epsilon$.
 $$
 y = \beta x + \epsilon
 $$
 
-Examples of an unobserved latent variable $z$ include local culture, social capital, neighborhood readiness. Importantly we would expect the latent variable to be spatially correlated (e.g., culture will be similar across neighborhoods), so let
+Examples of an unobserved variable $z$ include local culture, social capital, neighborhood readiness (often not easy to measure). Importantly we would expect such a variable to be spatially correlated (e.g., culture will be similar across neighborhoods), so let
 $$
 z = \lambda W z + r\\
+z - \lambda W z = r\\
+z(I -\lambda W) = r\\
 z = (I - \lambda W)^{-1} r
 $$
 where $r$ is a vector of random independent residuals (e.g., culture is similar but not identical), $W$ is the spatial weights matrix and $\lambda$ is a scalar spatial correlation parameter. 
@@ -146,9 +147,9 @@ $$
 y = X\beta + (I - \lambda W)^{-1} \epsilon
 $$
 
-The choice between a spatial lag model and a spatial error model should be made using domain-specific knowledge. Absent that we can run some statistical tests to help us decide.
+The choice between a spatial lag Y model and a spatial error model should be made using domain-specific knowledge. Absent that understanding we can run some statistical tests to help decide.
 
-The tests are performed with the `lm.LMtests()` function. The `LM` stands for 'Lagrange multiplier' indicating that the technique simultaneously determines the coefficients on the explanatory variables AND the coefficient on the spatial lag variable.
+One (older) approach is to use a series of tests with the `lm.LMtests()` function. The `LM` stands for 'Lagrange multiplier' indicating that the technique simultaneously determines the coefficients on the explanatory variables AND the coefficient on the spatial lag variable.
 
 The test type is specified as a character string. The tests should be considered in a sequence starting with the standard versions and moving to the 'robust' versions if the choice remains ambiguous.
 
@@ -380,7 +381,7 @@ The spatially lagged model has an R squared value that is higher than the R squa
 
 ## Fitting other spatial models
 
-An updated thinking on how to proceed with finding the correct spatial model is to consider both the spatial Durbin error model (SDEM) and the spatial Durbin model (SDM). 
+Updated thinking on how to proceed with finding the correct spatial model is to consider both the spatial Durbin error model (SDEM) and the spatial Durbin model (SDM). 
 
 The SDEM is a SEM with a spatial lag X term added. To fit a SDEM we use the `errorsarlm()` function but include the argument `etype = "emixed"` to ensure that the spatially lagged X variables are added and the lagged intercept term is dropped when the weights style is row standardized (`"W"`).
 ```{r}
@@ -406,9 +407,9 @@ summary(impacts(model.sdem, listw = wts, R = 500),
         zstats = TRUE)
 ```
 
-We see that income has is statistically significant direct and indirect effect on crime. Tracts with higher income have lower crime and higher income in neighboring tracts also reduce crime. 
+We see that income has a statistically significant direct and indirect effect on crime. This means that tracts with higher income have lower crime and tracts whose _neighboring tracts_ have higher income also have lower crime. 
 
-On the other hand, housing values only have a statistically significant direct effect on crime. Tracts with more expensive houses have lower crime but more expensive houses in neighboring tracts do not mean higher (or lower) crime. And the total effect of housing values on crime across the city is not significant. So if housing values go up citywide, there is no statistical evidence that crime will go down (or up).
+On the other hand, housing values have only a statistically significant direct effect on crime. Tracts with more expensive houses have lower crime but tracts whose neighboring tracts have more expensive houses do not imply lower crime. And the total effect of housing values on crime across the city is not significant. So if housing values go up in tracts citywide, there is no statistical evidence that crime will go down (or up).
 
 Likelihood ratio tests. Null hypothesis is that we should restrict the model.
 ```{r}
@@ -416,6 +417,6 @@ LR.sarlm(model.sdem,
          model.slxm)
 ```
 
-The relatively small $p$-values suggests we should NOT restrict the spatial Durbin model to just the spatial lag X model.
+The relatively small $p$-value suggests we should NOT restrict the spatial Durbin model to just the spatial lag X model.
 
 See also: https://youtu.be/b3HtV2Mhmvk and https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2420725
