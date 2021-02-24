@@ -141,7 +141,7 @@ The SDM is a SLYM that also includes a spatial lag X term. To fit a SDM we use t
                                     type = "mixed") )
 ```
 
-How to do we choose between these two models? Is the relationship between crime and income and housing values a global or local effect? Is there any reason to think that if something happens in one tract it will spillover across the entire city?  If crime happens in one tract does it influence crime across the entire city? If so, then it is a global relationship. Or is crime be a more local effect? If there is more crime in one tract then maybe that influences crime in the neighboring tract but not tracts farther away. If so, then it is a local relationship.
+How to do we choose between these two models? Is the relationship between crime and income and housing values a global or local effect? Is there any reason to think that if something happens in one tract it will spillover across the entire city?  If crime happens in one tract does it influence crime across the entire city? If so, then it is a global relationship. Or is crime a more local effect? If there is more crime in one tract then maybe that influences crime in the neighboring tract but not tracts farther away. If so, then it is a local relationship.
 
 We might think crime is a more local relationship. So we start with the spatial Durbin error model and we look at the $p$-values on the direct and indirect effects.
 ```{r}
@@ -215,7 +215,7 @@ The procedure continues by increasing the bandwidth distance (to 3.59) and then 
 
 This occurs at a bandwidth distance of .404 units, and this single value is assigned to the object we call `bw`.
 
-After determining the optimal bandwidth distance we use the `gwr()` function to get the results from the regression using that bandwidth. The arguments are the same as with the `gwr.sel()` function but includes the `bandwith =` argument where we specify the object `bw`.
+After determining the optimal bandwidth distance we use the `gwr()` function to get the results from the regression using that bandwidth. The arguments are the same as with the `gwr.sel()` function but includes the `bandwidth =` argument where we specify the object `bw`.
 ```{r}
 model.gwr <- gwr(formula = f, 
                  data = CC.sf, 
