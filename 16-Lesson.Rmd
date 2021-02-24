@@ -8,13 +8,15 @@ editor_options:
   chunk_output_type: console
 ---
 
+**"So much complexity in software comes from trying to make one thing do two things."** - Ryan Singer
+
 ### Example 2: Kansas tornadoes
 
 Let's return to the Kansas tornadoes. One of the first issues I encountered in the field of tornado climatology was reporting 'bias'.
 
 Here we are interested in the intensity of tornado genesis locations in Kansas. Import the data as a simple features data frame and transform the geographic CRS to a web Mercator.
 
-We did this to start the class but here we get all the tornadoes.
+Here we get all the tornadoes.
 ```{r}
 library(sf)
 library(dplyr)

@@ -8,6 +8,8 @@ editor_options:
   chunk_output_type: console
 ---
 
+**"Give someone a program, you frustrate them for a day; teach them how to program, you frustrate them for a lifetime."** - David Leinweber
+
 # Analyzing and modeling spatial data as point patterns
 
 For the next several lessons we turn our attention to analyzing and modeling point pattern data.

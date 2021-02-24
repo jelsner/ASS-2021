@@ -63,7 +63,7 @@ model.ols <- lm(formula = f,
 summary(model.ols)
 ```
 
-Tracts with higher income and housing values have lower crime rates. The marginal effect of income on crime holding housing values constant is -1.60 and the marginal effect of housing values holding income constant is -.27. The effects are statistically significant ($p$-values < .15).
+Tracts with higher income and housing values have lower crime rates. The marginal effect of income on crime holding housing values constant is -1.60 and the marginal effect of housing values holding income constant is -.274. The effects are statistically significant ($p$-values < .15).
 
 Add the vector of model residuals to the simple feature data frame as a column labeled `residuals` and compute the residual autocorrelation using the `lm.morantest()` function.
 ```{r}
