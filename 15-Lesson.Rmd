@@ -10,11 +10,11 @@ editor_options:
 
 **"Give someone a program, you frustrate them for a day; teach them how to program, you frustrate them for a lifetime."** - David Leinweber
 
-# Analyzing and modeling spatial data as point patterns
+## Spatial data as point patterns
 
 For the next several lessons we turn our attention to analyzing and modeling point pattern data.
 
-We naturally tend to assign order to things. We seek patterns in a collection of events. Stars in the night sky as constellations.One pattern that tends to catch our attention is the spatial grouping of events. Groups of events in a particular region trigger us to look for an explanation. Why do events occur more often in this particular region?
+We naturally tend to assign order to things. We seek patterns in a collection of events. Stars in the night sky as constellations. One pattern that tends to catch our attention is the spatial grouping of events. Groups of events in a particular region trigger us to look for an explanation. Why do events occur more often in this particular region?
 
 Consider Kansas tornadoes. Let the genesis of a tornado be an event location and the maximum EF rating provide a mark for the event. We consider only events with marks of 1, 2, 3, 4, and 5.
 
@@ -45,28 +45,11 @@ tm_layout(legend.position = c("left", "top"),
            legend.outside = TRUE)
 ```
 
-For comparison we create a map using the functions in the {ggplot2} package. We use `geom_sf()` with county borders as a simple feature data frame and then adding another `geom_sf()` with the tornado genesis as a simple feature and the size aesthetic set to the EF rating.
-```{r}
-library(ggplot2)
-
-ggplot() + 
-  geom_sf(data = KS.sf,
-          fill = "gray90") + 
-  geom_sf(data = Torn.sf, 
-          aes(size = mag), 
-          alpha = .4,
-          show.legend = FALSE) +
-  coord_sf(crs = 4326) + 
-  theme_minimal()
-```
-
 Based on this display of tornado genesis locations as spatial events we ask: (1) Are certain areas of the state more likely to get a tornado? (2) Do tornadoes tend to cluster? (3) Are there places in the state that are safe from tornadoes?
 
 These questions are similar but not identical. We explore these canonical questions about point pattern data in the next few lessons.
 
-## Definitions
-
-We need some definitions to get started. 
+We start with some definitions. 
 
 * Event: An occurrence of interest (e.g., tornado, accident, wildfire). 
 * Event location: Location of event (e.g., genesis latitude/longitude).
@@ -81,13 +64,14 @@ Consider a set of event locations that are randomly but uniformly distributed wi
 x <- runif(n = 50, min = 0, max = 1)
 y <- runif(n = 50, min = 0, max = 1)
 df1 <- data.frame(x, y, name = "Point Pattern 1")
-ggplot(df1, aes(x, y)) +
+ggplot(data = df1, 
+       mapping = aes(x, y)) +
   geom_point(size = 2)
 ```
 
-This is one realization (sample) from a spatial point pattern process. A spatial point process is a mechanism for producing a set of event locations across space. The pattern of locations produced by the point process is described as CSR. There are groups of event locations and some gaps. 
+The plot shows one sample from a spatial point pattern process. A spatial point process is a mechanism for producing a set of event locations across space. The pattern of locations produced by the point process is described as CSR. There are groups of event locations and some gaps. 
 
-Let's repeat to create a set of four realizations. Here we concatenate them into a single data frame with the `rbind()` function and then plot a four-panel figure using the `facet_wrap()` function.
+Let's repeat to create three additional samples. Here we concatenate them into a single data frame with the `rbind()` function and then plot a four-panel figure using the `facet_wrap()` function.
 ```{r}
 df2 <- data.frame(x = runif(n = 30, min = 0, max = 1),
                   y = runif(n = 30, min = 0, max = 1),
@@ -99,16 +83,17 @@ df4 <- data.frame(x = runif(n = 30, min = 0, max = 1),
                   y = runif(n = 30, min = 0, max = 1),
                   name = "Point Pattern 4")
 df <- rbind(df1, df2, df3, df4)
-ggplot(df, aes(x, y)) +
+ggplot(data = df, 
+       mapping = aes(x, y)) +
   geom_point() +
   facet_wrap(~ name)
 ```
 
 Groups of nearby events illustrate that a certain degree of clustering occurs by chance (without cause) making visual assessment of clustering difficult.
 
-Patterns of event locations that are described as completely spatially random are patterns that sit between event locations that are described as clustered and event locations that are described as 'regular'.
+Complete spatial randomness sits on a spectrum between regularity and clustered. To illustrate this idea we generate point pattern data that have more regularity than CSR and point pattern data that are more clustered than CSR. 
 
-To illustrate this idea we generate point pattern data that are more regular than CSR and point pattern data that are more clustered than CSR. Event locations are generated using the `rMaternI()` and `rMaternClust()` functions from the {spatstat} package. More about these later.
+Event locations are generated using the `rMaternI()` and `rMaternClust()` functions from the {spatstat} package.
 ```{r}
 library(spatstat)
 
@@ -121,7 +106,8 @@ df3 <- data.frame(x = m3$x, y = m3$y, name = "Cluster Pattern 1")
 m4 <- rMatClust(kappa = 30, r = .15, mu = 4)
 df4 <- data.frame(x = m4$x, y = m4$y, name = "Cluster Pattern 2")
 df <- rbind(df1, df2, df3, df4)
-ggplot(df, aes(x, y)) +
+ggplot(data = df, 
+       mapping = aes(x, y)) +
   geom_point() +
   facet_wrap(~ name)
 ```
@@ -134,19 +120,13 @@ Probability models for spatial patterns motivate methods for detecting event clu
 
 For example, we can think of crime as a stochastic process defined by location and influenced by environmental factors. The probability of a crime occurring at a particular location is the random variable and we can estimate the probability of a crime event at any location given factors that influence crime. 
 
-A spatial point process is a stochastic process where event location is the random variable. A realization of the process is a collection of events generated under the probability model. The theory of spatial point processes is developed by Ripley (1981), Diggle (1983), and Cressie (1993).
-
-The theory requires a few more definitions.
-
-### Stationarity and isotropy
+A spatial point process is a stochastic process where event location is the random variable. A sample of the process is a collection of events generated under the probability model.
 
 A spatial point process is said to be _stationary_ if the statistical properties of the events are invariant to translation across the domain. This means that the relationship between two events depends only on the relative event locations (not on where the events occur in the domain). Relative location (or spatial lag) refers to distance and orientation. 
 
 In the case where the statistical properties do not depend on the orientation of event pairs the process is said to be _isotropic_. 
 
 Stationarity and isotropy allow for replication within a data set. Under the assumption that the point pattern is generated from a stationary process, two event pairs that are separated by the same distance should have the same relatedness. This is analogous to the assumption we make when we define our weights matrix for spatially aggregated data. The assumptions of stationarity and isotropy are starting points for modeling point pattern data. 
-
-### Spatial Poisson process
 
 The Poisson distribution defines a simple model for complete spatial randomness (CSR). A point process is said to be 'homogeneous Poisson' under the following two criteria: 
 
@@ -168,15 +148,14 @@ N <- rpois(1, lambda)
 x <- runif(N)
 y <- runif(N)
 df <- data.frame(x, y)
-ggplot(df, aes(x, y)) +
+ggplot(data = df, 
+       mapping = aes(x, y)) +
   geom_point(size = 2) 
 ```
 
-The set of events represents a realization (sample) from a homogeneous Poisson point process. The intensity of the events is specified first then the locations are placed uniformly inside the domain. The domain need not be regular. The actual number of events varies from one realization  to the next.
+The set of events represents a sample from a homogeneous Poisson point process. The intensity of the events is specified first then the locations are placed uniformly inside the domain. The domain need not be regular. The actual number of events varies from one realization  to the next.
 
 By construction this point pattern is CSR. However, we are typically in the opposite position. We observe a set of events and we want to know if the events are regular or clustered. Our null hypothesis is CSR and we need a test statistic that will guide our inference. The null models are simple so we can use Monte Carlo methods to generate many realizations.
-
-### Heterogeneous Poisson process
 
 In many cases the homogeneous Poisson model as the null hypothesis is not restrictive enough. This means that we can easily reject the null hypothesis but not learn anything interesting about our data. For example, often with health events (locations of people with heart disease) CSR is not an appropriate model because a null hypothesis that incidences are equally likely does not consider that people cluster (locations at risk are not uniform).
 
@@ -184,7 +163,7 @@ Each person has the same risk of heart disease regardless of location, and we ex
 
 The intensity (density) function is a first-order property of the random process. If intensity varies (significantly) across the domain the process is said to be heterogeneous. The intensity function describes the expected number of events at any location of the region. Events might be independent of one another, but groups of events appear because of the changing intensity.
 
-## Point pattern objects in the {spatstat} package
+## Working with point pattern objects using functions from the {spatstat} package
 
 We will use functions from the {spatstat} package to analyze and model point pattern data. Point pattern data are represented in {spatstat} by an object of class `ppp` (for planar point pattern) which contains the coordinates of the events, optional values attached to the events (called 'marks'), and a description of the domain or 'window' over which the events are observed. See `?ppp.object()` for details.
 
@@ -247,7 +226,7 @@ LW <- lansing
 plot(split(LW))
 ```
 
-## Spatial varying intensity
+## Quantifying the varying intensity of a point process
 
 Given a set of events, how do we estimate the intensity function? Quadrat counting is a simple way. The spatial domain is divided into a grid of rectangular cells and the number of events in each cell is counted.
 
@@ -314,8 +293,6 @@ ggplot(df, aes(x, y)) +
   stat_binhex()
 ```
 
-### Kernel density
-
 Another way to quantify the spatial intensity of the process is with kernel density. A kernel density estimator is a smoothing function that gives the average number of events at any location in the domain.  
 
 Here we generate 100 events uniformly on the real number line between 0 and 1. The kernel density estimator is applied using different bandwidths.
@@ -340,7 +317,7 @@ As the bandwidth increases the curve indicated by the black line becomes smoothe
 
 The density is a summation of the kernels with one kernel centered on top of each event location. Event locations are marked with a point along the x-axis and the kernel is a Gaussian (normal) density. It is placed on each event and the bandwidth specifies the distance between the inflection points of the kernel. The one-dimensional density estimate extends to two (or more) dimensions.
 
-### Example 1: Tropical trees
+### Example 1: The distribution of trees in a tropical forest
 
 The object `bei` is a planar point pattern object with the locations of 3605 trees in a tropical rain forest. The data are part of the {spatstat} package.
 ```{r}
