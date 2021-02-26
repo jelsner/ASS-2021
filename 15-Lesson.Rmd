@@ -10,6 +10,8 @@ editor_options:
 
 **"Give someone a program, you frustrate them for a day; teach them how to program, you frustrate them for a lifetime."** - David Leinweber
 
+Mechanistic approach to introducing you to spatial statistics analyses and modeling. I want to demystify the process and give you confidence that you can analyze and fit appropriate models. At the expense of 
+
 ## Spatial data as point patterns
 
 For the next several lessons we turn our attention to analyzing and modeling point pattern data.
