@@ -10,26 +10,26 @@ editor_options:
 
 **"Give someone a program, you frustrate them for a day; teach them how to program, you frustrate them for a lifetime."** - David Leinweber
 
-Mechanistic approach to introducing you to spatial statistics analyses and modeling. I want to demystify the process and give you confidence that you can analyze and fit appropriate models. At the expense of 
+Mechanistic approach to expose you to spatial statistics analyses and modeling. I want to demystify the process and give you confidence that you can analyze and fit such models. In doing so, I don't want to give the false impression that statisticians have the answers. A good _working_ knowledge of the model fitting process needs to be combined with a solid understanding of the context in which you are working.
 
 ## Spatial data as point patterns
 
 For the next several lessons we turn our attention to analyzing and modeling point pattern data.
 
-We naturally tend to assign order to things. We seek patterns in a collection of events. Stars in the night sky as constellations. One pattern that tends to catch our attention is the spatial grouping of events. Groups of events in a particular region trigger us to look for an explanation. Why do events occur more often in this particular region?
+We naturally tend to assign order to things. We seek patterns in a collection of events. Stars in the night sky as constellations. The pattern that tends to catch our most attention is the grouping of events. A collection of events in a particular region begs for an explanation. Why do events occur more often in this particular region and not somewhere else?
 
-Consider Kansas tornadoes. Let the genesis of a tornado be an event location and the maximum EF rating provide a mark for the event. We consider only events with marks of 1, 2, 3, 4, and 5.
-
-Import and filter the data.
+Consider Kansas tornadoes. Let the genesis of a tornado be an event location and the maximum EF rating provide a mark for the event. Here we consider only events since 2007 with marks of 1, 2, 3, 4, and 5. Import and filter the data.
 ```{r}
 library(tidyverse)
 library(sf)
 
 Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
-             filter(st == "KS", yr >= 2007, mag > 0) 
+             filter(st == "KS", 
+                    yr >= 2007,
+                    mag > 0) 
 ```
 
-Then create a map using the functions in the {tmap} package. The state border is obtained as a simple feature data frame. The polygon geometry is plotted first with `tm_borders()` then the event locations are plotted with the `tm_bubbles()` and `size = "mag"`.
+Next create a map using the functions in the {tmap} package. The state border is obtained as a simple feature data frame. The polygon geometry is plotted first with `tm_borders()` then the event locations are plotted with the `tm_bubbles()` and `size = "mag"`.
 ```{r}
 library(tmap) 
 library(USAboundaries)
@@ -47,15 +47,15 @@ tm_layout(legend.position = c("left", "top"),
            legend.outside = TRUE)
 ```
 
-Based on this display of tornado genesis locations as spatial events we ask: (1) Are certain areas of the state more likely to get a tornado? (2) Do tornadoes tend to cluster? (3) Are there places in the state that are safe from tornadoes?
+Based on this display of tornado genesis locations we ask: (1) Are certain areas of the state more likely to get a tornado? (2) Do tornadoes tend to cluster? (3) Are there places in the state that are safe from tornadoes?
 
 These questions are similar but not identical. We explore these canonical questions about point pattern data in the next few lessons.
 
-We start with some definitions. 
+We need some definitions. 
 
 * Event: An occurrence of interest (e.g., tornado, accident, wildfire). 
 * Event location: Location of event (e.g., genesis latitude/longitude).
-* Point: Any location in the study area where an event could occur. Note: Event location is a particular point where an event did occur.
+* Point: Any location in the study area where an event _could_ occur. Note: Event location is a particular point where an event _did_ occur. Example: trees in a forest with a river running through it
 * Point pattern data: A collection of observed (or simulated) event locations and a spatial domain of interest.
 * Domain: Defined by data availability (e.g., state or county boundary) or by the extent of the events.
 
