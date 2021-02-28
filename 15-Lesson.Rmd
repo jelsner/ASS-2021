@@ -10,15 +10,15 @@ editor_options:
 
 **"Give someone a program, you frustrate them for a day; teach them how to program, you frustrate them for a lifetime."** - David Leinweber
 
-Mechanistic approach to expose you to spatial statistics analyses and modeling. I want to demystify the process and give you confidence that you can analyze and fit such models. In doing so, I don't want to give the false impression that statisticians have the answers. A good _working_ knowledge of the model fitting process needs to be combined with a solid understanding of the context in which you are working.
+Programming approach to exposing you to spatial statistics. I want to demystify the process and give you confidence that you can analyze and fit such models. I do believe that investment in honing your programming skills will pay dividends. But, in taking this approach, I don't want to give you the false impression that statisticians have the answers. A _working_ knowledge of the model fitting process needs to be combined with a good understanding of the context in which you are working.
 
 ## Spatial data as point patterns
 
 For the next several lessons we turn our attention to analyzing and modeling point pattern data.
 
-We naturally tend to assign order to things. We seek patterns in a collection of events. Stars in the night sky as constellations. The pattern that tends to catch our most attention is the grouping of events. A collection of events in a particular region begs for an explanation. Why do events occur more often in this particular region and not somewhere else?
+We somewhat naturally seek to find patterns in a collection of events. The pattern that tends to catch our attention quickly is the grouping of events across space. Stars in the night sky as constellations.  A collection of events in a particular region begs for an explanation. Why do events occur more often in this particular region and not somewhere else?
 
-Consider Kansas tornadoes. Let the genesis of a tornado be an event location and the maximum EF rating provide a mark for the event. Here we consider only events since 2007 with marks of 1, 2, 3, 4, and 5. Import and filter the data.
+Consider Kansas tornado reports. Let the start position of each tornado be an event location. And let the damage rating provide a mark for the event. Here we consider only events since 2007 with marks of 1, 2, 3, 4, and 5. Import and filter the data.
 ```{r}
 library(tidyverse)
 library(sf)
@@ -56,12 +56,11 @@ We need some definitions.
 * Event: An occurrence of interest (e.g., tornado, accident, wildfire). 
 * Event location: Location of event (e.g., genesis latitude/longitude).
 * Point: Any location in the study area where an event _could_ occur. Note: Event location is a particular point where an event _did_ occur. Example: trees in a forest with a river running through it
-* Point pattern data: A collection of observed (or simulated) event locations and a spatial domain of interest.
-* Domain: Defined by data availability (e.g., state or county boundary) or by the extent of the events.
+* Point pattern data: A collection of observed (or simulated) event locations together with a domain of interest.
+* Domain: Study area that is often defined by data availability (e.g., state or county boundary) or by the extent of the events.
+* Complete spatial randomness: Or CSR (not to be confused with CRS--coordinate reference system) defines the situation where an event has an equal chance of occurring at any point in the domain regardless of other nearby events. In this case we say they event locations have a uniform probability distribution (uniformly distributed) across space. Note: uniform chance does not mean that the events have an ordered pattern (e.g., trees in an orchard).
 
-Complete spatial randomness (CSR; not to be confused with CRS--coordinate reference system) defines the situation where an event has an equal chance of occurring at any point in the domain regardless of other nearby events. In this case we say they event locations have a uniform probability distribution (uniformly distributed) across space. Note: uniform chance does not necessarily mean that the events have an ordered pattern (e.g., trees in an orchard). Some parts of the domain may get lucky (or unlucky).
-
-Consider a set of event locations that are randomly but uniformly distributed within the unit plane.
+Consider a set of event locations that are randomly distributed within the unit plane. First we create two vectors containing the x and y coordinates, then we create a data frame that includes the name of the sample, and finally we graph the locations using the `ggplot()` method.
 ```{r}
 x <- runif(n = 50, min = 0, max = 1)
 y <- runif(n = 50, min = 0, max = 1)
@@ -73,7 +72,7 @@ ggplot(data = df1,
 
 The plot shows one sample from a spatial point pattern process. A spatial point process is a mechanism for producing a set of event locations across space. The pattern of locations produced by the point process is described as CSR. There are groups of event locations and some gaps. 
 
-Let's repeat to create three additional samples. Here we concatenate them into a single data frame with the `rbind()` function and then plot a four-panel figure using the `facet_wrap()` function.
+Let's repeat this process to create three additional samples. First we combine them into a single data frame with the `rbind()` function and then plot a four-panel figure using the `facet_wrap()` function.
 ```{r}
 df2 <- data.frame(x = runif(n = 30, min = 0, max = 1),
                   y = runif(n = 30, min = 0, max = 1),
@@ -91,11 +90,9 @@ ggplot(data = df,
   facet_wrap(~ name)
 ```
 
-Groups of nearby events illustrate that a certain degree of clustering occurs by chance (without cause) making visual assessment of clustering difficult.
+Groups of nearby events illustrate that a certain degree of _clustering_ occurs by chance (without cause) making visual assessment of patterns in the data difficult to discern.
 
-Complete spatial randomness sits on a spectrum between regularity and clustered. To illustrate this idea we generate point pattern data that have more regularity than CSR and point pattern data that are more clustered than CSR. 
-
-Event locations are generated using the `rMaternI()` and `rMaternClust()` functions from the {spatstat} package.
+Complete spatial randomness sits on a spectrum between regularity and clustered. To illustrate this idea we generate point pattern data that have more regularity than CSR and point pattern data that are more clustered than CSR. Here we generate event locations using the `rMaternI()` and `rMaternClust()` functions from the {spatstat} package.
 ```{r}
 library(spatstat)
 
@@ -114,23 +111,21 @@ ggplot(data = df,
   facet_wrap(~ name)
 ```
 
-The difference in the arrangement of event locations between a regular and a cluster process is a bit more clear. But the difference between CSR and either of them is usually not.
+The difference in the arrangement of event locations between a regular and a cluster process is clear. But the difference in the arrangement of event locations between a CSR and regular process and the difference in the arrangement of event locations between a CSR and cluster process is not.
 
 And spatial scale matters. A set of event locations can be regular on a small scale but clustered on a larger scale.
 
-Probability models for spatial patterns motivate methods for detecting event clustering. A probability model generates a stochastic process.
+Probability models for spatial patterns motivate methods for detecting event clustering. A probability model generates a point pattern process. For example, we can think of crime as a point pattern process defined by location and influenced by environmental factors. The probability of a crime occurring at a particular location is the random variable and we can estimate the probability of a crime event at any location given factors that influence crime. 
 
-For example, we can think of crime as a stochastic process defined by location and influenced by environmental factors. The probability of a crime occurring at a particular location is the random variable and we can estimate the probability of a crime event at any location given factors that influence crime. 
+More formally, a spatial point pattern process is a _stochastic_ (read: statistical) process where event location is the random variable. A sample of the process is a collection of events generated under the probability model.
 
-A spatial point process is a stochastic process where event location is the random variable. A sample of the process is a collection of events generated under the probability model.
+A spatial point process is said to be _stationary_ if the statistical properties of the events are invariant to translation. This means that the relationship between two events depends only on the relative event locations (not on where the events occur in the domain). Relative location (or spatial lag) refers to distance and orientation of the events relative to one another. 
 
-A spatial point process is said to be _stationary_ if the statistical properties of the events are invariant to translation across the domain. This means that the relationship between two events depends only on the relative event locations (not on where the events occur in the domain). Relative location (or spatial lag) refers to distance and orientation. 
+In the case where the statistical properties are independent of the orientation of event pairs, the process is said to be _isotropic_. 
 
-In the case where the statistical properties do not depend on the orientation of event pairs the process is said to be _isotropic_. 
+The properties of stationarity and isotropy allow for replication within a data set. Under the assumption of a stationary process, two event pairs that are separated by the same distance should have the same relatedness. This is analogous to the assumption we make when we define our weights matrix for spatially aggregated data. The assumptions of stationarity and isotropy are starting points for modeling point pattern data. 
 
-Stationarity and isotropy allow for replication within a data set. Under the assumption that the point pattern is generated from a stationary process, two event pairs that are separated by the same distance should have the same relatedness. This is analogous to the assumption we make when we define our weights matrix for spatially aggregated data. The assumptions of stationarity and isotropy are starting points for modeling point pattern data. 
-
-The Poisson distribution defines a simple model for complete spatial randomness (CSR). A point process is said to be 'homogeneous Poisson' under the following two criteria: 
+The Poisson distribution defines a model for complete spatial randomness (CSR). A point process is said to be 'homogeneous Poisson' under the following two criteria: 
 
 1. The number of events, N, occurring within a finite domain A is a random variable described by a Poisson distribution with mean $\lambda$|A| for some positive constant $\lambda$, with |A| denoting the area of the domain, and 
 2. The locations of the N events represent a random sample where each point in A is _equally likely_ to be chosen as an event location.
