@@ -3,6 +3,7 @@ title: "Lesson 15"
 author: "James B. Elsner"
 date: "March 1, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -94,6 +95,7 @@ Groups of nearby events illustrate that a certain degree of _clustering_ occurs 
 
 Complete spatial randomness sits on a spectrum between regularity and clustered. To illustrate this idea we generate point pattern data that have more regularity than CSR and point pattern data that are more clustered than CSR. Here we generate event locations using the `rMaternI()` and `rMaternClust()` functions from the {spatstat} package.
 ```{r}
+if(!require(spatstat)) install.packages(pkgs = "spatstat", repos = "http://cran.us.r-project.org")
 library(spatstat)
 
 m1 <- rMaternI(kappa = 100, r = .02)
@@ -152,19 +154,19 @@ ggplot(data = df,
 
 The set of events represents a sample from a homogeneous Poisson point process. The intensity of the events is specified first then the locations are placed uniformly inside the domain. The domain need not be regular. The actual number of events varies from one realization  to the next.
 
-By construction this point pattern is CSR. However, we are typically in the opposite position. We observe a set of events and we want to know if the events are regular or clustered. Our null hypothesis is CSR and we need a test statistic that will guide our inference. The null models are simple so we can use Monte Carlo methods to generate many realizations.
+This point pattern is CSR by construction. However, we are typically in the opposite position. We observe a set of events and we want to know if the events are regular or clustered. Our null hypothesis is CSR and we need a test statistic that will guide our choice. The null models are simple so we can use Monte Carlo methods to generate many samples and compare summary statistics from those samples with our observed data.
 
-In many cases the homogeneous Poisson model as the null hypothesis is not restrictive enough. This means that we can easily reject the null hypothesis but not learn anything interesting about our data. For example, often with health events (locations of people with heart disease) CSR is not an appropriate model because a null hypothesis that incidences are equally likely does not consider that people cluster (locations at risk are not uniform).
+In some cases the homogeneous Poisson model is not restrictive enough. This means that we can easily reject the null hypothesis but not learn anything interesting about our data. For example, with health events (locations of people with heart disease) CSR is not an appropriate model because a null hypothesis that incidences are equally likely does not consider that people cluster (locations at risk are not uniform).
 
 Each person has the same risk of heart disease regardless of location, and we expect more cases in areas with more people at risk. Clusters of cases in high population areas violate the CSR but not necessarily the constant risk hypothesis. The constant risk hypothesis requires the intensity of the spatial process be defined as a spatially varying function. That is, we define the intensity as $\lambda(s)$, where $s$ denotes location.
 
-The intensity (density) function is a first-order property of the random process. If intensity varies (significantly) across the domain the process is said to be heterogeneous. The intensity function describes the expected number of events at any location of the region. Events might be independent of one another, but groups of events appear because of the changing intensity.
+The intensity (density) function is a first-order property of the random process. If intensity varies (significantly) across the domain the data-generating process is said to be heterogeneous. The intensity function describes the expected number of events at any location of the region. Events might be independent of one another, but groups of events appear because of the changing intensity.
 
 ## Working with point pattern objects using functions from the {spatstat} package
 
 We will use functions from the {spatstat} package to analyze and model point pattern data. Point pattern data are represented in {spatstat} by an object of class `ppp` (for planar point pattern) which contains the coordinates of the events, optional values attached to the events (called 'marks'), and a description of the domain or 'window' over which the events are observed. See `?ppp.object()` for details.
 
-Spatial statistics computed on a `ppp` object will be somewhat sensitive to the choice of the window (domain), so some thought should go into deciding what it should be.
+Spatial statistics computed on a `ppp` object will be somewhat sensitive to the choice of the window (domain), so some thought should go into deciding what window should be used.
 
 As an example, the data `swedishpines` is available in the package as a `ppp` object.
 ```{r}
@@ -174,11 +176,11 @@ class(swedishpines)
 swedishpines
 ```
 
-The data is a planar point pattern object with 71 events. Caution: Unfortunately called the events are called 'points' because as was explained above, the theory was developed using the definition that a point represented a potential event not necessarily an actual event location.
+The data is a planar point pattern object with 71 events. Caution: Unfortunately the events in a `ppp` object are called 'points' rather than events. This is in contrast to the theory which was developed using the definition that a point represented a _potential_ event not an _observed_ event.
 
 All the events are contained within a rectangle window of size 9.6 by 10 meters.
 
-There is a `plot()` method for `ppp` objects that provides an easy way to view the data and the window.
+There is a `plot()` method for `ppp` objects that provides a quick way to view the data and the window.
 ```{r}
 plot(swedishpines)
 ```
@@ -192,9 +194,9 @@ plot(convexhull(swedishpines),
      add = TRUE)
 ```
 
-Recall that the hull defines the minimum area convex polygon that contains all the events. 
+Recall that a convex hull defines the minimum-area convex polygon that contains all the events. 
 
-The domain (window) for analysis and modeling should be somewhat larger than the convex hull. The function `ripras()` computes a spatial domain based on the event locations alone assuming the locations are independent and identically distributed. Here we add this polygon to our plot.
+The domain (window) for analysis and modeling should be somewhat larger than the convex hull. The function `ripras()` computes a spatial domain based on the event locations alone assuming the locations are independent and identically distributed. Here we overlay this polygon on our plot.
 ```{r}
 plot(swedishpines)
 plot(convexhull(swedishpines), 
@@ -207,7 +209,9 @@ The window can have an arbitrary shape. A rectangle, a polygon, a collection of 
 
 Each event may carry information called a 'mark'. A mark can be continuous (e.g. tree height) or discrete (tree species).
 
-A multitype point pattern is one in which the events are marked using a factor (e.g., tree species). The mark values are given in a vector of the same length as the vector of locations. That is, `marks[i]` is the mark attached to the point (`x[i]`, `y[i]`).
+A multitype point pattern is one in which the events are marked using a factor (e.g., tree species). The mark values are given in a vector of the same length as the vector of locations. That is, `marks[i]` is the mark attached to the location (`x[i]`, `y[i]`).
+
+Consider the ppp object `demopat` from the {spatstat} package.
 ```{r}
 plot(demopat)
 marks(demopat)
@@ -223,32 +227,35 @@ LW <- lansing
 plot(split(LW))
 ```
 
-## Quantifying the varying intensity of a point process
+## Quantifying the intensity of events
 
-Given a set of events, how do we estimate the intensity function? Quadrat counting is a simple way. The spatial domain is divided into a grid of rectangular cells and the number of events in each cell is counted.
+The average intensity of events is defined as the number of events per unit area of the domain. The `summary()` method applied to a `ppp` object gives the average intensity.
+```{r}
+summary(swedishpines)
+```
 
-Quadrat counting is done with the `quadratcount()` function.
+There are 71 events over a window area (spatial domain) of 9600 square units giving an average intensity of 71/9600 = .0074.
+
+The average intensity might not represent the intensity of events locally. We need a way to describe the expected number of events at any location of the region. Counting the number of events in equal areas is a simple way. The quadrat method divides the domain into a grid of rectangular cells and the number of events in each cell is counted. Quadrat counting is done with the `quadratcount()` function.
 ```{r}
 quadratcount(swedishpines)
 ```
 
-The default divides the data into a 5 x 5 grid. The event count in each grid cell is produced.
-
-To change the default number of cells in x and y directions we use the `nx =` and `ny =` arguments.
+The default divides the data into a 5 x 5 grid. The event count in each grid cell is produced. To change the default number of cells in x and y directions we use the `nx =` and `ny =` arguments.
 ```{r}
 quadratcount(swedishpines, 
              nx = 2, 
              ny = 3)
 ```
 
-We can plot the quadrat counts with the plot method.
+We plot the counts with the plot method.
 ```{r}
 plot(quadratcount(swedishpines))
 plot(swedishpines, pty = 19, col = "red", 
      add = TRUE, main = "")
 ```
 
-Note that the cell areas will not be equal when the domain boundaries are irregular.
+Note that the cell areas will not be equal when the domain boundaries are irregular like with the `demopat` ppp object.
 ```{r}
 plot(quadratcount(demopat))
 ```
@@ -257,6 +264,7 @@ When the number of events is large, hexagon cells are useful. The process is: (1
 
 Here we generate 20K random values from the standard normal distribution for the x coordinate and repeat for the y coordinate. We then use the `hexbin()` function from the {hexbin} package and specify 10 bins in the x direction to count the number of events in each hexagon and assign the result to the object `hbin`.
 ```{r}
+if(!require(hexbin)) install.packages(pkgs = "hexbin", repos = "http://cran.us.r-project.org")
 library(hexbin)
 
 x <- rnorm(20000)
@@ -265,16 +273,14 @@ hbin <- hexbin(x, y, xbins = 10)
 str(hbin)
 ```
 
-The package uses S4 data classes so the output is stored in slots.
-
-There is a plot method.
+The package uses S4 data classes so the output is stored in slots. We use the `plot()` method to make a graph.
 ```{r}
 plot(hbin)
 ```
 
 Hexagons have symmetric nearest neighbors (there is only rook contiguity). They have the most sides of any polygon that can tessellate the plane. They are generally more efficient than rectangles at covering the events. In other words it takes fewer of them to cover the same number of events. They are visually less biased for displaying densities compared to squares/rectangles.
 
-As another example, generate a large number of random events in the two-dimensional plane. Use a normal distribution in the x-direction and a student t-distribution in the y-direction.
+Here we generate a large number of random events in the two-dimensional plane. Use a normal distribution in the x-direction and a student t-distribution in the y-direction.
 ```{r}
 set.seed(131)
 x <- rnorm(7777)
@@ -286,13 +292,18 @@ plot(hbin2)
 The {ggplot2} package has the `stat_binhex()` function so that also can be used for display.
 ```{r}
 df <- data.frame(x, y)
-ggplot(df, aes(x, y)) +
+ggplot(data = df, 
+       mapping = aes(x, y)) +
   stat_binhex()
 ```
 
-Another way to quantify the spatial intensity of the process is with kernel density. A kernel density estimator is a smoothing function that gives the average number of events at any location in the domain.  
+Another way to quantify the spatial intensity is with kernel density estimation (KDE). Let $s_i$ be event locations, then an estimate for the intensity of the events at any location is given by
+$$
+\hat \lambda (s) = \frac{1}{nh}\sum_{i=1}^nK\Big(\frac{s - s_i}{h}\Big)
+$$
+where $K$ is the kernel (a non-negative function) and $h > 0$ is a smoothing parameter called the bandwidth. Typically the kernel is a Gaussian probability density function.
 
-Here we generate 100 events uniformly on the real number line between 0 and 1. The kernel density estimator is applied using different bandwidths.
+Here we generate 100 events uniformly on the real number line (one spatial dimension) between 0 and 1 and then use a kernel density estimation to get a continuous function of the intensity. The density estimation is is done using the function `density()` and here we compare increasing bandwidths specified with the `bw =` argument.
 ```{r}
 e <- runif(100)
 dd1 <- density(e, bw = .025)
@@ -300,43 +311,57 @@ dd2 <- density(e, bw = .05)
 dd3 <- density(e, bw = .1)
 df <- data.frame(x = c(dd1$x, dd2$x, dd3$x), 
                  y = c(dd1$y, dd2$y, dd3$y),
-                bw = c(rep("Bandwidth = .025", 512), 
-                       rep("Bandwidth = .05", 512),
-                       rep("Bandwidth = .1", 512)))
+                bw = c(rep("h = .025", 512), 
+                       rep("h = .05", 512),
+                       rep("h = .1", 512)))
 df2 <- data.frame(x = e, y = 0)
-ggplot(df, aes(x, y)) +
+ggplot(data = df, 
+       mapping = aes(x, y)) +
   geom_line() +
   facet_wrap(~ bw, nrow = 3) +
-  geom_point(aes(x, y), data = df2, color = "red")
+  geom_point(mapping = aes(x, y), 
+             data = df2, 
+             color = "red")
 ```
 
-As the bandwidth increases the curve indicated by the black line becomes smoother. The density is estimated at every location on the number line, not just at the location of the event. 
+As the bandwidth increases the curve (black line) representing the local intensity becomes smoother. The intensity is estimated at every location, not just at the location of the event. 
 
-The density is a summation of the kernels with one kernel centered on top of each event location. Event locations are marked with a point along the x-axis and the kernel is a Gaussian (normal) density. It is placed on each event and the bandwidth specifies the distance between the inflection points of the kernel. The one-dimensional density estimate extends to two (or more) dimensions.
+The density is a summation of the kernels with one kernel centered on top of each event location. Event locations are marked with a point along the x-axis and the kernel is a Gaussian probability density function. The kernel is placed on each event and the bandwidth specifies the distance between the inflection points of the kernel. The one-dimensional density estimate extends to two (or more) dimensions.
 
-### Example 1: The distribution of trees in a tropical forest
+### Example: The distribution of trees in a tropical forest
 
-The object `bei` is a planar point pattern object with the locations of 3605 trees in a tropical rain forest. The data are part of the {spatstat} package.
+The object `bei` is a planar point pattern object from the {spatstat} package containing the locations of trees in a tropical rain forest.
+```{r}
+summary(bei)
+```
+
+There are 3604 events (trees) over an area of 500,000 square meters giving an average intensity of the point pattern data of .0073 trees per unit area.
+
+The distribution of trees is not homogeneous as can be seen on a plot.
 ```{r}
 plot(bei)
 ```
 
-The point pattern data is accompanied by a data set (`bei.extra`) of elevation (`elev`) and slope of elevation (`grad`) across the region. 
+There are localized clusters of trees and large areas with few if any trees.
+
+Elevation and elevation slope are factors associated with tree occurrence.
+
+The point pattern data is accompanied by data (`bei.extra`) on elevation (`elev`) and slope of elevation (`grad`) across the region.
 ```{r}
 plot(bei.extra)
 ```
 
-These data are given as `im` (image) objects in a list format. 
+These data are stored as `im` (image) objects. 
 ```{r}
 class(bei.extra$elev)
 ```
 
-An image object contains a list with 10 elements including the matrix of values (`v`).
+The image object contains a list with 10 elements including the matrix of values (`v`).
 ```{r}
 str(bei.extra$elev)
 ```
 
-The window focuses the analysis on a particular region. Suppose you want to model locations of a certain tree type but only for trees located at elevations above 145 meters. The `levelset()` function creates a window from an image object as follows:
+Specifying a spatial domain (window) allows us to focus the analysis on a particular region. Suppose we want to model locations of a certain tree type but only for trees located at elevations above 145 meters. The `levelset()` function creates a window from an image object using `thresh =` and `compare =` arguments.
 ```{r}
 W <- levelset(bei.extra$elev, 
               thresh = 145, 
@@ -344,12 +369,12 @@ W <- levelset(bei.extra$elev,
 class(W)
 ```
 
-The result is an object of class `owin`. The plot method displays the window which is the region in black.
+The result is an object of class `owin`. The plot method displays the window as a mask, which is the region in black.
 ```{r}
 plot(W)
 ```
 
-We subset the point pattern data by the window using the bracket operator (`[]`) as we do with a data frame.
+We subset the `ppp` object by the window using the bracket operator (`[]`). Here we assign the reduced `ppp` object to `beiW` and then make a plot.
 ```{r}
 beiW <- bei[W]
 plot(beiW)
@@ -365,7 +390,7 @@ beiV <- bei[V]
 plot(beiV)
 ```
 
-We compute the spatial intensity over the domain with the `density()` method using the default Gaussian kernel and fixed bandwidth determined by the window size.
+We compute the spatial intensity function over the domain with the `density()` method using the default Gaussian kernel and fixed bandwidth determined by the window size.
 ```{r}
 den <- density(beiV)
 plot(den)

@@ -10,7 +10,7 @@ editor_options:
 
 **"So much complexity in software comes from trying to make one thing do two things."** - Ryan Singer
 
-### Example 2: Kansas tornadoes
+### Example: Kansas tornadoes
 
 Let's return to the Kansas tornadoes. One of the first issues I encountered in the field of tornado climatology was reporting 'bias'.
 
