@@ -10,22 +10,93 @@ editor_options:
 
 **"So much complexity in software comes from trying to make one thing do two things."** - Ryan Singer
 
-### Example: Kansas tornadoes
+## Subsetting point pattern data
 
-Let's return to the Kansas tornadoes. One of the first issues I encountered in the field of tornado climatology was reporting 'bias'.
-
-Here we are interested in the intensity of tornado genesis locations in Kansas. Import the data as a simple features data frame and transform the geographic CRS to a web Mercator.
-
-Here we get all the tornadoes.
+The object `bei` is a planar point pattern object from the {spatstat} package containing the locations of trees in a tropical rain forest.
 ```{r}
+summary(bei)
+```
+
+There are 3604 events (trees) over an area of 500,000 square meters giving an average intensity of the point pattern data of .0073 trees per unit area.
+
+The distribution of trees is not homogeneous as can be seen on a plot.
+```{r}
+plot(bei)
+```
+
+There are localized clusters of trees and large areas with few if any trees.
+
+Elevation and elevation slope are factors associated with tree occurrence.
+
+The point pattern data is accompanied by data (`bei.extra`) on elevation (`elev`) and slope of elevation (`grad`) across the region.
+```{r}
+plot(bei.extra)
+```
+
+These data are stored as `im` (image) objects. 
+```{r}
+class(bei.extra$elev)
+```
+
+The image object contains a list with 10 elements including the matrix of values (`v`).
+```{r}
+str(bei.extra$elev)
+```
+
+Specifying a spatial domain (window) allows us to focus the analysis on a particular region. Suppose we want to model locations of a certain tree type but only for trees located at elevations above 145 meters. The `levelset()` function creates a window from an image object using `thresh =` and `compare =` arguments.
+```{r}
+W <- levelset(bei.extra$elev, 
+              thresh = 145, 
+              compare = ">")
+class(W)
+```
+
+The result is an object of class `owin`. The plot method displays the window as a mask, which is the region in black.
+```{r}
+plot(W)
+```
+
+We subset the `ppp` object by the window using the bracket operator (`[]`). Here we assign the reduced `ppp` object to `beiW` and then make a plot.
+```{r}
+beiW <- bei[W]
+plot(beiW)
+```
+
+Now the analysis window is white and the event locations are plotted on top.
+
+As another example we create a window where altitude is lower than 145 m and slope exceeds .1 degrees. In this case we use the `solutionset()` function. 
+```{r}
+V <- solutionset(bei.extra$elev <= 145 & 
+                 bei.extra$grad > .1)
+beiV <- bei[V]
+plot(beiV)
+```
+
+We compute the spatial intensity function over the domain with the `density()` method using the default Gaussian kernel and fixed bandwidth determined by the window size.
+```{r}
+den <- density(beiV)
+plot(den)
+```
+
+The units of intensity are events per unit area (here square meters). The intensity values are computed on a grid ($v$) and are returned as a pixel image. 
+```{r}
+sum(is.na(den$v))
+```
+
+There are over 16K of the cells that have a value of `NA`.
+
+## Can the tornado events be adequately described by a model of complete spatial randomness?
+
+Here we are interested in the intensity of tornado genesis locations in Kansas. Import the data as a simple features data frame and transform the geographic CRS to a web Mercator. Here we get all the tornadoes since 1950 with a EF damage rating.
+```{r}
+library(tidyverse)
 library(sf)
-library(dplyr)
 
 Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
   st_transform(crs = 3857) %>%
   filter(st == "KS", mag >= 0) %>%
   mutate(EF = as.factor(mag)) %>%
-  dplyr::select(EF)
+  select(EF)
 ```
 
 Plot them.
@@ -120,7 +191,7 @@ plot(density(split(Z)))
 
 The range of local intensity variations is similar. So we don't have much evidence against the null model of CSR as defined by a homogeneous Poisson process.
 
-### Tornado reports as a function of distance from nearest town
+## Tornado reports as a function of distance from nearest town
 
 We know that tornado reports are more common near cities and towns. This is especially true in the earlier years of the record. This knowledge is available from the literature on tornadoes (not from the data). It is a well-known artifact of the data set, but it had never been quantified until we did it in 2013 http://myweb.fsu.edu/jelsner/PDF/Research/ElsnerMichaelsScheitlinElsner2013.pdf. 
 
@@ -249,13 +320,7 @@ ggplot(df) +
 
 The difference between the two point pattern data sets can be explained by the clustering of reports in the vicinity of towns.
 
-### Challenge problem: Tornado reports as a function of distance to nearest city/town
-
-Repeat for another state of your choice. (1) Determine the average EF1+ (EF1 or more damaging) tornado intensity per square kilometer over the state during the period 1950-2017. (2) Plot the spatial varying intensity of these tornadoes using (a) quadrats (10 x 10) and (b) a kernel density smoother. (3) Plot the spatial intensity as a smoothed function of distance to nearest town or city (with populations exceeding 500). Is there a significant population bias in tornado reports? If so, what is the spatial scale of this bias?
-
-## Conditional probability
-
-### Texas tornadoes
+## Conditional probability of an event
 
 Consider EF1 or worse tornadoes occurring over the state of Texas. The EPSG code is for a Texas centric Lambert conic conformal.
 ```{r}
