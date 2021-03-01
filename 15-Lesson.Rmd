@@ -61,7 +61,9 @@ We need some definitions.
 * Complete spatial randomness: Or CSR (not to be confused with CRS--coordinate reference system) defines the situation where an event has an equal chance of occurring at any point in the domain regardless of other nearby events. In this case we say they event locations have a uniform probability distribution (uniformly distributed) across space. Note: uniform chance does not mean that the events have an ordered pattern (e.g., trees in an orchard).
 
 Consider a set of event locations that are randomly distributed within the unit plane. First we create two vectors containing the x and y coordinates, then we create a data frame that includes the name of the sample, and finally we graph the locations using the `ggplot()` method.
-```{r}
+```{r} 
+library(ggplot2)
+
 x <- runif(n = 50, min = 0, max = 1)
 y <- runif(n = 50, min = 0, max = 1)
 df1 <- data.frame(x, y, name = "Point Pattern 1")
@@ -70,7 +72,7 @@ ggplot(data = df1,
   geom_point(size = 2)
 ```
 
-The plot shows one sample from a spatial point pattern process. A spatial point process is a mechanism for producing a set of event locations across space. The pattern of locations produced by the point process is described as CSR. There are groups of event locations and some gaps. 
+The plot shows one sample from a spatial point pattern process. A _spatial point process_ is a mechanism for producing a set of event locations across space. The pattern of locations produced by the point process is described as CSR. There are groups of event locations and some gaps. 
 
 Let's repeat this process to create three additional samples. First we combine them into a single data frame with the `rbind()` function and then plot a four-panel figure using the `facet_wrap()` function.
 ```{r}
@@ -163,7 +165,7 @@ The intensity (density) function is a first-order property of the random process
 
 ## Working with point pattern objects using functions from the {spatstat} package
 
-We will use functions from the {spatstat} package to analyze and model point pattern data. Point pattern data are represented in {spatstat} by an object of class `ppp` (for planar point pattern) which contains the coordinates of the events, optional values attached to the events (called 'marks'), and a description of the domain or 'window' over which the events are observed. See `?ppp.object()` for details.
+We will use functions from the {spatstat} package to analyze and model point pattern data. Point pattern data are represented in {spatstat} by an object of class `ppp` (for planar point pattern) which contains the coordinates of the events (event locations), optional values attached to the events (called 'marks'), and a description of the domain or 'window' over which the events are observed. See `?ppp.object()` for details.
 
 Spatial statistics computed on a `ppp` object will be somewhat sensitive to the choice of the window (domain), so some thought should go into deciding what window should be used.
 
@@ -210,7 +212,7 @@ Each event may carry information called a 'mark'. A mark can be continuous (e.g.
 
 A multitype point pattern is one in which the events are marked using a factor (e.g., tree species). The mark values are given in a vector of the same length as the vector of locations. That is, `marks[i]` is the mark attached to the location (`x[i]`, `y[i]`).
 
-Consider the ppp object `demopat` from the {spatstat} package.
+Consider the `ppp` object `demopat` from the {spatstat} package.
 ```{r}
 plot(demopat)
 marks(demopat)
