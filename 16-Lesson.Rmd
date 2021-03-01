@@ -14,19 +14,20 @@ editor_options:
 
 The object `bei` is a planar point pattern object from the {spatstat} package containing the locations of trees in a tropical rain forest.
 ```{r}
+if(!require(spatstat)) install.packages(pkgs = "spatstat", repos = "http://cran.us.r-project.org")
+library(spatstat)
+
 summary(bei)
 ```
 
 There are 3604 events (trees) over an area of 500,000 square meters giving an average intensity of the point pattern data of .0073 trees per unit area.
 
-The distribution of trees is not homogeneous as can be seen on a plot.
+The distribution of trees is not homogeneous as can be seen by this plot of the event locations.
 ```{r}
 plot(bei)
 ```
 
-There are localized clusters of trees and large areas with few if any trees.
-
-Elevation and elevation slope are factors associated with tree occurrence.
+There are localized clusters of trees and large areas with few if any trees. Elevation and elevation slope are factors associated with tree occurrence.
 
 The point pattern data is accompanied by data (`bei.extra`) on elevation (`elev`) and slope of elevation (`grad`) across the region.
 ```{r}
@@ -85,40 +86,37 @@ sum(is.na(den$v))
 
 There are over 16K of the cells that have a value of `NA`.
 
-## Can the tornado events be adequately described by a model of complete spatial randomness?
+## Creating ppp objects from simple feature data frames
 
-Here we are interested in the intensity of tornado genesis locations in Kansas. Import the data as a simple features data frame and transform the geographic CRS to a web Mercator. Here we get all the tornadoes since 1950 with a EF damage rating.
+Consider again the tornado genesis locations in Kansas. Import the data as a simple features data frame and transform the geographic CRS to Lambert conic conformal centered on Kansas (EPSG:6922). Here we get all the tornadoes since 1950 with a EF damage rating.
 ```{r}
 library(tidyverse)
 library(sf)
 
 Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
-  st_transform(crs = 3857) %>%
+  st_transform(crs = 6922) %>%
   filter(st == "KS", mag >= 0) %>%
   mutate(EF = as.factor(mag)) %>%
   select(EF)
 ```
 
-Plot them.
+We note that the spatial distance unit is meters.
+```{r}
+st_crs(Torn.sf)
+```
+
+We further note that some tornadoes are incorrectly coded as Kansas tornadoes.
 ```{r}
 plot(Torn.sf)
 ```
 
-Q: What is wrong?
+Instead of filtering by column name we can subset by geometry. We saw how to do this in Lesson 7 with the `st_intersection()` function. Here, since we are using the functions in the {spatstat} package, we do this by defining the window as an `owin` object. 
 
-Instead of filtering by column name we should subset by geometry. We saw how to do this in Lesson 6 with the `st_contains()` (`st_intersection()`) function. Here since we are using the functions in the {spatstat} package we do this by defining the window.
-
-Import the data again, this time keeping all the events with an EF rating. Here we project the geographic CRS to a Lambert conic conformal centered on Kansas (EPSG:6922).
+We first obtain the Kansas border as a simple feature data frame from the {USAboundaries} package and transform the CRS to that of the tornadoes. We then convert the simple feature object to an S4 `SpatialPolygons` object before converting it to an `owin` object with the `as.owin()` function. Make sure functions from the {maptools} package are available to the current session.
 ```{r}
-Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
-  st_transform(crs = 6922) %>%
-  filter(mag >= 0) %>%
-  mutate(EF = as.factor(mag)) %>%
-  dplyr::select(EF)
-```
+if(!require(USAboundaries)) install.packages(pkgs = "USAboundaries", repos = "http://cran.us.r-project.org")
+if(!require(maptools)) install.packages(pkgs = "maptools", repos = "http://cran.us.r-project.org")
 
-Next create a spatial window as an `owin` object. We first obtain the Kansas border as a simple feature data frame from the {USAboundaries} package and transform the CRS to that of the tornadoes. We then convert the simple feature object to an S4 `SpatialPolygons` object before converting it to an `owin` object with the `as.owin()` function. Make sure functions from the {maptools} package are available to the current session.
-```{r}
 library(USAboundaries)
 library(maptools)
 
@@ -129,7 +127,7 @@ KS.sp <- as(KS.sf, "Spatial")
 KS.win <- as(KS.sp, 'owin')
 ```
 
-Next convert the tornado simple feature data frame to a `ppp` object with the EF rating as the marks. Again we need to first convert to an S4 class spatial object.
+Next convert the tornado simple feature data frame to a `ppp` object with the EF rating as the marks. We need to first convert to an S4 class spatial object and then to a `ppp` object.
 ```{r}
 Torn.sp <- as(Torn.sf, "Spatial")
 
@@ -143,7 +141,7 @@ T.ppp <- T.ppp[KS.win]
 plot(T.ppp)
 ```
 
-Rescale the units from meters to kilometers. Recall that the spatial unit is given in the CRS of the simple feature.
+Rescale the distance unit from meters to kilometers with the `rescale()` function frmo the {spatstat} package.
 ```{r}
 T.ppp <- spatstat::rescale(T.ppp, 
                            s = 1000, 
@@ -160,7 +158,9 @@ We plot the events by magnitude using the `plot()` method together with the `spl
 plot(split(T.ppp))
 ```
 
-The number of events varies across the state (see EF4 events for example) but it's difficult to say whether this is due to sampling variation. 
+## Can Kansas tornado events be described by complete spatial randomness?
+
+The number of tornadoes varies across the state (see EF4 events for example) but it's difficult to say whether this is due to sampling variation. 
 
 To illustrate this here we compare the EF1 tornado locations with a sample of events generated under the null hypothesis of CSR. 
 
@@ -191,7 +191,7 @@ plot(density(split(Z)))
 
 The range of local intensity variations is similar. So we don't have much evidence against the null model of CSR as defined by a homogeneous Poisson process.
 
-## Tornado reports as a function of distance from nearest town
+## Are Kansas tornado reports more common in the vicinity of towns?
 
 We know that tornado reports are more common near cities and towns. This is especially true in the earlier years of the record. This knowledge is available from the literature on tornadoes (not from the data). It is a well-known artifact of the data set, but it had never been quantified until we did it in 2013 http://myweb.fsu.edu/jelsner/PDF/Research/ElsnerMichaelsScheitlinElsner2013.pdf. 
 
@@ -322,7 +322,7 @@ The difference between the two point pattern data sets can be explained by the c
 
 ## Conditional probability of an event
 
-Consider EF1 or worse tornadoes occurring over the state of Texas. The EPSG code is for a Texas centric Lambert conic conformal.
+Consider EF1 or more damaging tornadoes occurring over the state of Texas. The EPSG code is for a Texas centric Lambert conic conformal.
 ```{r}
 library(sf)
 library(dplyr)
