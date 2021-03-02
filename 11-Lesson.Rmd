@@ -421,7 +421,7 @@ library(tidyverse)
 if(!"1950-2018-torn-initpoint" %in% list.files()) {
 download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/1950-2018-torn-initpoint.zip",
               destfile = "1950-2018-torn-initpoint.zip")
-unzip("1950-2018-torn-aspath.zip")
+unzip("1950-2018-torn-initpoint.zip")
 }
 
 Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint", 

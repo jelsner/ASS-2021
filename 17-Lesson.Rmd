@@ -8,17 +8,161 @@ editor_options:
   chunk_output_type: console
 ---
 
-### Another example: Given a wildfire anywhere in Florida what is the probability is was started by lightning?
+**"To me programming is more than an important practical art. It is also a gigantic undertaking in the foundations of knowledge."** – Grace Hopper
+
+## Given a Texas tornado, what is the chance that it will cause at least EF3 damage?
+
+Combining maps allow us to map estimates of relative risks of events. More generally the relative risk is a conditional probability. For example, given a tornado in Texas what is the chance that it will cause at least EF3 damage? 
+```{r}
+library(sf)
+library(tidyverse)
+library(spatstat)
+library(maptools)
+library(USAboundaries)
+
+Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
+  st_transform(crs = 3082) %>%
+  filter(mag >= 0) %>%
+  mutate(EF = as.factor(mag)) %>%
+  dplyr::select(EF)
+
+T.ppp <- Torn.sf %>%
+  as_Spatial() %>%
+  as.ppp()
+
+W <- us_states(states = "Texas") %>%
+  st_transform(crs = st_crs(Torn.sf)) %>%
+  as_Spatial() %>%
+  as.owin()
+
+T.ppp <- T.ppp[W] %>%
+  spatstat::rescale(s = 1000, 
+                    unitname = "km")
+summary(T.ppp)
+```
+
+There are 8,736 Texas tornadoes of which 368 are EF3+ on the damage-rating scale. The distance unit is kilometer. The average intensity is .013 events per square kilometer over this 69-year period (1950-2018).
+
+For the state as a whole we have the answer from our summary of the `ppp` object.
+```{r}
+summary(T.ppp)
+```
+
+The chance that a tornado anywhere in Texas will be at least EF3 or worse is the sum of the proportions for these types: .03594 + .00549 + .00069 = .042 (or 4.2\%). Or the sum of the intensities for these types divided by the overall intensity (1.264744e-08). 
+
+But as we saw the intensity varies spatially.
+
+We create two `ppp` objects the first one being the set of all tornado locations with damage ratings 0, 1, or 2 and the other the set of all tornado locations with damage ratings 3, 4, or 5.
+
+First we split the object then merge them and assign names as marks.
+```{r}
+H.ppp <- unmark(T.ppp[T.ppp$marks == 2 | T.ppp$marks == 1 | T.ppp$marks == 0])
+I.ppp <- unmark(T.ppp[T.ppp$marks == 3 | T.ppp$marks == 4 | T.ppp$marks == 5])
+T2.ppp <- superimpose(H = H.ppp, I = I.ppp)
+```
+
+The probability that a tornado picked at random is intense (EF3+) is 4%. Plot touchdown locations for the set of intense tornadoes.
+```{r}
+plot(I.ppp, pch = 25, cols = "red", main="")
+plot(T.ppp, add=TRUE, lwd = .1)
+```
+
+To obtain the relative risk we use the `relrisk()` function. If X is a bivariate point pattern (a multitype point pattern consisting of two types of events) then by default, the events of the first type (the first level of `marks(X)`) are treated as controls or non-events, and events of the second type are treated as cases. 
+
+Then the function `relrisk()` computes the spatially-varying probability of a case, (i.e. the probability $p(u)$ that a point at location $u$ will be a case). If `relative = TRUE`, it computes the spatially-varying relative risk of a case relative to a control, $r(u) = p(u)/(1 - p(u))$.
+
+Here we compute the relative risk on a 128 by 128 grid. It takes a few seconds.
+```{r}
+rr <- relrisk(T2.ppp, 
+              dimyx = c(128, 128))
+```
+
+The result is again an object of class `im` (a pixel object with values we can interpret as the conditional probability of an 'intense' tornado, see https://en.wikipedia.org/wiki/Enhanced_Fujita_scale).
+
+We retrieve the range of probabilities with the `range()` function. Note that many of the values are `NA` corresponding pixels that are outside the window so we set `na.rm = TRUE`.
+```{r}
+range(rr, na.rm = TRUE)
+```
+
+The probabilities range from a low of .77% to a high of 6.1%.
+
+County borders from the {map} package (automatically installed with {ggplot2}). It provides maps of the USA, with state and county borders, that can be retrieved and converted as sf objects.
+```{r}
+library(maps)
+
+TX.sf <- map("county", regions = "Texas", plot = FALSE, fill = TRUE) %>%
+  st_as_sf() %>%
+  st_buffer(dist = 0)
+``` 
+
+Create a map. To facilitate plotting the results we convert the resulting `im` object to a raster and set the CRS accordingly.
+```{r}
+library(raster)
+
+rr.r <- raster(rr)
+crs(rr.r) <- st_crs(Torn.sf)$proj4string
+
+library(tmap)
+
+tm_shape(rr.r) +
+  tm_raster(title = "Probability") +
+tm_shape(TX.sf) +
+  tm_borders(col = "gray70") +
+tm_layout(frame = FALSE) +
+  tm_credits(text = "Chance that a random tornado\ndoes at least EF3 damage",
+             size = 1,
+             position = c("left", "bottom")) 
+```
+
+It is of considerable interest to extract these probabilities for specific cities.
+
+Here we use the data frame `us.cities` from the {map} package has a list of US cities with population greater than about 40,000. Also included are state capitals of any population size.
+```{r}
+Cities.sf <- st_as_sf(us.cities, 
+                      coords = c("long", "lat"),
+                      crs = 4326) %>%
+  st_transform(crs = st_crs(Torn.sf)) %>%
+  dplyr::filter(country.etc == "TX")
+```
+
+We use the `extract()` function from the {raster} package to get a single value for each city. We put these values into the simple feature data frame. 
+```{r}
+Cities.sf$rr <- raster::extract(rr.r, Cities.sf)
+
+Cities.sf %>%
+  dplyr::arrange(desc(rr)) 
+```
+
+To put the finishing touch on this analysis we create a chart using the `geom_lollipop()` function from the {ggalt} package.
+```{r}
+library(ggalt)
+library(scales)
+
+Cities.sf <- Cities.sf %>%
+  dplyr::filter(rr > .042)
+
+ggplot(Cities.sf, aes(x = reorder(name, rr), y = rr)) +
+    geom_lollipop(point.colour = "steelblue", point.size = 3) +
+    scale_y_continuous(labels = percent) +
+    coord_flip() +
+    labs(x = "", y = NULL, 
+         title = "Chance that a random tornado will do at least EF3 damage",
+         subtitle = "Cities in Texas with a 2010 population > 40,000",
+         caption = "Data from SPC") +
+  theme_minimal()
+```
+
+## Given a wildfire anywhere in Florida what is the probability is was started by lightning?
 
 The spatial wildfire occurrence data for the United States, 1992-2015 [FPA_FOD_20170508]. Data publication contains GIS data (Karen C. Short). It is available here: https://www.fs.usda.gov/rds/archive/catalog/RDS-2013-0009.4. 
 
 I download the GPKG data. GeoPackage is an open, standards-based, platform-independent, portable, self-describing, compact format for transferring geospatial information. Of the 8 million or so wildfires in the U.S. over the period 1992-2015 I extracted those occurring in Florida and saved it as a ESRI Shapefile.
 ```{r, eval=FALSE}
 library(sf)
-
 unzip("RDS-2013-0009.4_GPKG.zip")
 
 st_layers(dsn = "Data/FPA_FOD_20170508.gpkg")
+
 Fires.sf <- st_read(dsn = "Data/FPA_FOD_20170508.gpkg",
                     layer = "Fires")
 
@@ -38,6 +182,12 @@ zip(files = "FL_Fires",
 
 We import the Florida wildfire data as a simple feature data frame.
 ```{r}
+if(!"FL_Fires" %in% list.files()){
+  download.file("http://myweb.fsu.edu/jelsner/temp/data/FL_Fires.zip",
+                "FL_Fires.zip")
+unzip("FL_Fires.zip")
+}
+
 FL_Fires.sf <- st_read(dsn = "FL_Fires")
 dim(FL_Fires.sf)
 ```
@@ -208,7 +358,7 @@ $$
 $$
 where $r_{ij}$ is the euclidean distance between event $i$ and event $j$, $r$ is the search radius, and $\hat \lambda$ is an estimate of the intensity $(\hat \lambda = n/|A|)$ where $|A|$ is the window area and $n$ is the number of events. $I(.)$ is an indicator function equal to 1 when the expression inside the parentheses is true, and 0 otherwise. If the events are homogeneous, $\hat{K}(r)$ increases at a rate proportional to $\pi r^2$.
 
-#### Another example: Bramble canes
+### Example: Bramble canes
 
 The locations of bramble canes are available as a marked `ppp` object in the {spatstat} package. A bramble is any rough (usually wild) tangled prickly shrub with thorny stems.
 ```{r}
@@ -239,7 +389,7 @@ The empirical estimate of $K$ (black line) is to the left of the theoretical fun
 
 The expected number of additional events is multiplied by the total number of events (823) so a value of .1 indicates that at a distance of about 1.6 meters we would expect to see about 82 additional events.
 
-#### Example: Kansas tornadoes
+### Example: Kansas tornadoes
 
 Last week we mapped the intensity of tornadoes across Kansas by considering the genesis locations as point pattern data. Here we return to these data and consider only tornadoes since 1994.
 ```{r}
@@ -319,7 +469,7 @@ The interpretation is that 40% ($G$ = .4) of all tornado locations have another 
 
 Note: With this many events the difference between the raw and border-corrected estimates is small.
 
-### Statistical significance
+## Statistical significance
 
 We see the separation between the black solid line and the blue dashed line, but is this separation large relative to the sample size? More to the point, is the above difference between the empirical and theoretical distance functions (e.g., $G$) large enough to conclude there is significant clustering? 
 

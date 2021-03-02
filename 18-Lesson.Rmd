@@ -8,7 +8,9 @@ editor_options:
   chunk_output_type: console
 ---
 
-#### Multitype clustering
+**"Good code is its own best documentation. As you're about to add a comment, ask yourself, 'How can I improve the code so that this comment isn't needed?' Improve the code and then document it to make it even clearer."** - Steve McConnell
+
+## Multitype clustering
 
 Analogues of the $G$ and $K$ functions are available for 'multitype' point patterns. Multitype patterns have factor marks. Interest focuses on whether the occurrence of one type of event influences the occurrence of another type of event. For example, does the occurrence of species X over this domain influence the occurrence of species Y? Physically what might cause this?
 
