@@ -61,7 +61,7 @@ I.ppp <- unmark(T.ppp[T.ppp$marks == 3 | T.ppp$marks == 4 | T.ppp$marks == 5])
 T2.ppp <- superimpose(H = H.ppp, I = I.ppp)
 ```
 
-The probability that a tornado picked at random is intense (EF3+) is 4%. Plot touchdown locations for the set of intense tornadoes.
+The probability that a tornado chosen at random is intense (EF3+) is 4%. Plot touchdown locations for the set of intense tornadoes.
 ```{r}
 plot(I.ppp, pch = 25, cols = "red", main="")
 plot(T.ppp, add=TRUE, lwd = .1)
@@ -88,11 +88,9 @@ The probabilities range from a low of .77% to a high of 6.1%.
 
 County borders from the {map} package (automatically installed with {ggplot2}). It provides maps of the USA, with state and county borders, that can be retrieved and converted as sf objects.
 ```{r}
-library(maps)
 
-TX.sf <- map("county", regions = "Texas", plot = FALSE, fill = TRUE) %>%
-  st_as_sf() %>%
-  st_buffer(dist = 0)
+TX.sf <- us_counties(state = "TX") %>%
+  st_transform(crs = st_crs(Torn.sf))
 ``` 
 
 Create a map. To facilitate plotting the results we convert the resulting `im` object to a raster and set the CRS accordingly.
@@ -109,7 +107,7 @@ tm_shape(rr.r) +
 tm_shape(TX.sf) +
   tm_borders(col = "gray70") +
 tm_layout(frame = FALSE) +
-  tm_credits(text = "Chance that a random tornado\ndoes at least EF3 damage",
+  tm_credits(text = "Chance that a tornado\ndoes at least EF3 damage",
              size = 1,
              position = c("left", "bottom")) 
 ```
@@ -118,16 +116,14 @@ It is of considerable interest to extract these probabilities for specific citie
 
 Here we use the data frame `us.cities` from the {map} package has a list of US cities with population greater than about 40,000. Also included are state capitals of any population size.
 ```{r}
-Cities.sf <- st_as_sf(us.cities, 
-                      coords = c("long", "lat"),
-                      crs = 4326) %>%
-  st_transform(crs = st_crs(Torn.sf)) %>%
-  dplyr::filter(country.etc == "TX")
+Cities.sf <- us_cities(state = "TX") %>%
+  st_transform(crs = st_crs(Torn.sf))
 ```
 
 We use the `extract()` function from the {raster} package to get a single value for each city. We put these values into the simple feature data frame. 
 ```{r}
-Cities.sf$rr <- raster::extract(rr.r, Cities.sf)
+Cities.sf$rr <- raster::extract(rr.r, 
+                                Cities.sf)
 
 Cities.sf %>%
   dplyr::arrange(desc(rr)) 
@@ -152,35 +148,13 @@ ggplot(Cities.sf, aes(x = reorder(name, rr), y = rr)) +
   theme_minimal()
 ```
 
-## Given a wildfire anywhere in Florida what is the probability is was started by lightning?
+## Given a wildfire in Florida what is the probability is was started by lightning?
 
 The spatial wildfire occurrence data for the United States, 1992-2015 [FPA_FOD_20170508]. Data publication contains GIS data (Karen C. Short). It is available here: https://www.fs.usda.gov/rds/archive/catalog/RDS-2013-0009.4. 
 
 I download the GPKG data. GeoPackage is an open, standards-based, platform-independent, portable, self-describing, compact format for transferring geospatial information. Of the 8 million or so wildfires in the U.S. over the period 1992-2015 I extracted those occurring in Florida and saved it as a ESRI Shapefile.
-```{r, eval=FALSE}
-library(sf)
-unzip("RDS-2013-0009.4_GPKG.zip")
 
-st_layers(dsn = "Data/FPA_FOD_20170508.gpkg")
-
-Fires.sf <- st_read(dsn = "Data/FPA_FOD_20170508.gpkg",
-                    layer = "Fires")
-
-library(dplyr)
-
-FL_Fires.sf <- Fires.sf %>%
-  filter(STATE == "FL") %>%
-  st_transform(crs = 3857)
-
-st_write(FL_Fires.sf, 
-         dsn = "FL_Fires", 
-         driver = "ESRI Shapefile")
-
-zip(files = "FL_Fires",
-    zipfile = "FL_Fires.zip")
-```
-
-We import the Florida wildfire data as a simple feature data frame.
+We import the Florida wildfire data as a simple feature data frame and transform the native CRS to a Florida GDL Albers (EPSG 3086).
 ```{r}
 if(!"FL_Fires" %in% list.files()){
   download.file("http://myweb.fsu.edu/jelsner/temp/data/FL_Fires.zip",
@@ -188,41 +162,56 @@ if(!"FL_Fires" %in% list.files()){
 unzip("FL_Fires.zip")
 }
 
-FL_Fires.sf <- st_read(dsn = "FL_Fires")
+FL_Fires.sf <- st_read(dsn = "FL_Fires") %>%
+  st_transform(crs = 3086)
 dim(FL_Fires.sf)
 ```
 
-There are over 90K events in Florida. To make things run faster here we analyze a random sample of the events. We first create a random sample of 1000 row numbers and assign the row numbers to the vector `index`. We then subset the `FL_Fires.sf` sf data frame by this index.
+There are over 90K events in Florida. To make things run faster here we analyze a random sample of the events. We first create a random sample of 2000 row numbers and assign the row numbers to the vector `index`. We then subset the `FL_Fires.sf` sf data frame by this index.
 ```{r}
 set.seed(78732)
-index <- sample(nrow(FL_Fires.sf), size = 1000)
-FL_FiresS.sf <- FL_Fires.sf[index, ]
+
+FL_FiresS.sf <- FL_Fires.sf %>%
+  sample_n(size = 2000)
+
 dim(FL_FiresS.sf)
 ```
 
-We then convert the event set to a `ppp` object over a window defined by the state boundaries as we've done before.
+The variable `STAT_CAU_1` indicates the cause.
 ```{r}
-FL_FiresS.sp <- as(FL_FiresS.sf, "Spatial")
-Fires.ppp <- as(FL_FiresS.sp["STAT_CAU_1"], "ppp")
-
-W.sf <- us_states(states = "Florida") %>%
-  st_transform(crs = st_crs(FL_Fires.sf))
-
-W.sp <- as(W.sf, "Spatial")
-W <- as(W.sp, 'owin')
-
-Fires.ppp <- Fires.ppp[W]
-summary(Fires.ppp)
+table(FL_FiresS.sf$STAT_CAU_1)
 ```
 
-The probability that a wildfire picked at random is caused by lightning is about 25% (proportion column of the frequency versus type table). How does this probability vary over the state?
-
-First we split the object then merge them and assign names as marks.
+We then convert the simple feature event set to a `ppp` object over a window defined by the state boundaries with the cause as a factor mark.
 ```{r}
-L.ppp <- unmark(Fires.ppp[Fires.ppp$marks == "Lightning"])
-NL.ppp <- unmark(Fires.ppp[Fires.ppp$marks != "Lightning"])
+F.ppp <- FL_FiresS.sf["STAT_CAU_1"] %>%
+  as_Spatial() %>%
+  as.ppp()
 
-LNL.ppp <- superimpose(NL = NL.ppp, L = L.ppp)
+W <- us_states(states = "Florida") %>%
+  st_transform(crs = st_crs(FL_Fires.sf)) %>%
+  as_Spatial() %>%
+  as.owin()
+
+F.ppp <- F.ppp[W]
+
+marks(F.ppp) <- as.factor(marks(F.ppp)) # make the character marks factor marks
+
+summary(F.ppp)
+```
+
+The probability that a wildfire is caused by lightning is about 25% (`proportion` column of the frequency versus type table). How does this probability vary over the state?
+
+First we split the object and then merge them and assign names as marks.
+```{r}
+L.ppp <- F.ppp[F.ppp$marks == "Lightning"] %>%
+  unmark()
+
+NL.ppp <- F.ppp[F.ppp$marks != "Lightning"] %>%
+  unmark()
+
+LNL.ppp <- superimpose(NL = NL.ppp, 
+                       L = L.ppp)
 ```
 
 The function `relrisk()` computes the spatially-varying probability of a case, (i.e. the probability $p(u)$ that a point at location $u$ will be a case).
@@ -230,25 +219,30 @@ The function `relrisk()` computes the spatially-varying probability of a case, (
 Here we compute the relative risk on a 256 by 256 grid.
 ```{r}
 wfr <- relrisk(LNL.ppp, 
-              dimyx = c(256, 256))
+               dimyx = c(256, 256))
 ```
 
-We map the raster as before first converting the image object to a raster object and assigning the CRS. We add the county borders for reference.
+We map the raster as before first converting the image object to a raster object and assigning the CRS. We add the county borders for geographic reference.
 ```{r}
 wfr.r <- raster(wfr)
 
 crs(wfr.r) <- st_crs(FL_Fires.sf)$proj4string
 
-FL.sf <- map("county", regions = "Florida", plot = FALSE, fill = TRUE) %>%
-  st_as_sf()
+FL.sf <- us_counties(state = "FL") %>%
+  st_transform(crs = st_crs(FL_Fires.sf))
+
+library(tmap)
 
 tm_shape(wfr.r) +
   tm_raster(title = "Probability") +
 tm_shape(FL.sf) +
   tm_borders(col = "gray70") +
-tm_legend(position = c("left", "bottom") ) +
-tm_credits(text = "Chance that a random wildfire\nwas caused by lightning",
-             position = c("left", "bottom")) 
+tm_legend(position = c("left", "center") ) +
+tm_layout(main.title = "Chance a wildfire was started by lightning (1992-2015)",
+          main.title.size = 1) +
+tm_compass(position = c("right", "top")) +
+tm_credits(text = "Data source: Karen Short https://doi.org/10.2737/RDS-2013-0009.4",
+           position = c("left", "bottom")) 
 ```
 
 ## Clustering through interaction
