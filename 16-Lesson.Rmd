@@ -3,12 +3,19 @@ title: "Lesson 16"
 author: "James B. Elsner"
 date: "March 3, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
 ---
 
 **"So much complexity in software comes from trying to make one thing do two things."** - Ryan Singer
+
+Last time I introduced the terminology of point pattern data including the concept of complete spatial randomness (CSR). With point pattern data our focus is typically on natural occurring systems where the location of events is examined through the lens of spatial statistics in an attempt to understand physical processes. The {spatstat} package is a comprehensive set of functions for analyzing, plotting, and modeling point pattern data. The package requires the data be of spatial class `ppp`.
+
+The typical work flow will include importing and munging data as simple feature data frames and then converting the simple feature data frame to a `ppp` object for analysis and modeling. But it is often convenient to do some of the data munging after conversion. Today we will see how to subset point pattern data and how to convert a simple feature data frame to point pattern data object. Then we get answers to two questions about tornado reports in Kansas: Can the reports be adequately described as CSR? And, are there more tornado reports in the vicinity of towns?
+
+As a heads up, Assignment 7 on Friday will ask you to convert a simple feature data frame to point pattern data and to determine the average spatial intensity and to map the local spatial intensity. These operations are covered in this lesson.
 
 ## Subsetting point pattern data
 
@@ -374,7 +381,7 @@ intensity(T.ppp)
 
 There are 8,736 tornado reports. The distance unit is kilometer. The average intensity is .013 events per square kilometer over this 69-year period (1950-2018).
 
-Next we plot the spatial varying intensity using a kernel smoother.
+Next we plot the local intensity using a kernel smoother.
 ```{r}
 T.ppp %>%
   density() %>%
@@ -405,7 +412,7 @@ Zc <- distmap(C.ppp)
 plot(Zc)
 ```
 
-Finally we compute the spatial varying intensity of tornadoes as a smoothed function of distance to nearest town/city with the `rhohat()` function. We then prepare the output and make a plot.
+Finally we compute the intensity of tornadoes as a smoothed function of distance to nearest town/city with the `rhohat()` function. We then prepare the output and make a plot.
 ```{r}
 rhat <- rhohat(Tum.ppp, 
                covariate = Zc,
@@ -425,7 +432,7 @@ ggplot() +
   theme_minimal()
 ```
 
-We see that the local intensity of the tornado reports is much higher than the average intensity in the vicinity of towns and cities. However caution needs to exercised in the interpretation because the trend of increasing tornado reports moving from southwest to northeast across the state mirrors the trend in the occurrence of cities/towns.
+We see that the intensity of the tornado reports is much higher than the average intensity in the vicinity of towns and cities. However caution needs to exercised in the interpretation because the trend of increasing tornado reports moving from southwest to northeast across the state mirrors the trend in the occurrence of cities/towns.
 
 We can quantify this effect by specifying a function in the `covariate =` argument. Here we specify a flat surface with `x,y` as arguments and `x + y` inside the function.
 ```{r}
@@ -434,11 +441,11 @@ plot(rhohat(Tum.ppp,
             method = "transform"))
 ```
 
-The spatial varying tornado event intensity increases along the axis labeled `X` starting at a value of 7,400. At value of `X` equal to about 8,200 the spatial intensity stops increasing.
+Local intensity increases along the axis labeled `X` starting at a value of 7,400. At value of `X` equal to about 8,200 the spatial intensity stops increasing.
 
 Units along the horizontal axis are kilometers but the reference (intercept) distance is at the far left. So we interpret the increase in spatial intensity going from southwest to northeast as a change across about 800 km (8200 - 7400).
 
-The spatial varying intensity of cities has the same property (increasing from southwest to northeast then leveling off).
+The local intensity of cities has the same property (increasing from southwest to northeast then leveling off).
 ```{r}
 plot(rhohat(C.ppp, 
             covariate = function(x,y){x + y},
