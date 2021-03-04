@@ -30,8 +30,10 @@ T.ppp <- Torn.sf %>%
   as_Spatial() %>%
   as.ppp() 
 
-W <- us_states(states = "Texas") %>%
-  st_transform(crs = st_crs(Torn.sf)) %>%
+TX.sf <- us_states(states = "TX") %>%
+  st_transform(crs = st_crs(Torn.sf)) 
+
+W <- TX.sf %>%
   as_Spatial() %>%
   as.owin()
 
@@ -126,7 +128,7 @@ Bottom line: We can only get so far by examining intensity estimates if our inte
 
 Combining intensity maps of multitype events allow us to estimate the relative risk. More generally the relative risk is a conditional probability. For example, given a tornado in Texas what is the chance that it will cause at least EF3 damage? 
 
-To answer this we import the data again then mutate and selectthe damage rating as a factor called `EF` before turning this into a planar point pattern subset by the boundary of Texas.
+To answer this we import the data again then mutate and select the damage rating as a factor called `EF` before turning this into a planar point pattern subset by the boundary of Texas.
 ```{r}
 Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
   st_transform(crs = 3082) %>%
@@ -138,85 +140,79 @@ T.ppp <- Torn.sf %>%
   as_Spatial() %>%
   as.ppp()
 
-T.ppp <- T.ppp[W] %>%
-  spatstat::rescale(s = 1000, 
-                    unitname = "km")
+W <- TX.sf %>%
+  as_Spatial() %>%
+  as.owin()
+
+T.ppp <- T.ppp[W]
 summary(T.ppp)
 ```
 
-The chance that a tornado anywhere in Texas will be at least EF3 or worse is the sum of the proportions for these types: .03594 + .00549 + .00069 = .042 (or 4.2\%). But as we saw there is a gradient in intensity from the southwest to the northeast over the state.
+The chance that a tornado anywhere in Texas will be at least EF3 or worse is the sum of the proportions for these types: .03594 + .00549 + .00069 = .042 (or 4.2%). But as we saw there is a gradient in intensity from the southwest to the northeast over the state.
 
-We create two `ppp` objects the first one being the set of all tornado locations with damage ratings 0, 1, or 2 and the other the set of all tornado locations with damage ratings 3, 4, or 5.
+We create two `ppp` objects one being the set of all tornado locations with damage ratings 0, 1, or 2 and the other the set of all tornado locations with damage ratings 3, 4, or 5.
 
-First we split the object then merge them and assign names as marks.
+We subset the object using brackets (`[]`) and the logical operator `|` (or) and then merge the two subsets assigning names `H` and `I` as marks.
 ```{r}
 H.ppp <- unmark(T.ppp[T.ppp$marks == 2 | T.ppp$marks == 1 | T.ppp$marks == 0])
 I.ppp <- unmark(T.ppp[T.ppp$marks == 3 | T.ppp$marks == 4 | T.ppp$marks == 5])
-T2.ppp <- superimpose(H = H.ppp, I = I.ppp)
+T2.ppp <- superimpose(H = H.ppp, 
+                      I = I.ppp)
 ```
 
 The probability that a tornado chosen at random is intense (EF3+) is 4%. Plot touchdown locations for the set of intense tornadoes.
 ```{r}
-plot(I.ppp, pch = 25, cols = "red", main="")
-plot(T.ppp, add=TRUE, lwd = .1)
+plot(I.ppp, pch = 25, cols = "red", main = "")
+plot(T.ppp, add = TRUE, lwd = .1)
 ```
 
-To obtain the relative risk we use the `relrisk()` function. If X is a bivariate point pattern (a multitype point pattern consisting of two types of events) then by default, the events of the first type (the first level of `marks(X)`) are treated as controls or non-events, and events of the second type are treated as cases. 
+To obtain the relative risk we use the `relrisk()` function. If X is a multitype point pattern with factor marks and two levels of the factor then the events of the first type (the first level of `marks(X)`) are treated as controls or non-events, and events of the second type are treated as cases.
 
-Then the function `relrisk()` computes the spatially-varying probability of a case, (i.e. the probability $p(u)$ that a point at location $u$ will be a case). If `relative = TRUE`, it computes the spatially-varying relative risk of a case relative to a control, $r(u) = p(u)/(1 - p(u))$.
+The function estimates the local probability of a case (i.e. the probability $p(u)$ that a point at $u$ will be a case) using a kernel density smoother. The bandwidth for the kernel can be specified or can be found through an iterative cross-validation procedure (recall the bandwidth selection procedure used in geographic regression) using the `bw.relrisk()` function. The bandwidth will have units of distance (here kilometers). We specify a minimum and maximum bandwidth with the `hmin =` and `hmax =` arguments. This takes a few seconds.
+```{r}
+( bw <- bw.relrisk(T2.ppp,
+                   hmin = 1000,
+                   hmax = 200000) )
+```
 
-Here we compute the relative risk on a 128 by 128 grid. It takes a few seconds.
+The optimal bandwidth is 120 km. 
+
+Here we compute the relative risk at points defined by a 256 by 256 grid. 
 ```{r}
 rr <- relrisk(T2.ppp, 
-              dimyx = c(128, 128))
+              sigma = bw,
+              dimyx = c(256, 256))
 ```
 
-The result is again an object of class `im` (a pixel object with values we can interpret as the conditional probability of an 'intense' tornado, see https://en.wikipedia.org/wiki/Enhanced_Fujita_scale).
+Th result is an object of class `im` (image) with values we can interpret as the conditional probability of an 'intense' tornado (see https://en.wikipedia.org/wiki/Enhanced_Fujita_scale).
 
 We retrieve the range of probabilities with the `range()` function. Note that many of the values are `NA` corresponding pixels that are outside the window so we set `na.rm = TRUE`.
 ```{r}
 range(rr, na.rm = TRUE)
 ```
 
-The probabilities range from a low of .77% to a high of 6.1%.
+The probabilities range from a low of .5% to a high of 6.2%.
 
-County borders from the {map} package (automatically installed with {ggplot2}). It provides maps of the USA, with state and county borders, that can be retrieved and converted as sf objects.
+We map the probabilities with the `plot()` method after assigning the projection and re-projecting to a geographic CRS.
 ```{r}
+rr.r <- raster::raster(rr)
+projection(rr.r) <- st_crs(Torn.sf)$proj4string
+rr.r2 <- projectRaster(rr.r, crs = 4326)
 
-TX.sf <- us_counties(state = "TX") %>%
-  st_transform(crs = st_crs(Torn.sf))
-``` 
-
-Create a map. To facilitate plotting the results we convert the resulting `im` object to a raster and set the CRS accordingly.
-```{r}
-library(raster)
-
-rr.r <- raster(rr)
-crs(rr.r) <- st_crs(Torn.sf)$proj4string
-
-library(tmap)
-
-tm_shape(rr.r) +
-  tm_raster(title = "Probability") +
-tm_shape(TX.sf) +
-  tm_borders(col = "gray70") +
-tm_layout(frame = FALSE) +
-  tm_credits(text = "Chance that a tornado\ndoes at least EF3 damage",
-             size = 1,
-             position = c("left", "bottom")) 
+plot(rr.r2)
 ```
 
-It is of considerable interest to extract these probabilities for specific cities.
+Since the relative risk is computed for any point is interesting to extract these probabilities for cities and towns.
 
-Here we use the data frame `us.cities` from the {map} package has a list of US cities with population greater than about 40,000. Also included are state capitals of any population size.
+Here we use the `us_cities` data frame from the {USAboundaries} package that has a list of cities and towns. The CRS is 4326 and we filter to keep only cities with at least 50000 in 2010.
 ```{r}
 Cities.sf <- us_cities(state = "TX") %>%
-  st_transform(crs = st_crs(Torn.sf))
+  dplyr::filter(population > 100000)
 ```
 
 We use the `extract()` function from the {raster} package to get a single value for each city. We put these values into the simple feature data frame. 
 ```{r}
-Cities.sf$rr <- raster::extract(rr.r, 
+Cities.sf$rr <- raster::extract(rr.r2, 
                                 Cities.sf)
 
 Cities.sf %>%
@@ -228,16 +224,13 @@ To put the finishing touch on this analysis we create a chart using the `geom_lo
 library(ggalt)
 library(scales)
 
-Cities.sf <- Cities.sf %>%
-  dplyr::filter(rr > .042)
-
-ggplot(Cities.sf, aes(x = reorder(name, rr), y = rr)) +
+ggplot(Cities.sf, aes(x = reorder(city, rr), y = rr)) +
     geom_lollipop(point.colour = "steelblue", point.size = 3) +
-    scale_y_continuous(labels = percent) +
+    scale_y_continuous(labels = percent, limits = c(0, .0625)) +
     coord_flip() +
     labs(x = "", y = NULL, 
-         title = "Chance that a random tornado will do at least EF3 damage",
-         subtitle = "Cities in Texas with a 2010 population > 40,000",
+         title = "Chance that a tornado will cause at least EF3 damage",
+         subtitle = "Cities in Texas with a 2010 population > 100,000",
          caption = "Data from SPC") +
   theme_minimal()
 ```
@@ -261,7 +254,7 @@ FL_Fires.sf <- st_read(dsn = "FL_Fires") %>%
 dim(FL_Fires.sf)
 ```
 
-There are over 90K events in Florida. To make things run faster here we analyze a random sample of the events. We first create a random sample of 2000 row numbers and assign the row numbers to the vector `index`. We then subset the `FL_Fires.sf` sf data frame by this index.
+There are over 90K events in Florida. To make things run faster here we analyze a random sample of the events. We first create a random sample of 2000 row numbers and assign the row numbers to the vector `index`. We then subset the `FL_Fires.sf` simple feature data frame by this index.
 ```{r}
 set.seed(78732)
 
