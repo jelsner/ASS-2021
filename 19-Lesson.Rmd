@@ -50,7 +50,7 @@ $$
 
 For data that is CSR, the $L$ function has expected value $r$ and its variance is approximately constant in $r$. A common plot is a graph of $r - \hat{L}(r)$ against $r$, which approximately follows the horizontal zero-axis with constant dispersion if the data follow a homogeneous Poisson process.
 
-## Caution when interpreting clustering functions
+## Caution when interpreting the clustering functions
 
 The clustering functions are defined and estimated under the assumption that the point process is stationary (homogeneous). If the process is inhomogeneous (trending) then deviations from the theoretical model do not necessarily imply interaction clustering. Also, the clustering functions characterize the process 'on average' so variability in the interaction process as a function of scale will not be detected.
 

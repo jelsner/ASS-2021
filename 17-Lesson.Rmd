@@ -12,17 +12,23 @@ editor_options:
 
 ## Intensity trend as a possible confounding factor
 
-Quantifying the report bias works well for Kansas where there is no trend in the local intensity. There is no large differences in the number of reports as we move across different regions of the state.
+Quantifying the reporting bias is easy for tornadoes in Kansas where there is no trend in the local intensity. There is no large gradient to the number of reports as we move across different regions of the state.
 
-Things are different in Texas. Convert the tornado reports (EF1 or worse) occurring over the state as a `ppp` object. We use an EPSG code or a Texas-centric Lambert conic conformal projection.
+Things are different in Texas. Let's see how. Convert the tornado reports (EF1 or worse) occurring over the state as a `ppp` object. We use an EPSG code or a Texas-centric Lambert conic conformal projection.
 ```{r}
+library(sf)
+library(tidyverse)
+library(spatstat)
+library(maptools)
+library(USAboundaries)
+
 Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
   st_transform(crs = 3082) %>%
   filter(mag >= 0)
 
 T.ppp <- Torn.sf %>%
   as_Spatial() %>%
-  as.ppp()
+  as.ppp() 
 
 W <- us_states(states = "Texas") %>%
   st_transform(crs = st_crs(Torn.sf)) %>%
@@ -35,18 +41,22 @@ W <- us_states(states = "Texas") %>%
 intensity(T.ppp)
 ```
 
-There are 8,736 tornado reports. The distance unit is kilometer. The average intensity is .013 events per square kilometer over this 69-year period (1950-2018).
+There are 8,736 tornado reports. The distance (length) unit is kilometer. The average intensity is .013 events per square kilometer over this 69-year period (1950-2018).
 
-Next we plot the local intensity using a kernel smoother.
+Next we plot the local intensity using a kernel smoother using the `plot()` method on the results of the `density()` function.
 ```{r}
 T.ppp %>%
   density() %>%
   plot()
+
+plot(T.ppp, 
+     pch = '.', 
+     add = TRUE)
 ```
 
-There is a clear trend of tornado reports from a low in the southwest to a high in the northeast. The average intensity of .013 tornadoes per square km is too high in southwestern parts of the state and too low in the northern parts.
+There is a clear trend of tornado reports from a low in the southwest to a high in the northeast. The average intensity of .013 tornadoes per square km is above the local intensity over southwestern parts of the state and below in the northern parts.
 
-Next we compute and plot the spatial intensity as a smoothed function of distance to nearest town or city. We start by removing the marks on the tornado events assigning the unmarked `ppp` object to `Tum.ppp`. We then create a `ppp` object from the city/town locations and subset the tornado events by the window.
+Next we compute and plot the local intensity as a smoothed function of distance to nearest town or city as we did for Kansas. We start by removing the marks on the tornado events assigning the unmarked `ppp` object to `Tum.ppp`. We then create a `ppp` object from the city/town locations and subset the tornado events by the window.
 ```{r}
 Tum.ppp <- T.ppp %>%
   unmark()
@@ -62,7 +72,7 @@ C.ppp <- C.ppp[W] %>%
                     unitname = "km")
 ```
 
-Next create a distance map of the city/town locations using the `distmap()` function.
+Next we create a distance map of the city/town locations using the `distmap()` function.
 ```{r}
 Zc <- distmap(C.ppp)
 plot(Zc)
@@ -101,27 +111,23 @@ Local intensity increases along the axis labeled `X` starting at a value of 7,40
 
 Units along the horizontal axis are kilometers but the reference (intercept) distance is at the far left. So we interpret the increase in spatial intensity going from southwest to northeast as a change across about 800 km (8200 - 7400).
 
-The local intensity of cities has the same property (increasing from southwest to northeast then leveling off).
+The local intensity of cities/towns has the same property (increasing from southwest to northeast then leveling off).
 ```{r}
 plot(rhohat(C.ppp, 
             covariate = function(x,y){x + y},
             method = "transform"))
 ```
 
-So the population bias towards more reports near towns/cities is potentially confounded by the fact that there tends to be more cities and towns in areas that have conditions more favorable for tornadoes.
+So the population bias towards more reports near towns/cities is potentially confounded by the fact that there are more cities and towns in areas that have conditions more favorable for tornadoes.
 
-Thus we can only get so far by examining intensity estimates if our interest lies in inferring the cause of spatial variation in the intensity. We will need to look at second order properties of the events.
+Bottom line: We can only get so far by examining intensity estimates if our interest lies in inferring the cause of spatial variation in the local intensity. We need to look at second-order properties of the events. Before we go there, lets consider two more examples of how to make use of local intensity variations.
 
 ## Given a Texas tornado, what is the chance that it will cause at least EF3 damage?
 
-Combining maps allow us to map estimates of relative risks of events. More generally the relative risk is a conditional probability. For example, given a tornado in Texas what is the chance that it will cause at least EF3 damage? 
-```{r}
-library(sf)
-library(tidyverse)
-library(spatstat)
-library(maptools)
-library(USAboundaries)
+Combining intensity maps of multitype events allow us to estimate the relative risk. More generally the relative risk is a conditional probability. For example, given a tornado in Texas what is the chance that it will cause at least EF3 damage? 
 
+To answer this we import the data again then mutate and selectthe damage rating as a factor called `EF` before turning this into a planar point pattern subset by the boundary of Texas.
+```{r}
 Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
   st_transform(crs = 3082) %>%
   filter(mag >= 0) %>%
@@ -132,27 +138,13 @@ T.ppp <- Torn.sf %>%
   as_Spatial() %>%
   as.ppp()
 
-W <- us_states(states = "Texas") %>%
-  st_transform(crs = st_crs(Torn.sf)) %>%
-  as_Spatial() %>%
-  as.owin()
-
 T.ppp <- T.ppp[W] %>%
   spatstat::rescale(s = 1000, 
                     unitname = "km")
 summary(T.ppp)
 ```
 
-There are 8,736 Texas tornadoes of which 368 are EF3+ on the damage-rating scale. The distance unit is kilometer. The average intensity is .013 events per square kilometer over this 69-year period (1950-2018).
-
-For the state as a whole we have the answer from our summary of the `ppp` object.
-```{r}
-summary(T.ppp)
-```
-
-The chance that a tornado anywhere in Texas will be at least EF3 or worse is the sum of the proportions for these types: .03594 + .00549 + .00069 = .042 (or 4.2\%). Or the sum of the intensities for these types divided by the overall intensity (1.264744e-08). 
-
-But as we saw the intensity varies spatially.
+The chance that a tornado anywhere in Texas will be at least EF3 or worse is the sum of the proportions for these types: .03594 + .00549 + .00069 = .042 (or 4.2\%). But as we saw there is a gradient in intensity from the southwest to the northeast over the state.
 
 We create two `ppp` objects the first one being the set of all tornado locations with damage ratings 0, 1, or 2 and the other the set of all tornado locations with damage ratings 3, 4, or 5.
 
