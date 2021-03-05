@@ -10,9 +10,11 @@ editor_options:
 
 **"To me programming is more than an important practical art. It is also a gigantic undertaking in the foundations of knowledge."** – Grace Hopper
 
+Note on schedule: Lessons 17 & 18 and Assignment 8 this week. Next week Lessons 19 & 20 but no assignment. Friday March 19 will be the second wellness day for this class.
+
 ## Intensity trend as a possible confounding factor
 
-Quantifying the reporting bias is easy for tornadoes in Kansas where there is no trend in the local intensity. There is no large gradient to the number of reports as we move across different regions of the state.
+Quantifying the reporting bias is straightforward for tornadoes in Kansas since there is no trend in the local intensity. That is, there are no large gradients in the number of reports as we move across different regions of the state.
 
 Things are different in Texas. Let's see how. Convert the tornado reports (EF1 or worse) occurring over the state as a `ppp` object. We use an EPSG code or a Texas-centric Lambert conic conformal projection.
 ```{r}
@@ -56,7 +58,7 @@ plot(T.ppp,
      add = TRUE)
 ```
 
-There is a clear trend of tornado reports from a low in the southwest to a high in the northeast. The average intensity of .013 tornadoes per square km is above the local intensity over southwestern parts of the state and below in the northern parts.
+Unlike the local intensity of tornadoes across Kansas and Iowa (Assignment 7), here we see a clear trend of tornado reports from a low in the southwest to a high in the northeast. The average intensity of .013 tornadoes per square km is above the local intensity over southwestern parts of the state and below in the northern parts.
 
 Next we compute and plot the local intensity as a smoothed function of distance to nearest town or city as we did for Kansas. We start by removing the marks on the tornado events assigning the unmarked `ppp` object to `Tum.ppp`. We then create a `ppp` object from the city/town locations and subset the tornado events by the window.
 ```{r}
@@ -330,4 +332,71 @@ tm_layout(main.title = "Chance a wildfire was started by lightning (1992-2015)",
 tm_compass(position = c("right", "top")) +
 tm_credits(text = "Data source: Karen Short https://doi.org/10.2737/RDS-2013-0009.4",
            position = c("left", "bottom")) 
+```
+
+## Clustering through interaction
+
+The first-order spatial intensity function describes the distribution on a scale across the domain (trend and/or covariate terms). Clustering is a second-order property of point pattern data. It answers the question: is the probability of an event in the proximity of another event higher than expected by chance? 
+
+What physical processes can you think of where this question might be relevant?
+
+Let $r$ be the distance between two events or the distance between an event and an arbitrary point within the domain of a spatial point pattern data set, then functions to describe clustering are:
+
+The nearest neighbor distance function $G(r)$ : The cumulative distribution of the distances from an event to the nearest other event (event-to-event function). It summarizes the distances between nearest neighbors.
+
+The empty space function $F(r)$ : The cumulative distribution of the distances from a point in the domain to the nearest event (point-to-event function). It summarizes the distance gaps between events (lacunarity--amount of gappiness).
+
+The reduced second moment function (Ripley $K$) $K(r)$ : Defined such that $\lambda \times K(r)$ is the expected number of additional events within a distance $r$ of an event, where $\lambda$ is the average intensity of the events. It is a measure of the spatial autocorrelation among the events.
+
+To help evaluate clustering estimates of $G$, $F$, and $K$ computed on point pattern data (empirical estimates) are compared to theoretical curves assuming a homogeneous Poisson process. These theoretical curves are well defined for homogeneous point patterns (CSR--complete spatial randomness). A deviation of the empirical estimate from the theoretical curve is evidence against CSR. 
+
+The theoretical functions assuming a homogeneous Poisson process are:
+
+$K(r) = \pi r^2$
+$F(r) = G(r) = 1 - \exp(-\lambda \pi r^2)$
+
+Where $\lambda$ is the spatial intensity.
+
+Recall the Swedish pine saplings data from the {spatstat} package.
+```{r}
+library(spatstat)
+
+data(swedishpines)
+class(swedishpines)
+```
+
+Here we first assign the data to an object called `SP`. We then compute the nearest neighbor distance function using `Gest()` and assign the output of this computation to an object called `G`. List the output.
+```{r}
+SP <- swedishpines
+( G <- Gest(SP) )
+```
+
+Output includes the distance `r` and estimates for the cumulative event-to-event distances. With many events the different estimates (e.g., Kaplan-Meier, border corrected, etc) will be similiar.
+
+The output also includes theoretical values under the assumption of a homogeneous Poisson process (read: CSR). The `plot()` method makes it easy to compare the estimates against CSR.
+```{r}
+plot(G)
+abline(h = c(.2, .5), 
+       col = "black",
+       lty = 2)
+```
+
+The graph shows $G$ as a function of distance $r$ starting at zero distance. We add two horizontal lines to help with interpretation. 
+
+The horizontal dashed line at $G$ = .2 intersects the black line at a distance of .5 meter ($r$) [unit of length is .1 meters]. This means that 20% of the pairwise distances between saplings are within .5 meter. The horizontal dashed line at $G$ = .5 intersects the black line at .8 meters indicating that 50% of the pairwise distances are within .8 meter.
+
+The blue dashed-dotted line is the theoretical homogeneous Poisson process model with the same intensity as the Swedish pines. We see that for a given radius, the actual value of $G$ is less than the theoretical value of $G$. There are fewer saplings in the vicinity of other saplings than expected by chance. For example, if the saplings were arranged under the model of CRS we would expect 20% of the pairwise distances to be within .3 meter and 50% of them to be within .55 meter.
+
+For publication we should convert the object `G` to a data frame and then use {ggplot2} functions. Here we do this then remove estimates for distances greater than 1.1 meter and convert the units to meters.
+```{r}
+G.df <- as.data.frame(G) %>%
+  filter(r < 11) %>%
+  mutate(r = r * .1)
+
+ggplot(G.df, aes(x = r, y = km)) +
+  geom_line() +
+  geom_line(aes(y = theo), color = "blue") +
+  geom_hline(yintercept = c(.2, .5), lty = 'dashed') +
+  xlab("Distance (m)") +  ylab("G(r): Cumulative % of distances within a distance r of another event") +
+  theme_minimal()
 ```
