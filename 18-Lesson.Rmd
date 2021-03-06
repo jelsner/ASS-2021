@@ -18,7 +18,7 @@ What physical processes can you think of where this question might be relevant?
 
 Let $r$ be the distance between two events or the distance between an event and an arbitrary point within the domain of a spatial point pattern data set, then functions to describe clustering are:
 
-The nearest neighbor distance function $G(r)$ : The cumulative distribution of the distances from an event to the nearest other event (event-to-event function). It summarizes the distances between nearest neighbors.
+The nearest neighbor distance function $G(r)$: The cumulative distribution of the distances from an event to the nearest other event (event-to-event function). It summarizes the distances between nearest neighbors.
 
 The empty space function $F(r)$ : The cumulative distribution of the distances from a point in the domain to the nearest event (point-to-event function). It summarizes the distance gaps between events (lacunarity--amount of gappiness).
 
@@ -230,7 +230,7 @@ The interpretation is that 40% ($G$ = .4) of all tornado locations have another 
 
 Note: With this many events the difference between the raw and border-corrected estimates is small.
 
-## Statistical significance
+## Determining the statistical significance of event clustering or regularity
 
 We see the separation between the black solid line and the blue dashed line, but is this separation large relative to the sample size? More to the point, is the above difference between the empirical and theoretical distance functions (e.g., $G$) large enough to conclude there is significant clustering? 
 
@@ -339,7 +339,7 @@ ggplot(Kboot.df, aes(x = r, y = iso)) +
   theme_minimal()
 ```
 
-## Multitype clustering
+## Estimating clustering in mult-type point patterns
 
 Analogues to the $G$ and $K$ functions are available for 'multitype' point patterns. Multitype patterns have factor marks. Interest focuses on whether the occurrence of one type of event influences the occurrence of another type of event. For example, does the occurrence of species X over this domain influence the occurrence of species Y? Physically what might cause this?
 
