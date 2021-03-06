@@ -150,7 +150,7 @@ T.ppp <- T.ppp[W]
 summary(T.ppp)
 ```
 
-The chance that a tornado anywhere in Texas will be at least EF3 or worse is the sum of the proportions for these types: .03594 + .00549 + .00069 = .042 (or 4.2%). But as we saw there is a gradient in intensity from the southwest to the northeast over the state.
+Chance that a tornado anywhere in Texas will be at least EF3 or worse is the sum of the proportions for these types: .03594 + .00549 + .00069 = .042 (or 4.2%). But as we saw there is a gradient in intensity from the southwest to the northeast over the state.
 
 We create two `ppp` objects one being the set of all tornado locations with damage ratings 0, 1, or 2 and the other the set of all tornado locations with damage ratings 3, 4, or 5.
 
@@ -199,8 +199,8 @@ We map the probabilities with the `plot()` method after assigning the projection
 ```{r}
 rr.r <- raster::raster(rr)
 projection(rr.r) <- st_crs(Torn.sf)$proj4string
-rr.r2 <- projectRaster(rr.r, crs = 4326)
 
+rr.r2 <- projectRaster(rr.r, crs = 4326)
 plot(rr.r2)
 ```
 

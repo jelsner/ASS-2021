@@ -165,8 +165,10 @@ Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
 Convert the simple feature data frame to a `ppp` object. First we need to convert the simple feature to a `SpatialPointsDataFrame`.
 ```{r}
 library(maptools)
-Torn.sp <- as(Torn.sf, "Spatial")
-T.ppp <- as(Torn.sp["EF"], "ppp")
+
+T.ppp <- Torn.sf["EF"] %>%
+  as_Spatial() %>%
+  as.ppp()
 ```
 
 Create the analysis window using the state boundary then subset the tornado locations by the border. We use the `rescale()` function with scale (`s =`) set to 1000. We compute the average intensity of the point pattern.
