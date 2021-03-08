@@ -3,7 +3,6 @@ title: "Lesson 17"
 author: "James B. Elsner"
 date: "March 8, 2021"
 output:
-  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -11,9 +10,9 @@ editor_options:
 
 **"To me programming is more than an important practical art. It is also a gigantic undertaking in the foundations of knowledge."** – Grace Hopper
 
-Note on schedule: Lessons 17 & 18 and Assignment 8 this week. Next week Lessons 19 & 20 but no assignment. Friday March 19 will be the second wellness day for this class.
+Note on schedule: This week: Lessons 17 & 18 and Assignment 8. Next week Lessons 19 & 20 but _no assignment_. Friday March 19 will be the second wellness day for this class this semester.
 
-Last week: Point pattern data where the focus is on spatial event locations and where the null hypothesis is CSR. The {spatstat} package has many functions for analyzing and modeling this type of data. We looked at how to convert simple features to `ppp` objects and how to get the intensity with the `intensity()` function and the spatial varying intensity with the `density()` function.
+Last week: Point pattern data where the focus is on spatial event locations and where the null hypothesis is CSR. The {spatstat} package has functions for analyzing and modeling this type of data. We looked at how to convert simple features to `ppp` objects and how to get the intensity with the `intensity()` function and the spatial varying intensity with the `density()` function.
 
 We also saw that the local intensity might vary with some explanatory variable and we quantified this variation for the tornado reports with the `rhohat()` function using distance to nearest city as the covariate.
 
@@ -21,7 +20,7 @@ We also saw that the local intensity might vary with some explanatory variable a
 
 Quantifying the tornado report bias is straightforward in Kansas since there is no trend in the local intensity. That is, there are no large gradients in the number of reports as we move across different regions of the state.
 
-Things are different in Texas. Let's see how. Convert the tornado reports (EF1 or worse) occurring over the state as a `ppp` object. We use an EPSG code or a Texas-centric Lambert conic conformal projection.
+Things are different in Texas. Let's see how. Convert the tornado reports (EF1 or worse) occurring over the state as a `ppp` object. We use an EPSG code for a Texas-centric Lambert conic conformal projection.
 ```{r}
 library(sf)
 library(tidyverse)
@@ -82,7 +81,7 @@ C.ppp <- C.ppp[W] %>%
                     unitname = "km")
 ```
 
-Next we create a distance map of the city/town locations using the `distmap()` function.
+Next we create a distance map of the city/town locations using the `distmap()` function. This distance map is the covariate.
 ```{r}
 Zc <- distmap(C.ppp)
 plot(Zc)
@@ -168,7 +167,7 @@ T2.ppp <- superimpose(H = H.ppp,
                       I = I.ppp)
 ```
 
-The probability that a tornado chosen at random is intense (EF3+) is 4%. Plot touchdown locations for the set of intense tornadoes.
+The probability that a tornado chosen at random is intense (EF3+) is 4%. Plot the event locations for the set of intense tornadoes.
 ```{r}
 plot(I.ppp, pch = 25, cols = "red", main = "")
 plot(T.ppp, add = TRUE, lwd = .1)
@@ -176,7 +175,7 @@ plot(T.ppp, add = TRUE, lwd = .1)
 
 To obtain the relative risk we use the `relrisk()` function. If X is a multitype point pattern with factor marks and two levels of the factor then the events of the first type (the first level of `marks(X)`) are treated as controls or non-events, and events of the second type are treated as cases.
 
-The function estimates the local probability of a case (i.e. the probability $p(u)$ that a point at $u$ will be a case) using a kernel density smoother. The bandwidth for the kernel can be specified or can be found through an iterative cross-validation procedure (recall the bandwidth selection procedure used in geographic regression) using the `bw.relrisk()` function. The bandwidth will have units of distance (here kilometers). We specify a minimum and maximum bandwidth with the `hmin =` and `hmax =` arguments. This takes a few seconds.
+The function estimates the local probability of a case (i.e. the probability $p(u)$ that a point at $u$ will be a case) using a kernel density smoother. The bandwidth for the kernel can be specified or can be found through an iterative cross-validation procedure (recall the bandwidth selection procedure used in geographic regression) using the `bw.relrisk()` function. The bandwidth will have units of distance (here meters). We specify a minimum and maximum bandwidth with the `hmin =` and `hmax =` arguments. This takes a few seconds.
 ```{r}
 ( bw <- bw.relrisk(T2.ppp,
                    hmin = 1000,
@@ -204,6 +203,7 @@ The probabilities range from a low of .5% to a high of 6.2%.
 We map the probabilities with the `plot()` method after assigning the projection and re-projecting to a geographic CRS.
 ```{r}
 library(raster)
+
 rr.r <- raster(rr)
 projection(rr.r) <- st_crs(Torn.sf)$proj4string
 
@@ -211,7 +211,7 @@ rr.r2 <- projectRaster(rr.r, crs = 4326)
 plot(rr.r2)
 ```
 
-Since the relative risk is computed for any point is interesting to extract these probabilities for cities and towns.
+Since the relative risk is computed for any point it is interesting to extract these probabilities for cities and towns.
 
 Here we again use the `us_cities()` function from the {USAboundaries} package that extracts a simple feature data frame of cities and towns for particular states. The CRS is 4326 and we filter to keep only cities with at least 100000 in 2010.
 ```{r}
@@ -259,7 +259,7 @@ FL_Fires.sf <- st_read(dsn = "FL_Fires") %>%
 dim(FL_Fires.sf)
 ```
 
-There are over 90K rows and 38 variables. To make things run faster in this lesson, we analyze a sample of the rows. We do this with the `sample_n()` function from the {tidyverse} set of package where the argument `size =` specifies the number of rows to choose at random. We save the sample of events to the object `FL_FiiresS.sf`. Here we set the random number seed so that the set of rows chosen will be the same for everyone running the code.
+There are over 90K rows and 38 variables. To make things run faster in this lesson, we analyze a sample of the rows. We do this with the `sample_n()` function from the {tidyverse} set of package where the argument `size =` specifies the number of rows to choose at random. We save the sample of events to the object `FL_FiresS.sf`. Here we set the random number seed so that the set of rows chosen will be the same for everyone running the code.
 ```{r}
 set.seed(78732)
 
