@@ -218,7 +218,7 @@ ggplot(K.df, aes(x = r, y = iso * summary(BFU.ppp)$intensity)) +
   theme_minimal()
 ```
 
-We see a difference, but is it significant against a null hypothesis of inhomogeneous Poisson?
+We see a difference, but is it significant against a null hypothesis of a homogeneous Poisson?
 ```{r}
 Kenv <- envelope(BFU.ppp, 
               fun = Kinhom, 

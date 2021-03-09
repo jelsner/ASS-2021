@@ -1,0 +1,542 @@
+---
+title: "Lesson 20"
+author: "James B. Elsner"
+date: "March 17, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+**"Sometimes it pays to stay in bed on Monday, rather than spending the rest of the week debugging Monday's code."** - Christopher Thompson
+
+## Cluster models
+
+[Clean up this discuss a bit]
+
+Cluster models are needed to describe point pattern data when event interactions violate the assumption of a homogenous Poisson process. Recall that event interaction implies that an event at one location changes the probability of an event or events nearby.
+
+Cluster models can be derived from a Poisson process so as to retain some of their nice features. For example, with a Poisson cluster process, we begin with a Poisson process $Y$ describing a set of 'parent' events. Each parent $y_i$ in $Y$ produces to a finite set $x_i$ of 'offspring' events according to some random (read: stochastic) mechanism. Then the set of all offsprings forms a clustered point process $X$. Only $X$ is observed and it will not be adequately described by homogeneous Poisson process (CSR). 
+
+Said another way, the model is homogeneous Poisson at an unobserved level but clustered at the level of the observations. Note: "model is homogeneous Poisson" refers to the idea that events locations generated from the model will be indistinguishable from a homogeneous Poisson process.
+
+The Matern cluster process is one such example. Parent events come from a homogeneous Poisson process with intensity $\kappa$ and each parent has a Poisson ($\mu$) number of offspring that are independently and uniformly distributed (iid) within a disc of radius $r$ centered on the parent.
+
+For instance here we use the `rMatClust()` function from the {spatstat} package to produce a clustered `ppp` object. We use a disc radius of .1 units and an offspring rate equal to 5 (`mu = 5`).
+```{r}
+library(spatstat)
+
+plot(rMatClust(kappa = 10, 
+               r = .1, 
+               mu = 5), main = "")
+```
+
+The result is a point pattern described as doubly Poisson. We can vary $\kappa$, $r$, and $\mu$ to generate more or fewer events.
+
+Other clustered Poisson processes include:
+
+* Thomas process: each cluster consists of a Poisson number of random events with each event having an isotropic Gaussian displacement from its parent.  
+* Gauss-Poisson process: each cluster is either a single event or a pair of events.  
+* Neyman-Scott process: the cluster mechanism is arbitrary.
+
+A Cox point process is a homogeneous Poisson process but with a random intensity function. Let $\Lambda(s)$ be a random function with non-negative values defined at all locations $s$ inside the domain. Then, conditional on $\Lambda$ let $X$ be a Poisson process with an intensity function $\Lambda$. Then $X$ is a Cox process.
+
+An example of a Cox process is the mixed Poisson process in which we generate a random variable $\Lambda$ and, conditional on $\Lambda$, we generate a homogeneous Poisson process with intensity $\Lambda$. Following are two realizations of a Cox point process:
+```{r}
+set.seed(3042)
+par(mfrow = c(1, 2))
+for (i in 1:2){
+  lambda <- rexp(n = 1, rate = 1/100)
+  X <- rpoispp(lambda)
+  plot(X)
+}
+par(mfrow = c(1, 1))
+```
+
+The statistical moments of Cox processes are defined in terms of the moments of $\Lambda$. For instance, the intensity function of $X$ is $\lambda(s)$ = E[$\Lambda(s)$], where E[] is the expected value.
+
+Cox processes provide convenient models for clustered point patterns. A Cox model is over dispersed relative to a Poisson process (i.e. the variance of the number of events falling in any region of size A, is greater than the mean number of events in those regions). The Matern cluster and Thomas process are Cox processes.
+
+One such class of processes is the log-Gaussian Cox processes (LGCP) in which logarithm of $\Lambda(s)$ is a Gaussian random function.
+
+If we have a way of generating realizations of a random function $\Lambda$ of interest, then we can use the `rpoispp()` function to generate the Cox process. The intensity argument `lambda` of `rpoispp()` can be a function of x or y or a pixel image.
+
+### Thinned processes
+
+Another way to generate clustered point pattern data is by 'thinning'. Thinning refers to deleting some of the events. With 'independent thinning' the fate of each event is independent of the fate of the other events. When independent thinning is applied to a homogeneous Poisson point pattern, the resulting point pattern consisting of the retained events is also Poisson. 
+
+To get a non-Poisson process we need some kind of dependent thinning mechanism.
+
+An example of this is Matern's Model I process. Here a homogeneous Poisson process $Y$ first generates a point pattern, then any event in $Y$ that lies closer than a distance $r$ from another event is deleted. This results in point pattern data where close neighbor events do not exist.
+```{r}
+plot(rMaternI(kappa = 70, 
+              r = .05), main = "")
+```
+
+Changing $\kappa$ and $r$ will change the event intensity.
+
+### Markov point process models
+
+Expanding on the earlier notation we write that a homogeneous Poisson process with intensity $\lambda > 0$ has intensity $$\lambda(s, x) = \lambda$$ where $s$ is any location in the window W and $x$ is the set of events.
+
+Then an inhomogeneous Poisson process has conditional intensity $$\lambda(s, x) = \lambda(s)$$. The intensity $\lambda(s)$ depends on a spatial trend or on a covariate.
+
+There is also a class of Markov point process models that allow for clustering (or regularity) due to event interaction. Markov refers to the fact that the interaction is limited to nearest neighbors. Said another way, a Markov point process generalizes a Poisson process in the case where events are pairwise dependent.
+
+A Markov process with parameters $\beta > 0$ and $0 < \gamma < \infty$ with interaction radius $r > 0$ has conditional intensity $\lambda(s, x)$ given by
+$$
+\lambda(s, x) = \beta \gamma^{t(s, x)}
+$$
+where $t(s, x)$ is the number of events that lie within a distance $r$ of location $s$.
+
+Three cases:
+
+1. If $\gamma = 1$, then $\lambda(s, x) = \beta$ No interaction between events,  $\beta$ can vary with $s$.
+2. If $\gamma < 1$, then $\lambda(s, x) < \beta$. Events inhibit nearby events.
+3. If $\gamma > 1$, then $\lambda(s, x) > \beta$. Events encourage nearby events.
+
+Note the distinction between the interaction term $\gamma$ and the trend term $\beta$. As we saw earlier in the semester, a similar distinction exists between autocorrelation $\rho$ and trend $\beta$ in spatial regression models.
+
+### Fitting models to point pattern data
+
+The {spatstat} package contains functions for fitting statistical models to point pattern data. Models can include trend, covariates, and event interactions of any order (interactions are not restricted to pairwise). Models are fit with maximum likelihood and minimum contrast procedures. 
+
+The method of minimum contrasts derives a cost function between the theoretical and empirical $K$ function. Parameter values are those that minimize this cost function.
+
+The `ppm()` function is used to fit a spatial point pattern model. The syntax has the form `ppm(X, formula, interaction, ...)` where `X` is the point pattern object of class `ppp`, `formula` describes the systematic (trend and covariate) part of the model, and `interaction` describes the stochastic dependence between events (e.g., Matern process).
+
+More generally, we write the logarithm of the conditional intensity $\log[\lambda(s, x)]$ as linear expression with two components.  
+$$
+\log\big[\lambda(s, x)\big] = \theta_1 B(s) + \theta_2 C(s, x)
+$$
+where the $\theta$'s are model parameters that need to be estimated.  
+
+The term $B(s)$ depends only on location so it represents trend and covariate effects. It is the 'systematic component' of the model. The term $C(s, x)$ represents stochastic interactions (dependency) between events.
+
+Recall a plot of the Swedish pine saplings. There was no indication of a trend. That is, no systematic variation in the intensity of saplings.
+```{r}
+SP <- swedishpines
+plot(SP)
+```
+
+A plot of the nearest neighborhood distance function indicated some regularity. The regularity appeared at scales between at least 3 and 10 units of distance. Let's take a look again.
+```{r}
+plot(Kest(SP))
+```
+
+The Strauss process is a simple interaction model. Inhibition is constant with a fixed radius (r) around each event. The amount of inhibition ranges from zero to complete (zero probability of a nearby event). In the case of no inhibition the process is equivalent to a homogeneous Poisson process.
+
+To model the process we set the trend term to a constant (`~ 1`) and the Strauss interaction radius to 10 units. The `rbord =` argument specifies a distance from the window for border corrections. 
+```{r}
+modelSP <- ppm(SP, 
+               trend = ~ 1, 
+               interaction = Strauss(r = 10), 
+               rbord = 10)
+```
+
+The value for `r` in the `Strauss()` function is based on our visual inspection of the plot of `Kest()`. A value is chosen that represents the distance at which there is the largest departure from a CSR model. 
+
+We inspect the model by typing the object name.
+```{r}
+modelSP
+```
+
+The first-order term (`beta`) has a value of .076. This is the intensity of the 'proposal' events. Here beta exceeds the average intensity (here .0074) by a factor of ten. 
+
+The interaction parameter (`gamma`) is .275. It is less than one, indicating an inhibition process. The logarithm of gamma, called the interaction coefficient (`Interaction`), is -1.29. Interaction coefficients less than zero imply inhibition.
+
+A table with the coefficients including the standard errors and uncertainty ranges is obtained with the `coef()` method.
+```{r}
+coef(summary(modelSP))
+```
+
+We again see the `Interaction` coefficient along with it's standard error (`S.E.`) and the associated 95% uncertainty interval. The ratio of the `Interaction` coefficient to its standard error is the `Zval`. A large z-value (in absolute magnitude) translates to a low $p$-value and a rejection of the null hypothesis of no interaction between events.
+
+We also see here an estimated value for the `(Intercept)`. It is the logarithm of the beta value, so exp(-2.58) = .076 is the intensity of the proposal events.
+
+The model is interpreted as follows. The process producing the spatial pattern of pine saplings is such that we should see .076 saplings per unit area [unobserved (latent) rate]. But because of event inhibition, where saplings nearby other saplings fail to grow, the number of saplings is reduced to .0074 per unit area. Thus the spatial pattern is suggestive of sibling-sibling interaction. Adults have many off-springs, but only some survive due to limited resources.
+
+Let's compare this to the maple trees in the Lansing woods dataset (`lansing`). We extract the events marked as `maple` and put them in a separate `ppp` object called `MT`.
+```{r}
+MT <- unmark(lansing[lansing$marks == "maple"])
+summary(MT)
+```
+
+There are 514 maples over this square region (924 x 924) square feet.
+
+A plot of the tree locations and the local intensity articulates the first-order property of this point pattern data.
+```{r}
+plot(density(MT))
+plot(MT, add = TRUE)
+```
+
+We see there are more maple trees across the southern part of the domain than across the nothern part of the domain.
+
+A plot of the $G$ function summarizes the second-order properties under the assumption of no trend.
+```{r}
+library(dplyr) 
+
+G <- Gest(MT)
+G.df <- as.data.frame(G) %>%
+  filter(r < .033) %>%
+  mutate(r = r * 924)
+
+library(ggplot2)
+
+ggplot(G.df, aes(x = r, y = km)) +
+  geom_line() +
+  geom_line(aes(y = theo), color = "blue") +
+  geom_vline(xintercept = 18.5, lty = 'dashed') +
+  xlab("Distance (ft)") + ylab("G(r): Cumulative % of distances within a distance r of another maple") +
+  theme_minimal()
+```
+
+The cumulative event-to-event distances indicate clustering. The empirical curve is above the theoretical curve. For example about 74% of the maple trees are within 18.5 feet of another maple tree. If the process resulted in trees was CSR then only 49% of the trees would be within 18.5 feet of another maple.
+
+Model the event interaction as a Strauss process with interaction distance of .025 units (23 ft).
+```{r}
+ppm(MT, trend = ~ 1, 
+        interaction = Strauss(r = .025))
+```
+
+Here the first order term beta is 301. It is the 'latent' rate of maple trees per unit area. This rate is less than the 514 actual maple trees. The fitted interaction parameter (gamma) is 1.47. It is greater than one as expected since the trees are clustered. The logarithm of gamma is .387.
+
+The model is interpreted as follows. The process producing the maple trees is such that we expect to see about 301 maples. Because of clustering, maples are more likely near other maples, so the number of maples increases to 514 per unit area.
+
+Here the physical explanation may not be about event interaction. As the clustering in the pattern of maple tree locations can be explained by the presence of hickories (cross event interaction). 
+
+Note: The Strauss process is for inhibition models. So although we use it here for diagnostics, we need to fit a cluster model (thus the `*** Model is not valid ***` warning).
+
+For a cluster model the spatial intensity $$\lambda(s) = \kappa \mu(s)$$ where $\kappa$ is the average number of clusters and where $\mu(s)$ is the spatial varying cluster size (number events per cluster).
+
+Cluster models are fit using the `kppm()` function. Here we specify the cluster process as `clusters = "Thomas"`. That means each cluster consists of a Poisson number of maple trees, with each tree in the cluster being placed isotropically a distance from the parent tree where smaller distances are more likely based on a Gaussian distribution.
+```{r}
+modelMT <- kppm(MT, 
+                trend = ~ 1,
+                clusters = "Thomas")
+modelMT
+```
+
+Here $\kappa$ is 21.75 and $\bar \mu(s)$ (mean cluster size) is 23.64. The product of these two parameters is the number of events. It is a parent-child process. The number of parents is about 22. The distribution of the parents can be described as CSR. Each parent produces about 24 offspring distributed randomly about the location of the parent within a characteristic distance. Again, the physical process might be different from the point pattern process used to describe it.
+
+The cluster scale parameter is $\sigma^2$. The cluster scale indicates the characteristic size (area units) of the cluster.
+
+A `plot()` method verifies that the cluster process statistically 'explains' the spatial correlation.
+```{r}
+plot(modelMT, what = "statistic")
+```
+
+This is seen by the fact that the model fit (black line) is very close to the cluster process line (red line).
+
+The spatial scale of the clustering is visualized with the `what = "cluster"` argument.
+```{r}
+plot(modelMT, what = "cluster")
+```
+
+### Steps in fitting a point process model
+
+* Analyze/plot the first and second order characteristics of the event pattern. The intensity and nearest neighbor stastistics.
+* Select a spatial point process model (trend, interaction distance, etc) for pattern, informed by the results of step 1
+* Fit the model to the event pattern
+* Assess the model's goodness-of-fit by running simulations and comparing the simulated point patterns with the original point pattern
+
+The model should be capable of generating data that looks like the actual data used to fit the model.
+
+The development of spatial point process methods has largely been theory driven (not by actual problems/data). More work needs to be done to apply the theory to environmental data with spatial heterogeneity, properties at the individual level (marks), and with time information.
+
+### Model diagnostics
+
+The `envelope()` function computes the upper and lower values of a nearest-neighbor statistic from simulated realizations of a point pattern model. This is used as a test of the goodness-of-fit for the model.
+
+We start with the pine sapling model. Here we use the $L$ function (variance stablized Ripley $K$) estimated with `Lest()`.
+```{r}
+plot(envelope(modelSP, Lest, 
+              nsim = 39, 
+              global = TRUE, 
+              correction = 'border'), legend = FALSE)
+```
+
+The empirical curve is in black and the model is in red. The kink is the result of specifying 10 units for the interaction distance. From the results we conclude that an inhibition model is sufficient for describing the pine sapling data. 
+
+What about the maple trees? Our model is saved as `modelMT`.
+```{r}
+plot(envelope(modelMT, Lest, 
+              nsim = 39, 
+              global = TRUE, 
+              correction = 'border'), legend = FALSE)
+```
+
+In the case of the maple trees, a cluster model is sufficient. However, it is not satisfying since we know about the cross correlation with hickories. Also there appears to be more trees in the south. So we are not finished modeling these data.
+
+Here we model the intensity as a function of distance in the north-south direction.
+```{r}
+modelMT2 <- kppm(MT, 
+                 trend = ~ y,
+                 clusters = "Thomas")
+modelMT2
+```
+
+This is a inhomogeneous cluster point process model. The logarithm of the intensity depends on y. The coefficient is negative as expected with fewer trees as we move north (increasing y). There is one spatial unit in the north-south direction so we interpret this coefficient to mean there are 77% fewer trees in the north than in the south [1 - exp(-1.486) = .77].
+
+The average number of clusters (`kappa`) increases to about 27. The cluster scale parameter (`sigma`), indicating the characteristic size of the cluster (in distance units) decreases to .0536. That makes sense since some of the event-to-event distances are accounted for by the trend term.
+
+To examine if spatial covariates are needed in the case of inhibition models we use the `diagnose.ppm()` function to plot the residuals. Returning to our pine sapling model.
+```{r}
+diagnose.ppm(modelSP)
+```
+
+The point pattern data is shown in the top-left panel along with an estimate of the local spatial intensity using kernel density smoothing (blue shading). A plot of the residuals is shown in the lower-right panel. Blue indicates over prediction by the model and orange indicates under prediction. The observed occurrence of saplings is underestimated in the southeast and west-central part of the domain but the departures are not large nor are they systematic.
+
+The margin plots show the cumulative residuals in the north-south direction (top right) and east-west direction (bottom left). Imagine a vertical line (in the case of the x-coordinate) that sweeps from left to right across the window. The progressive total residual to the left of the line is plotted against the position of the line. The idea is to detect a lurking variable not included in the model. Negative residuals begin to accumulate at about 50 but they are not large.
+
+Given a point process model fitted to a point pattern, the function `qqplot.ppm` produces a quantile-quantile (Q-Q) plot based on residuals from the model. The residuals from the model are plotted ('data') as quantiles against quantiles from the theoretical distribution, which are estimated using simulation.
+
+For a good-fitting model the points should be near the diagonal (between the uncertainty lines).
+```{r}
+qqplot.ppm(modelSP, nsim = 39)
+```
+
+This is indeed the case with this model for the pine sapling dataset.
+
+We might be done at this point. Let's simulate a fake point pattern data using the model.
+```{r}
+plot(simulate(modelMT2))
+```
+
+It looks reasonable.
+
+### Example 1: Tropical trees
+
+If the intensity of events depends on spatial location as it does with the maple trees we can include a trend and covariate term in the model.
+
+For a trend term, the `formula ~ x` corresponds to a spatial trend of the form $\lambda(x) = \exp(a + bx)$, while `~ x + y` corresponds to $\lambda(x, y) = \exp(a + bx + cy)$ where `x`, `y` are the spatial coordinates. For a covariate term, the formula is `~ covariate1 + covariate2`.
+
+Consider the `bei` data from the {spatstat} package containing the locations of 3605 trees in a tropical rain forest.
+```{r}
+plot(bei)
+```
+
+Accompanied by covariate data giving the elevation (altitude) and slope of elevation in the study region. The data `bei.extra` is a list containing two pixel images, `elev` (elevation in meters) and `grad` (norm of elevation gradient). These pixel images are objects of class `im`, see `im.object`.
+```{r}
+image(bei.extra)
+```
+
+Compute and plot the $L$ function to examine spatial autocorrelation. The method computes the $L$ function from data generated by a homogeneous Poisson model (`nsim = 39` different data sets) and compares it to the L function computed from the actual data. By default the gray area includes the maximum and minimum value of $L$ at each radius from the generated data.
+```{r}
+plot(envelope(bei, 
+              Lest, 
+              nsim = 39, 
+              global = TRUE, 
+              correction = "border"), 
+     legend = FALSE)
+```
+
+There is significant clustering indicated by the black line far above the CSR line. There are more trees in the vicinity (r = 0 to 100 m) of other trees than expected by chance.
+
+But how much of the clustering is due to terrain (elevation and slope)?.
+
+Fit a model that includes elevation and gradient as covariates. This is done with the `trend =` argument naming the image variables and including the argument `covariates =` indicating a data frame or, in this case, a list whose entries are image functions.
+```{r}
+modelBEI.ppm <- ppm(bei, 
+                    trend = ~ elev + grad, 
+                    covariates = bei.extra)
+```
+
+We check to see if the covariates are significant to the model.
+```{r}
+summary(modelBEI.ppm)
+```
+
+The output shows that both elevation and elevation gradient are significant in explaining the spatial varying intensity of the trees. 
+
+Since the conditional intensity is on a log scale we interpret the elevation coefficient as follows: For a one meter increase in elevation the local spatial intensity increases by a amount equal to exp(.021) or 2%.
+
+Check how well the model fits the data. This is done with the `envelope()` function using the model object as the first argument. The second argument is the name of the distance function. Here the variance stablized Ripley $K$ function ($L$).
+
+The method computes the $L$ function from data generated by the model (`nsim = 39` different data sets) and compares it to the $L$ function computed from the actual data. By default the gray area includes the maximum and minimum value of $L$ at each radius from the generated data.
+```{r}
+E <- envelope(modelBEI.ppm, Lest, 
+              nsim = 39,
+              correction = "border",
+              global = TRUE)
+plot(E, main = "Inhomogeneous Poisson Model", 
+     legend = FALSE)
+```
+
+Better, but not by much. 
+
+An improvement is made by adding a cluster process to the model. This is done with the function `kppm()`.
+```{r}
+modelBEI.kppm <- kppm(bei, 
+                      trend = ~ elev + grad, 
+                      covariates = bei.extra, 
+                      clusters = "Thomas")
+E <- envelope(modelBEI.kppm, Lest, nsim = 39, 
+             global = TRUE, 
+             correction = "border")
+plot(E, main = "Clustered Inhomogeneous Model", legend = FALSE)
+```
+
+The uncertainty band is much wider. The empirical curve fits completely inside the band. The inhomogeneous cluster process appears to be an adequate description of the point pattern data.
+
+### Example 2: Violent tornado occurrence
+
+The vast majority of tornadoes have winds of less than 60 m/s (120 mph). A violent tornado, with winds exceeding 90 m/s, is rare. Most of these potentially destructive and deadly tornadoes occur from rotating thunderstorms called supercells, with formation contingent on local (storm-scale) meteorological conditions. 
+
+The long-term risk of a tornado at a given location is assessed using historical records, however, the rarity of the most violent tornadoes make these rate estimates unstable. Here we use the more stable rate estimates from the larger set of less violent tornadoes to create more reliable estimates of violent tornado frequency.
+
+For this exercise we restrict our attention to tornadoes occurring in Kansas over the period 1954--2018.
+```{r}
+library(sf)
+library(dplyr)
+
+Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
+  st_transform(crs = 3082) %>%
+  filter(mag >= 0, yr >= 1954) %>%
+  mutate(EF = mag,
+         EFf = as.factor(EF)) %>%
+  dplyr::select(yr, EF, EFf)
+
+library(USAboundaries)
+library(maptools)
+
+KS.sfc <- us_states(states = "Kansas") %>%
+  st_transform(crs = st_crs(Torn.sf))
+Torn.sf <- Torn.sf[KS.sfc, ]
+```
+
+Create a `owin` and `ppp` objects. Note that although we've already subsetted by Kansas tornadoes above we need to subset on the `ppp` object to assign the KS boundary as the analysis window.
+```{r}
+KS.sp <- as(KS.sfc, "Spatial")
+KS.win <- as(KS.sp, 'owin')
+
+Torn.sp <- as(Torn.sf, "Spatial")
+T.ppp <- as(Torn.sp["EF"], "ppp")
+
+T.ppp <- T.ppp[KS.win]
+
+summary(T.ppp)
+```
+
+There are 4079 tornadoes over the period with an average intensity of 189 per 100 square km (multiply the average intensity in square meters by 10^10).
+
+Here we separate the point pattern data into non-violent tornadoes and violent tornadoes. The non-violent tornadoes include those with an EF rating of 0, 1, 2 or 3. The violent tornadoes include those with an EF rating of 4 or 5.
+```{r}
+NV.ppp <- unmark(T.ppp[T.ppp$marks <= 3 & T.ppp$marks >= 0])
+summary(NV.ppp)
+V.ppp <- unmark(T.ppp[T.ppp$marks >= 4])
+summary(V.ppp)
+```
+
+The spatial intensity of the non-violent tornadoes is 187 per 100 sq km. The spatial intensity of the violent tornadoes is 1.9 per 100 sq km.
+
+Locations of the violent tornadoes.
+```{r}
+plot(V.ppp)
+```
+
+In Lesson 14 we saw that the spatial intensity of tornado reports was a function of distance to nearest city. So we want to include this as a confounding variable. Import the data, set the CRS, and transform the CRS to match that of the tornadoes. Exclude cities with fewer than 1000 people.
+```{r}
+download.file("http://myweb.fsu.edu/jelsner/temp/data/ci08au12.zip",
+              "ci08au12.zip")
+unzip("ci08au12.zip")
+
+C.sf <- st_read(dsn = ".",
+                layer = "ci08au12",
+                quiet = TRUE) %>%
+  st_set_crs(4326) %>%
+  st_transform(crs = st_crs(Torn.sf)) %>%
+  dplyr::filter(POP_1990 >= 1000)
+```
+
+Then create a `ppp` object of events from the city/town locations. First create an S4 class spatial data frame and convert this data frame to a `ppp` object before removing the marks. Then subset the events by the window.
+```{r}
+C.sp <- as(C.sf, "Spatial")
+C.ppp <- as(C.sp, "ppp")
+C.ppp <- unmark(C.ppp[KS.win])
+plot(C.ppp)
+```
+
+Next create a distance map of the city/town locations using the `distmap()` function.
+```{r}
+Zc <- distmap(C.ppp)
+plot(Zc)
+```
+
+The resulting object an `im` class indicating a pixeled image. Pixel values are distances is meters. Blue indicates locations that are less than 20 km from a city or town with a population of at least 1000.
+
+Our interest lies with the distance to nearest non-violent tornado. We check to see if this might be a useful variable in a model.
+```{r}
+Znv <- distmap(NV.ppp)
+rhat <- rhohat(V.ppp, Znv, 
+               adjust = 1.3, 
+               smoother = "kernel", 
+               method = "transform")
+
+dist <- rhat$Znv
+rho <- rhat$rho
+hi <- rhat$hi
+lo <- rhat$lo
+Rho.df <- data.frame(dist = dist, rho = rho, hi = hi, lo = lo)
+
+ggplot(Rho.df) + 
+  geom_ribbon(aes(x = dist, ymin = lo, ymax = hi), alpha = .3) + 
+  geom_line(aes(x = dist, y = rho), col = "black") + 
+  ylab("Spatial intensity of violent tornadoes") + xlab("Distance from nearest non-violent tornado (m)") + 
+  theme_minimal()
+```
+
+This shows that regions that get non-violent tornadoes also see higher rates of violent tornadoes.
+
+So our model includes two trend terms.
+```{r}
+model <- ppm(V.ppp, 
+             trend = ~ Zc + Znv, 
+             covariates = list(Zc = Zc, Znv = Znv))
+
+coef(summary(model))
+```
+
+As expected the model shows fewer violent tornadoes with increasing distance from the nearest city (negative coefficient on `Zc`) and fewer violent tornadoes with increasing distance from a non-violent tornado (negative coefficient on `Znv`).
+
+Since the spatial unit is meters the coefficient of -4.6e-05 is interpreted as a [1 - exp(-.046)] * 100% or 4% decrease in violent tornado reports per kilometer of distance from a city. Similarly the coefficient on distance from nearest non-violent tornado is interpreted as a 21% decrease in violent tornado reports per kilometer of distance from nearest non-violent tornado.
+
+We check if there is any residual nearest neighbor correlation.
+```{r}
+E <- envelope(model, 
+              fun = Lest, 
+              nsim = 39,
+              global = TRUE)
+plot(E, main = "Inhomogeneous Poisson Model", legend = FALSE)
+```
+
+There appears to be a bit of regularity at smaller scales. The empirical curve (black line) falls slightly below the model (dashed red line). There are fewer nearby violent tornadoes than one would expect.
+
+To see if this is statistically significant, we add an inhibition process to the model.
+```{r}
+model2 <- ppm(V.ppp, 
+              trend = ~ Zc + Znv, 
+              covariates = list(Zc = Zc, Znv = Znv),
+              interaction = Strauss(r = 40000))
+
+coef(summary(model2))
+```
+
+We see a negative sign on the interaction coefficient as expected from the above plot, but the standard error is relatively large so it is not significant.
+
+Remove the inhibition process and add a trend term in the east-west direction.
+```{r}
+model3 <- ppm(V.ppp, 
+              trend = ~ Zc + Znv + x, 
+              covariates = list(Zc = Zc, Znv = Znv))
+
+coef(summary(model3))
+```
+
+There is a significant eastward trend but it appears to confound the distance to city term. Why is this? 
+
+Plot simulated data.
+```{r}
+plot(V.ppp)
+plot(simulate(model, nsim = 6))
+```
