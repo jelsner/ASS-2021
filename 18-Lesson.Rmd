@@ -19,7 +19,7 @@ Today we consider functions that quantify event clustering (and regularity).
 
 The local intensity function quantifies the frequency of events. Intensity is a first-moment property (like the average value of a set of numbers). Clustering is a second-moment property of spatial data. It answers the question: is the probability of an event in the proximity of another event higher than expected by chance? Think about the location of trees where the tree's seed dispersal leads to a greater likelihood of another tree nearby.
 
-Let $r$ be the distance between two event locations or the distance between an event and an arbitrary point in the domain, then functions to quantify event clustering include:
+Let $r$ be the distance (relative) between two event locations or the distance between an event and an arbitrary point in the domain, then functions to quantify event clustering include:
 
 * The nearest neighbor function $G(r)$: The cumulative distribution of events having another event within a distance $r$ (event-to-event function). 
 
@@ -81,7 +81,7 @@ PDmatrix[1:6, 1:6]
 
 This creates a 71 x 71 square matrix of distances. We then sum the number of rows where those distances are within 5 units.
 ```{r}
-sum(rowSums(PDmatrix < 5) - 1) / nrow(PDmatrix) * 100
+sum(rowSums(PDmatrix < 5) - 1) / nrow(PDmatrix)
 ```
 
 Returning to the plot, the horizontal dashed line at G = .5 intersects the black line at .8 meters indicating that 50% of the pine saplings have another pine sapling within .8 meter.
@@ -178,7 +178,7 @@ ggplot(data = K.df,
   theme_minimal()
 ```
 
-The estimate of K on the actual data (black line) is to the left of the theoretical K function under CSR (red line). This means that for any distance between 0 and 2 m from any event there tends to be more events within this distance (larger K). We say that the bramble canes are more clustered than CRS.
+The estimate of K on the actual data (black line) is to the left of the theoretical K function under CSR (red line). This means that for any distance there tends to be _more_ events within this distance (larger K) than expected under CSR. We say that the bramble canes are more clustered than CRS.
 
 The expected number of additional events is multiplied by the total number of events (823) so a value of .1 indicates that at a distance of 1.6 meters we would expect to see about 82 additional events.
 
@@ -245,7 +245,7 @@ The red line is the curve under the assumption that the tornadoes are CSR across
 
 The black line lies above the red line across distances from 0 to greater than 100 km.
 
-How do we interpret the output from the nearest neighbor distance function applied to the set of Kansas tornadoes? Here we create a data frame from the output of the `Gest()` function and remove distances exceeding 8 km.
+How do we interpret the output from the nearest neighbor function applied to the set of Kansas tornadoes? Here we create a data frame from the output of the `Gest()` function and remove distances exceeding 8 km.
 ```{r}
 G.df <- T.ppp %>%
   Gest(correction = "km") %>%
@@ -258,7 +258,7 @@ ggplot(data = G.df,
   geom_line(aes(y = theo), color = "red") +
   geom_hline(yintercept = .4, lty = 'dashed') +
   geom_vline(xintercept = c(3.2, 4), lty = 'dashed') +
-  xlab("Distance (m)") + ylab("G(r): Cumulative % of tornadoes\n within a distance r of another tornado") +
+  xlab("Distance (km)") + ylab("G(r): Cumulative % of tornadoes\n within a distance r of another tornado") +
   theme_minimal()
 ```
 
@@ -268,7 +268,7 @@ Note: With many events the difference between the raw and border-corrected estim
 
 ## Determining the statistical significance of event clustering
 
-We see the separation between the black solid line and the blue dashed line, but is this separation large relative to the sample size? More to the point, is the above difference between the empirical and theoretical distance functions (e.g., $G$) large enough to conclude there is significant clustering? 
+We see the separation between the black solid line and the red line, but is this separation large relative to the sample size? More to the point, is the above difference between the empirical and theoretical distance functions (e.g., $G$) large enough to conclude there is significant clustering? 
 
 There are two ways to approach inference. 1) Compare the statistic of interest against many cases generated from the null hypothesis and ask: does the statistic fall outside the envelope of the null cases? 2) Get estimates of uncertainty on the statistic of interest and ask: does the uncertainty interval contain the null case? 
 
@@ -295,7 +295,7 @@ head(Kenv.df)
 
 The resulting data frame has estimates of Ripley K as a function of distance (column labeled `obs`). It also has the estimates of K under the null hypothesis of CSR (`theo`) and the lowest (`lo`) and highest (`hi`) values of K across the 99 samples.
 
-We take this data frame and make a plot using the `geom_ribbion()` layer to include a gray ribbon around the model of CSR.
+We take this data frame and make a plot using the `geom_ribbon()` layer to include a gray ribbon around the model of CSR.
 ```{r}
 ggplot(data = Kenv.df, 
        mapping = aes(x = r, y = obs)) +
