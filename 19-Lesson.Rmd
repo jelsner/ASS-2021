@@ -10,46 +10,6 @@ editor_options:
 
 **"Weeks of coding can save you hours of planning."** - Unknown
 
-## More about the Ripley K function
-
-Ripley $K$ function (Ripley, 1976) is a descriptive statistic used to detect deviations from CSR. It is used to help determine whether events have a random, dispersed or clustered pattern.
-
-Compute Ripley $K$ and look at the classes of the resulting object.
-```{r}
-K <- Kest(T.ppp)
-class(K)
-```
-
-It has two classes `fv` and `data.frame`. It is a data frame but with additional attribute information. We focus on the data frame portion. 
-```{r}
-K.df <- as.data.frame(K)
-head(K.df)
-```
-
-In particular we want the values of `r` and `iso`. The value of `iso` times average intensity is the number of tornadoes within a distance `r`.
-
-We add this information to the data frame.
-```{r}
-library(dplyr)
-
-K.df <- K.df %>%
-  mutate(nT = summary(T.ppp)$intensity * iso)
-```
-
-Suppose we are interested in the average number of tornadoes at a distance of exactly 50 km. We use the `approx()` function to interpolate the value of `nT` at a distance of 50 km.
-```{r}
-approx(x = K.df$r, 
-       y = K.df$nT,
-       xout = 50)$y
-```
-
-The variance stabilized Ripley $K$ function called the $L$ function is often used instead of $K$.  The sample version of the $L$ function is defined as
-$$
-\hat{L}(r) = \Big( \hat{K}(r)/\pi\Big)^{1/2}.
-$$
-
-For data that is CSR, the $L$ function has expected value $r$ and its variance is approximately constant in $r$. A common plot is a graph of $r - \hat{L}(r)$ against $r$, which approximately follows the horizontal zero-axis with constant dispersion if the data follow a homogeneous Poisson process.
-
 ## Caution when interpreting the clustering functions
 
 The clustering functions are defined and estimated under the assumption that the point process is stationary (homogeneous). If the process is inhomogeneous (trending) then deviations from the theoretical model do not necessarily imply interaction clustering. Also, the clustering functions characterize the process 'on average' so variability in the interaction process as a function of scale will not be detected.
@@ -63,7 +23,7 @@ plot(X, main = "")
 
 We see two clusters one in the north and one in the south. But overall the events appear to be more regular than CSR. 
 
-Your interpretation based on Ripley $K$ function would be that this pattern is CSR.
+Our interpretation based on Ripley $K$ function would be that this pattern is CSR.
 ```{r}
 K.df <- as.data.frame(Kest(X))
 ggplot(K.df, aes(x = r, y = iso)) +
@@ -88,7 +48,7 @@ plot(X, main = "")
 
 There is a clear trend toward fewer events going from west to east.
 
-The $K$ function indicates clustering but this is an artifact of this trend.
+The K function indicates clustering but this is an artifact of this trend.
 ```{r}
 K.df <- as.data.frame(Kest(X))
 
@@ -141,6 +101,34 @@ We conclude that the point pattern data are consistent with an inhomogeneous Poi
 
 Let's return to the Kansas tornadoes (EF2+).
 ```{r}
+library(sf)
+library(USAboundaries)
+library(maptools)
+
+Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
+  st_transform(crs = 3082) %>%
+  filter(mag >= 2, yr >= 1994) %>%
+  mutate(EF = as.factor(mag)) %>%
+  dplyr::select(EF)
+
+ST.ppp <- Torn.sf["EF"] %>%
+  as_Spatial() %>%
+  as.ppp()
+
+KS.sf <- us_states(states = "Kansas") %>%
+  st_transform(crs = st_crs(Torn.sf)$proj4string)
+
+W <- KS.sf %>%
+  as_Spatial() %>%
+  as.owin()
+
+ST.ppp <- ST.ppp[W] %>%
+  spatstat::rescale(s = 1000, 
+                    unitname = "km")
+plot(ST.ppp)
+```
+
+```{r}
 Kenv <- envelope(ST.ppp,
                  fun = Kinhom,
                  nsom = 39,
@@ -165,21 +153,27 @@ But we would conclude from this plot that there is not strong evidence for clust
 
 We import the Florida wildfire data as a simple feature data frame. Extract only fires occurring in Baker County (west of Duval County--Jacksonville). Include only wildfires started by lightning and select the fire size variable.
 ```{r}
-FL_Fires.sf <- st_read(dsn = "FL_Fires")
-dim(FL_Fires.sf)
+FL_Fires.sf <- st_read(dsn = "FL_Fires") %>%
+  st_transform(crs = 3086)
 
-BakerFL.sf <- maps::map("county", regions = "Florida", plot = FALSE, fill = TRUE) %>%
-  st_as_sf() %>%
-  dplyr::filter(ID == "florida,baker") %>%
-  st_transform(crs = st_crs(FL_Fires.sf))
+Baker.sf <- us_counties(states = "FL") %>%
+  filter(name == "Baker") %>%
+  st_transform(crs = 3086)
 
-Baker_Fires.sf <- st_intersection(FL_Fires.sf, BakerFL.sf) %>%
-  dplyr::filter(STAT_CAUSE == 1) %>%
+BakerFires.sf <- FL_Fires.sf %>%
+  st_intersection(Baker.sf) %>%
+  dplyr::filter(STAT_CAU_1 == "Lightning") %>%
   dplyr::select(FIRE_SIZE_)
 ```
 
 Create a `ppp` object and an unmarked `ppp` object. Summarize the unmarked object and make a plot.
 ```{r}
+library(maptools)
+
+BF.ppp <- BakerFires.sf %>%
+  as_Spatial() %>%
+  as.ppp()
+
 Baker_Fires.sp <- as(Baker_Fires.sf, "Spatial")
 BF.ppp <- as(Baker_Fires.sp, "ppp")
 BFU.ppp <- unmark(BF.ppp)
@@ -236,3 +230,149 @@ ggplot(Kenv.df, aes(x = r, y = obs)) +
 ```
 
 No.
+
+## Cluster models
+
+[Clean up this discuss a bit]
+
+Cluster models are needed to describe point pattern data when event interactions violate the assumption of a homogenous Poisson process. Recall that event interaction implies that an event at one location changes the probability of an event or events nearby.
+
+Cluster models can be derived from a Poisson process so as to retain some of their nice features. For example, with a Poisson cluster process, we begin with a Poisson process $Y$ describing a set of 'parent' events. Each parent $y_i$ in $Y$ produces to a finite set $x_i$ of 'offspring' events according to some random (read: stochastic) mechanism. Then the set of all offsprings forms a clustered point process $X$. Only $X$ is observed and it will not be adequately described by homogeneous Poisson process (CSR). 
+
+Said another way, the model is homogeneous Poisson at an unobserved level but clustered at the level of the observations. Note: "model is homogeneous Poisson" refers to the idea that events locations generated from the model will be indistinguishable from a homogeneous Poisson process.
+
+The Matern cluster process is one such example. Parent events come from a homogeneous Poisson process with intensity $\kappa$ and each parent has a Poisson ($\mu$) number of offspring that are independently and uniformly distributed (iid) within a disc of radius $r$ centered on the parent.
+
+For instance here we use the `rMatClust()` function from the {spatstat} package to produce a clustered `ppp` object. We use a disc radius of .1 units and an offspring rate equal to 5 (`mu = 5`).
+```{r}
+library(spatstat)
+
+plot(rMatClust(kappa = 10, 
+               r = .1, 
+               mu = 5), main = "")
+```
+
+The result is a point pattern described as doubly Poisson. We can vary $\kappa$, $r$, and $\mu$ to generate more or fewer events.
+
+Other clustered Poisson processes include:
+
+* Thomas process: each cluster consists of a Poisson number of random events with each event having an isotropic Gaussian displacement from its parent.  
+* Gauss-Poisson process: each cluster is either a single event or a pair of events.  
+* Neyman-Scott process: the cluster mechanism is arbitrary.
+
+A Cox point process is a homogeneous Poisson process but with a random intensity function. Let $\Lambda(s)$ be a random function with non-negative values defined at all locations $s$ inside the domain. Then, conditional on $\Lambda$ let $X$ be a Poisson process with an intensity function $\Lambda$. Then $X$ is a Cox process.
+
+An example of a Cox process is the mixed Poisson process in which we generate a random variable $\Lambda$ and, conditional on $\Lambda$, we generate a homogeneous Poisson process with intensity $\Lambda$. Following are two realizations of a Cox point process:
+```{r}
+set.seed(3042)
+par(mfrow = c(1, 2))
+for (i in 1:2){
+  lambda <- rexp(n = 1, rate = 1/100)
+  X <- rpoispp(lambda)
+  plot(X)
+}
+par(mfrow = c(1, 1))
+```
+
+The statistical moments of Cox processes are defined in terms of the moments of $\Lambda$. For instance, the intensity function of $X$ is $\lambda(s)$ = E[$\Lambda(s)$], where E[] is the expected value.
+
+Cox processes provide convenient models for clustered point patterns. A Cox model is over dispersed relative to a Poisson process (i.e. the variance of the number of events falling in any region of size A, is greater than the mean number of events in those regions). The Matern cluster and Thomas process are Cox processes.
+
+One such class of processes is the log-Gaussian Cox processes (LGCP) in which logarithm of $\Lambda(s)$ is a Gaussian random function.
+
+If we have a way of generating realizations of a random function $\Lambda$ of interest, then we can use the `rpoispp()` function to generate the Cox process. The intensity argument `lambda` of `rpoispp()` can be a function of x or y or a pixel image.
+
+### Thinned processes
+
+Another way to generate clustered point pattern data is by 'thinning'. Thinning refers to deleting some of the events. With 'independent thinning' the fate of each event is independent of the fate of the other events. When independent thinning is applied to a homogeneous Poisson point pattern, the resulting point pattern consisting of the retained events is also Poisson. 
+
+To get a non-Poisson process we need some kind of dependent thinning mechanism.
+
+An example of this is Matern's Model I process. Here a homogeneous Poisson process $Y$ first generates a point pattern, then any event in $Y$ that lies closer than a distance $r$ from another event is deleted. This results in point pattern data where close neighbor events do not exist.
+```{r}
+plot(rMaternI(kappa = 70, 
+              r = .05), main = "")
+```
+
+Changing $\kappa$ and $r$ will change the event intensity.
+
+### Markov point process models
+
+Expanding on the earlier notation we write that a homogeneous Poisson process with intensity $\lambda > 0$ has intensity $$\lambda(s, x) = \lambda$$ where $s$ is any location in the window W and $x$ is the set of events.
+
+Then an inhomogeneous Poisson process has conditional intensity $$\lambda(s, x) = \lambda(s)$$. The intensity $\lambda(s)$ depends on a spatial trend or on a covariate.
+
+There is also a class of Markov point process models that allow for clustering (or regularity) due to event interaction. Markov refers to the fact that the interaction is limited to nearest neighbors. Said another way, a Markov point process generalizes a Poisson process in the case where events are pairwise dependent.
+
+A Markov process with parameters $\beta > 0$ and $0 < \gamma < \infty$ with interaction radius $r > 0$ has conditional intensity $\lambda(s, x)$ given by
+$$
+\lambda(s, x) = \beta \gamma^{t(s, x)}
+$$
+where $t(s, x)$ is the number of events that lie within a distance $r$ of location $s$.
+
+Three cases:
+
+1. If $\gamma = 1$, then $\lambda(s, x) = \beta$ No interaction between events,  $\beta$ can vary with $s$.
+2. If $\gamma < 1$, then $\lambda(s, x) < \beta$. Events inhibit nearby events.
+3. If $\gamma > 1$, then $\lambda(s, x) > \beta$. Events encourage nearby events.
+
+Note the distinction between the interaction term $\gamma$ and the trend term $\beta$. As we saw earlier in the semester, a similar distinction exists between autocorrelation $\rho$ and trend $\beta$ in spatial regression models.
+
+### Fitting models to point pattern data
+
+The {spatstat} package contains functions for fitting statistical models to point pattern data. Models can include trend, covariates, and event interactions of any order (interactions are not restricted to pairwise). Models are fit with maximum likelihood and minimum contrast procedures. 
+
+The method of minimum contrasts derives a cost function between the theoretical and empirical $K$ function. Parameter values are those that minimize this cost function.
+
+The `ppm()` function is used to fit a spatial point pattern model. The syntax has the form `ppm(X, formula, interaction, ...)` where `X` is the point pattern object of class `ppp`, `formula` describes the systematic (trend and covariate) part of the model, and `interaction` describes the stochastic dependence between events (e.g., Matern process).
+
+More generally, we write the logarithm of the conditional intensity $\log[\lambda(s, x)]$ as linear expression with two components.  
+$$
+\log\big[\lambda(s, x)\big] = \theta_1 B(s) + \theta_2 C(s, x)
+$$
+where the $\theta$'s are model parameters that need to be estimated.  
+
+The term $B(s)$ depends only on location so it represents trend and covariate effects. It is the 'systematic component' of the model. The term $C(s, x)$ represents stochastic interactions (dependency) between events.
+
+Recall a plot of the Swedish pine saplings. There was no indication of a trend. That is, no systematic variation in the intensity of saplings.
+```{r}
+SP <- swedishpines
+plot(SP)
+```
+
+A plot of the nearest neighborhood distance function indicated some regularity. The regularity appeared at scales between at least 3 and 10 units of distance. Let's take a look again.
+```{r}
+plot(Kest(SP))
+```
+
+The Strauss process is a simple interaction model. Inhibition is constant with a fixed radius (r) around each event. The amount of inhibition ranges from zero to complete (zero probability of a nearby event). In the case of no inhibition the process is equivalent to a homogeneous Poisson process.
+
+To model the process we set the trend term to a constant (`~ 1`) and the Strauss interaction radius to 10 units. The `rbord =` argument specifies a distance from the window for border corrections. 
+```{r}
+modelSP <- ppm(SP, 
+               trend = ~ 1, 
+               interaction = Strauss(r = 10), 
+               rbord = 10)
+```
+
+The value for `r` in the `Strauss()` function is based on our visual inspection of the plot of `Kest()`. A value is chosen that represents the distance at which there is the largest departure from a CSR model. 
+
+We inspect the model by typing the object name.
+```{r}
+modelSP
+```
+
+The first-order term (`beta`) has a value of .076. This is the intensity of the 'proposal' events. Here beta exceeds the average intensity (here .0074) by a factor of ten. 
+
+The interaction parameter (`gamma`) is .275. It is less than one, indicating an inhibition process. The logarithm of gamma, called the interaction coefficient (`Interaction`), is -1.29. Interaction coefficients less than zero imply inhibition.
+
+A table with the coefficients including the standard errors and uncertainty ranges is obtained with the `coef()` method.
+```{r}
+coef(summary(modelSP))
+```
+
+We again see the `Interaction` coefficient along with it's standard error (`S.E.`) and the associated 95% uncertainty interval. The ratio of the `Interaction` coefficient to its standard error is the `Zval`. A large z-value (in absolute magnitude) translates to a low $p$-value and a rejection of the null hypothesis of no interaction between events.
+
+We also see here an estimated value for the `(Intercept)`. It is the logarithm of the beta value, so exp(-2.58) = .076 is the intensity of the proposal events.
+
+The model is interpreted as follows. The process producing the spatial pattern of pine saplings is such that we should see .076 saplings per unit area [unobserved (latent) rate]. But because of event inhibition, where saplings nearby other saplings fail to grow, the number of saplings is reduced to .0074 per unit area. Thus the spatial pattern is suggestive of sibling-sibling interaction. Adults have many off-springs, but only some survive due to limited resources.

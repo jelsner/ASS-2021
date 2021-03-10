@@ -512,3 +512,43 @@ dclf.test(T.ppp13, fun = Kcross, nsim = 99)
 ```
 
 Both tests lead us to conclude EF3 tornadoes are more likely near EF1 tornadoes than would be expected if they were independently CSR.
+
+## More about the Ripley K function
+
+Last week we used the Ripley K function to detect deviations from CSR.
+
+Compute Ripley $K$ and look at the classes of the resulting object.
+```{r}
+K <- Kest(T.ppp)
+class(K)
+```
+
+It has two classes `fv` and `data.frame`. It is a data frame but with additional attribute information. We focus on the data frame portion. 
+```{r}
+K.df <- as.data.frame(K)
+head(K.df)
+```
+
+In particular we want the values of `r` and `iso`. The value of `iso` times average intensity is the number of tornadoes within a distance `r`.
+
+We add this information to the data frame.
+```{r}
+library(dplyr)
+
+K.df <- K.df %>%
+  mutate(nT = summary(T.ppp)$intensity * iso)
+```
+
+Suppose we are interested in the average number of tornadoes at a distance of exactly 50 km. We use the `approx()` function to interpolate the value of `nT` at a distance of 50 km.
+```{r}
+approx(x = K.df$r, 
+       y = K.df$nT,
+       xout = 50)$y
+```
+
+The variance stabilized Ripley $K$ function called the $L$ function is often used instead of $K$.  The sample version of the $L$ function is defined as
+$$
+\hat{L}(r) = \Big( \hat{K}(r)/\pi\Big)^{1/2}.
+$$
+
+For data that is CSR, the $L$ function has expected value $r$ and its variance is approximately constant in $r$. A common plot is a graph of $r - \hat{L}(r)$ against $r$, which approximately follows the horizontal zero-axis with constant dispersion if the data follow a homogeneous Poisson process.
