@@ -3,6 +3,7 @@ title: "Lesson 18"
 author: "James B. Elsner"
 date: "March 10, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -393,7 +394,7 @@ mx.df <- as.data.frame(mx)
 
 The `lohboot()` function estimates the uncertainty on the computed spatial statistic using a bootstrap procedure. It works by computing a local version of the function (e.g., `localK()`) on the set of re-sampled events.
 ```{r}
-Kboot.sf <- ST.ppp %>%
+Kboot.df <- ST.ppp %>%
   lohboot(fun = Kest) %>%
   as.data.frame()
 
