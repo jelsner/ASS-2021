@@ -10,32 +10,33 @@ editor_options:
 
 **"Good code is its own best documentation. As you're about to add a comment, ask yourself, 'How can I improve the code so that this comment isn't needed?' Improve the code and then document it to make it even clearer."** - Steve McConnell
 
-Last lesson we saw how the local (spatial varying) intensity of point pattern data can be used to compute the relative risk of events. For example, conditional on the occurrence of a wildfire where is it most likely to be caused by lightning.
+Last lesson we saw that the local spatial intensity of point pattern data can be used to quantify the relative risk of events when we have two event types. For example, conditional on the occurrence of a wildfire where is it most likely to be caused by lightning. We created a point pattern object with events labeled L and NL and used a relative risk function.
 
-Today we examine functions that describe event clustering (and regularity).
+Today we consider functions that quantify event clustering (and regularity).
 
-## Estimating second-order properties of point pattern data
+## Quantifying event cluster in point pattern data
 
-The local spatial intensity function describes the frequency of events. Intensity is a first-order property (like the average value of a set of numbers). Clustering is a second-order property of spatial data. It answers the question: is the probability of an event in the proximity of another event higher than expected by chance? Think about the location of trees where the tree's seed dispersal leads to a greater likelihood of another tree nearby.
+The local intensity function quantifies the frequency of events. Intensity is a first-moment property (like the average value of a set of numbers). Clustering is a second-moment property of spatial data. It answers the question: is the probability of an event in the proximity of another event higher than expected by chance? Think about the location of trees where the tree's seed dispersal leads to a greater likelihood of another tree nearby.
 
-Let $r$ be the distance between two event locations or the distance between an event and an arbitrary point in the domain, then functions to describe clustering include:
+Let $r$ be the distance between two event locations or the distance between an event and an arbitrary point in the domain, then functions to quantify event clustering include:
 
-The nearest neighbor function $G(r)$: The cumulative distribution of events having another event within a distance $r$ (event-to-event function). 
+* The nearest neighbor function $G(r)$: The cumulative distribution of events having another event within a distance $r$ (event-to-event function). 
 
-The empty space function $F(r)$: The cumulative distribution of points having an event within a distance $r$ (point-to-event function).
+* The empty space function $F(r)$: The cumulative distribution of points having an event within a distance $r$ (point-to-event function).
 
-The reduced second moment function (Ripley $K$) $K(r)$: Defined such that $\lambda \times K(r)$ is the expected number of additional events within a distance $r$ of an event, where $\lambda$ is the average intensity of the events. It is a measure of the spatial autocorrelation among the events.
+* The reduced second moment function (Ripley $K$) $K(r)$: Defined such that $\lambda \times K(r)$ is the expected number of additional events within a distance $r$ of an event, where $\lambda$ is the average intensity of the events. It is a measure of the spatial autocorrelation among the events.
 
-To assess the degree (and statistical significance) of clustering, we compute a function using our data set and compare the resulting curve (empirical curve) to a theoretical curve assuming a homogeneous Poisson process. The theoretical curve is well defined for homogeneous point patterns (CSR--complete spatial randomness). Deviations of an 'empirical' curve from a theoretical curve provides evidence against CSR. 
+To assess the degree of clustering and significance (in a statistical sense), we estimate values of the function using our data set and compare the resulting curve (empirical curve) to a theoretical curve assuming a homogeneous Poisson process. 
+
+The theoretical curve is well defined for homogeneous point patterns (recall: CSR--complete spatial randomness). Deviations of an 'empirical' curve from a theoretical curve provides evidence against CSR. 
 
 The theoretical functions assuming a homogeneous Poisson process are:
 $F(r) = 1 - \exp(-\lambda \pi r^2)$
 $G(r) = 1 - \exp(-\lambda \pi r^2)$
 $K(r) = \pi r^2$
+where $\exp()$ is the exponential function and $\lambda$ is the average spatial intensity.
 
-where $\lambda$ is the average spatial intensity.
-
-Recall the Swedish pine saplings data from the {spatstat} package.
+Recall the Swedish pine saplings data that comes with the {spatstat} package.
 ```{r}
 library(spatstat)
 library(tidyverse)
@@ -44,14 +45,20 @@ data(swedishpines)
 class(swedishpines)
 ```
 
-Here we first assign the data to an object called `SP` (to reduce the amount of typing). We then compute the nearest neighbor distance function using the `Gest()` function with argument `correction = "none"` to specify no correction be made for the borders of the window. We assign the output of this computation to a list object called `G`.
+We assign the data to an object called `SP` to reduce the amount of typing. 
 ```{r}
-SP <- swedishpines
+( SP <- swedishpines )
+```
+
+We see there are 71 events within a rectangle window.
+
+We get the values for the nearest neighbor function using the `Gest()` function from the {spatstat} package. We use the argument `correction = "none"` so no corrections are made for events near the window borders. We assign the output to a list object called `G`.
+```{r}
 ( G <- Gest(SP,
             correction = "none") )
 ```
 
-The output includes the distance `r`, the raw uncorrected estimate of $G(r)$ (empirical estimate) at various distances, and a theoretical estimate at those same distances based on a homogeneous Poisson process. With the `plot()` method we can easily compare the empirical estimates with the theoretical estimates. Here we add two horizontal lines to help with interpretation.
+The output includes the distance `r`, the raw uncorrected estimate of $G(r)$ (empirical estimate) at various distances, and a theoretical estimate at those same distances based on a homogeneous Poisson process. Using the `plot()` method on the saved object `G` we can compare the empirical estimates with the theoretical estimates. Here we add two horizontal lines to help with the interpretation.
 ```{r}
 plot(G)
 abline(h = c(.2, .5), 
@@ -59,17 +66,24 @@ abline(h = c(.2, .5),
        lty = 2)
 ```
 
-Values of G are on the vertical axis and values of relative distance are on the horizontal axis starting at 0. The black curve is the uncorrected estimate of $G_{raw}(r)$ from the event locations and the red curve is $G_{pois}(r)$ estimated from a homogeneous Poisson process with the same average intensity as the pine saplings. Recall that a homogeneous Poisson model simulates point pattern data that can be described as CSR.
+Values of G are on the vertical axis and values of distance (relative) are on the horizontal axis starting at 0. The black curve is the uncorrected estimate of $G_{raw}(r)$ from the event locations and the red curve is $G_{pois}(r)$ estimated from a homogeneous Poisson process with the same average intensity as the pine saplings.
 
-The horizontal dashed line at G = .2 intersects the black line at a distance (r) of 5 units. This means that 20% of the events have another event _within_ 5 units. To check this we compute all pairwise distances with the `pairdist()` function.
+The horizontal dashed line at G = .2 intersects the black line at a relative distance (r) of 5 units. This means that 20% of the events have another event _within_ 5 units. This means that 20% of the saplings have another sapling withing .5 meter. 
+
+Imagine placing a disc of radius 5 units around all 71 events then counting the number of events that have another event under the disc. That number divided by 71 is G(r).
+
+To check this we compute all pairwise distances with the `pairdist()` function.
 ```{r}
-PD <- pairdist(SP)
-PD[1:6, 1:6]
-
-sum(rowSums(PD < 5) - 1) / nrow(PD) * 100
+PDmatrix <- pairdist(SP)
+PDmatrix[1:6, 1:6]
 ```
 
-This means that 20% of the saplings have another sapling withing .5 meter. The horizontal dashed line at G = .5 intersects the black line at .8 meters indicating that 50% of the pine saplings have another pine sapling within .8 meter.
+This creates a 71 x 71 square matrix of distances. We then sum the number of rows where those distances are within 5 units.
+```{r}
+sum(rowSums(PDmatrix < 5) - 1) / nrow(PDmatrix) * 100
+```
+
+Returning to the plot, the horizontal dashed line at G = .5 intersects the black line at .8 meters indicating that 50% of the pine saplings have another pine sapling within .8 meter.
 
 We see that for a given radius the $G_{raw}$ line is _below_ the $G_{pois}(r)$ line indicating that there are _fewer_ pine saplings with another pine sapling in the vicinity than expected by chance.
 
@@ -90,7 +104,9 @@ ggplot(data = G.df,
   theme_minimal()
 ```
 
-The empty space function (F) is interpreted as the percent of the domain within a distance from any event. Here again we add some lines to help with interpretation. Here we apply the Kaplan-Meier correction for edge effects with `correction = "km"`.
+We get the values for the empty space function using the `Fest()` function from the {spatstat} package. Here we apply the Kaplan-Meier correction for edge effects with `correction = "km"`. The function returns the percent of the domain within a distance from any event. Imagine again placing the disc, but this time on top of every point in the window and counting the number of points that have an event underneath.
+
+We make a plot and again add some lines to help with interpretation. 
 ```{r}
 F.df <- SP %>%
   Fest(correction = "km") %>%
@@ -405,7 +421,7 @@ ggplot(Kboot.df, aes(x = r, y = iso)) +
   theme_minimal()
 ```
 
-## Estimating clustering in mult-type point patterns
+## Estimating event clustering in mult-type point patterns
 
 Analogues to the G and K functions are available for 'multi-type' point patterns where the marks are factors. In these cases interest focuses on whether the occurrence of one type of event influences the occurrence of another type of event. For example, does the occurrence of one species influence the occurrence of another species?
 
@@ -467,7 +483,7 @@ ggplot(data = Kc.df,
 
 The vertical axis is the number of EF3 tornadoes within a radius r of an EF1 tornado divided by the average intensity of the EF3 tornadoes. At a distance of 70 km from a random EF1 tornado there are on average 19000 x .000277 = 5.3 EF3 tornadoes. If EF1 and EF3 tornadoes are CSR then we would expect, on average, somewhat fewer EF3 tornadoes in the vicinity of EF1 tornadoes (15000 x .000277 = 4.2).
 
-We can see this clearly by using the `envelope()` function with the `fun = Kross`. We first use the `subset()` method with `drop = TRUE` to make a new `ppp` object with only those two groups.
+We can see this more clearly by using the `envelope()` function with the `fun = Kross`. We first use the `subset()` method with `drop = TRUE` to make a new `ppp` object with only those two groups.
 ```{r}
 T.ppp13 <- subset(T.ppp,
                   marks == "1" |
