@@ -45,9 +45,9 @@ ggplot(G.df, aes(x = r, y = km)) +
   theme_minimal()
 ```
 
-The cumulative event-to-event distances indicate clustering. The empirical curve is above the theoretical curve. For example about 74% of the maple trees are within 18.5 feet of another maple tree. If the process resulted in trees was CSR then only 49% of the trees would be within 18.5 feet of another maple.
+The plot indicates the data are clustered. The empirical curve is above the theoretical curve. For example about 74% of the maple trees are within 18.5 feet of another maple tree. If the process resulted in trees was CSR then only 49% of the trees would be within 18.5 feet of another maple.
 
-Model the event interaction as a Strauss process with interaction distance of .025 units (23 ft).
+Model event interaction as a Strauss process with interaction distance of .025 units (23 ft).
 ```{r}
 ppm(MT, trend = ~ 1, 
         interaction = Strauss(r = .025))

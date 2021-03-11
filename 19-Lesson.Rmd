@@ -10,7 +10,11 @@ editor_options:
 
 **"Weeks of coding can save you hours of planning."** - Unknown
 
-## Caution when interpreting the clustering functions
+In Lesson 18 we examined the evidence for event location clustering using the nearest neighbor function, the empty space function, and Ripley's K function. These so-called 'distance' functions provide a way to compare the spatial separation of events against a theoretical model of randomness.
+
+Today we start with a cautionary note on inferring clustering from these functions and then introduce cluster models.
+
+## Caution when inferring clustering from distance functions
 
 The clustering functions are defined and estimated under the assumption that the point process is stationary (homogeneous). If the process is inhomogeneous (trending) then deviations from the theoretical model do not necessarily imply interaction clustering. Also, the clustering functions characterize the process 'on average' so variability in the interaction process as a function of scale will not be detected.
 
@@ -28,12 +32,12 @@ Our interpretation based on Ripley $K$ function would be that this pattern is CS
 K.df <- as.data.frame(Kest(X))
 ggplot(K.df, aes(x = r, y = iso)) +
   geom_line() +
-  geom_line(aes(y = theo), color = "blue") +
+  geom_line(aes(y = theo), color = "red") +
   xlab("Distance (km)") + ylab("K(r)") +
   theme_minimal()
 ```
 
-The empirical curve (black line) coincides with the theoretical CSR line (blue line).
+The empirical curve (black line) coincides with the theoretical CSR line (red line).
 
 And the maximum absolute deviation test under the null hypothesis of CSR returns a large $p$-value.
 ```{r}
@@ -54,7 +58,7 @@ K.df <- as.data.frame(Kest(X))
 
 ggplot(K.df, aes(x = r, y = iso)) +
   geom_line() +
-  geom_line(aes(y = theo), color = "blue") +
+  geom_line(aes(y = theo), color = "red") +
   xlab("Distance (km)") + ylab("K(r)") +
   theme_minimal()
 ```
@@ -73,7 +77,7 @@ Kenv.df <- as.data.frame(Kenv)
 ggplot(Kenv.df, aes(x = r, y = obs)) +
   geom_ribbon(aes(ymin = lo, ymax = hi), fill = "gray70") +
   geom_line() +
-  geom_line(aes(y = theo), color = "blue", lty = 'dashed') +
+  geom_line(aes(y = theo), color = "red", lty = 'dashed') +
   xlab("Distance (km)") + ylab("K(r)") +
   theme_minimal()
 ```
@@ -92,7 +96,7 @@ Kenv.df <- as.data.frame(Kenv)
 ggplot(Kenv.df, aes(x = r, y = obs)) +
   geom_ribbon(aes(ymin = lo, ymax = hi), fill = "gray70") +
   geom_line() +
-  geom_line(aes(y = theo), color = "blue", lty = 'dashed') +
+  geom_line(aes(y = theo), color = "red", lty = 'dashed') +
   xlab("Distance (km)") + ylab("K(r), Expected number of additional events\n within a distance r of an event") +
   theme_minimal()
 ```
@@ -140,7 +144,7 @@ Kenv.df <- as.data.frame(Kenv)
 ggplot(Kenv.df, aes(x = r, y = obs)) +
   geom_ribbon(aes(ymin = lo, ymax = hi), fill = "gray70") +
   geom_line() +
-  geom_line(aes(y = theo), color = "blue", lty = 'dashed') +
+  geom_line(aes(y = theo), color = "red", lty = 'dashed') +
   xlab("Distance (km)") + ylab("K(r)") +
   theme_minimal()
 ```
@@ -207,7 +211,7 @@ Ripley K function.
 K.df <- as.data.frame(Kest(BFU.ppp))
 ggplot(K.df, aes(x = r, y = iso * summary(BFU.ppp)$intensity)) +
   geom_line() +
-  geom_line(aes(y = theo * summary(BFU.ppp)$intensity), color = "blue") +
+  geom_line(aes(y = theo * summary(BFU.ppp)$intensity), color = "red") +
   xlab("Distance (m)") + ylab("K(r), Expected number of additional wildfires\n within a distance r of any wildfire") +
   theme_minimal()
 ```
@@ -224,45 +228,43 @@ Kenv.df <- as.data.frame(Kenv)
 ggplot(Kenv.df, aes(x = r, y = obs)) +
   geom_ribbon(aes(ymin = lo, ymax = hi), fill = "gray70") +
   geom_line() +
-  geom_line(aes(y = theo), color = "blue", lty = 'dashed') +
+  geom_line(aes(y = theo), color = "red", lty = 'dashed') +
   xlab("Distance (m)") + ylab("K(r)") +
   theme_minimal()
 ```
 
 No.
 
-## Cluster models
+## Introducing cluster models
 
-[Clean up this discuss a bit]
+Cluster models are needed to describe point pattern data when event interactions violate the assumption of a homogenous Poisson process. Event interaction implies that an event at one location changes the probability of an event nearby.
 
-Cluster models are needed to describe point pattern data when event interactions violate the assumption of a homogenous Poisson process. Recall that event interaction implies that an event at one location changes the probability of an event or events nearby.
+Cluster models can be derived from a Poisson model. For example, we begin with a homogeneous Poisson model $Y$ describing a set of events. Note: "model is homogeneous Poisson" refers to the idea that events locations generated from the model will be indistinguishable from a homogeneous Poisson process. 
 
-Cluster models can be derived from a Poisson process so as to retain some of their nice features. For example, with a Poisson cluster process, we begin with a Poisson process $Y$ describing a set of 'parent' events. Each parent $y_i$ in $Y$ produces to a finite set $x_i$ of 'offspring' events according to some random (read: stochastic) mechanism. Then the set of all offsprings forms a clustered point process $X$. Only $X$ is observed and it will not be adequately described by homogeneous Poisson process (CSR). 
+Then we consider each individual event $y_i$ in $Y$ to be a 'parent' that produces a set of 'offspring' events ($x_i$) according to some random mechanism. The resulting set of all offsprings forms clustered point pattern data $X$ which will not be adequately described by a homogeneous Poisson model. Said another way, the model is homogeneous Poisson at an unobserved level but clustered at the level of the observations ($X$). 
 
-Said another way, the model is homogeneous Poisson at an unobserved level but clustered at the level of the observations. Note: "model is homogeneous Poisson" refers to the idea that events locations generated from the model will be indistinguishable from a homogeneous Poisson process.
-
-The Matern cluster process is one such example. Parent events come from a homogeneous Poisson process with intensity $\kappa$ and each parent has a Poisson ($\mu$) number of offspring that are independently and uniformly distributed (iid) within a disc of radius $r$ centered on the parent.
+One example of this is the Matern cluster model. Parent events come from a homogeneous Poisson process with intensity $\kappa$ and then each parent has a Poisson ($\mu$) number of offspring that are independently and uniformly distributed (iid) within a disc of radius $r$ centered on the parent.
 
 For instance here we use the `rMatClust()` function from the {spatstat} package to produce a clustered `ppp` object. We use a disc radius of .1 units and an offspring rate equal to 5 (`mu = 5`).
 ```{r}
-library(spatstat)
-
 plot(rMatClust(kappa = 10, 
                r = .1, 
                mu = 5), main = "")
 ```
 
-The result is a point pattern described as doubly Poisson. We can vary $\kappa$, $r$, and $\mu$ to generate more or fewer events.
+The result is a point pattern described as _doubly Poisson_. We can vary $\kappa$, $r$, and $\mu$ to generate more or fewer events.
 
-Other clustered Poisson processes include:
+Other clustered Poisson models include:
 
-* Thomas process: each cluster consists of a Poisson number of random events with each event having an isotropic Gaussian displacement from its parent.  
-* Gauss-Poisson process: each cluster is either a single event or a pair of events.  
-* Neyman-Scott process: the cluster mechanism is arbitrary.
+* Thomas model: each cluster consists of a Poisson number of random events with each event having an isotropic Gaussian displacement from its parent.  
+* Gauss-Poisson model: each cluster is either a single event or a pair of events.  
+* Neyman-Scott model: the cluster mechanism is arbitrary.
 
-A Cox point process is a homogeneous Poisson process but with a random intensity function. Let $\Lambda(s)$ be a random function with non-negative values defined at all locations $s$ inside the domain. Then, conditional on $\Lambda$ let $X$ be a Poisson process with an intensity function $\Lambda$. Then $X$ is a Cox process.
+A Cox model is a homogeneous Poisson model with a random intensity function. Let $\Lambda(s)$ be a random function with non-negative values defined at all locations $s$ inside the domain. Then, conditional on $\Lambda$ let $X$ be a Poisson model with an intensity function $\Lambda$. Then $X$ will be a sample from a Cox model.
 
-An example of a Cox process is the mixed Poisson process in which we generate a random variable $\Lambda$ and, conditional on $\Lambda$, we generate a homogeneous Poisson process with intensity $\Lambda$. Following are two realizations of a Cox point process:
+An example of a Cox model is the mixed Poisson process in which a random variable $\Lambda$ is generated and then, conditional on $\Lambda$, a homogeneous Poisson process with intensity $\Lambda$ is generated. 
+
+Following are two samples from a Cox point process:
 ```{r}
 set.seed(3042)
 par(mfrow = c(1, 2))
@@ -274,21 +276,17 @@ for (i in 1:2){
 par(mfrow = c(1, 1))
 ```
 
-The statistical moments of Cox processes are defined in terms of the moments of $\Lambda$. For instance, the intensity function of $X$ is $\lambda(s)$ = E[$\Lambda(s)$], where E[] is the expected value.
+The statistical moments of Cox models are defined in terms of the moments of $\Lambda$. For instance, the intensity function of $X$ is $\lambda(s)$ = E[$\Lambda(s)$], where E[] is the expected value.
 
-Cox processes provide convenient models for clustered point patterns. A Cox model is over dispersed relative to a Poisson process (i.e. the variance of the number of events falling in any region of size A, is greater than the mean number of events in those regions). The Matern cluster and Thomas process are Cox processes.
+Cox models are convenient for describing clustered point pattern data. A Cox model is over dispersed relative to a Poisson model (i.e. the variance of the number of events falling in any region of size A, is greater than the mean number of events in those regions). The Matern cluster model and the Thomas models are Cox models. Another common type of a Cox model is the log-Gaussian Cox processes (LGCP) model in which logarithm of $\Lambda(s)$ is a Gaussian random function.
 
-One such class of processes is the log-Gaussian Cox processes (LGCP) in which logarithm of $\Lambda(s)$ is a Gaussian random function.
-
-If we have a way of generating realizations of a random function $\Lambda$ of interest, then we can use the `rpoispp()` function to generate the Cox process. The intensity argument `lambda` of `rpoispp()` can be a function of x or y or a pixel image.
-
-### Thinned processes
+If we have a way of generating samples from a random function $\Lambda$ of interest, then we can use the `rpoispp()` function to generate the Cox process. The intensity argument `lambda` of `rpoispp()` can be a function of x or y or a pixel image.
 
 Another way to generate clustered point pattern data is by 'thinning'. Thinning refers to deleting some of the events. With 'independent thinning' the fate of each event is independent of the fate of the other events. When independent thinning is applied to a homogeneous Poisson point pattern, the resulting point pattern consisting of the retained events is also Poisson. 
 
 To get a non-Poisson process we need some kind of dependent thinning mechanism.
 
-An example of this is Matern's Model I process. Here a homogeneous Poisson process $Y$ first generates a point pattern, then any event in $Y$ that lies closer than a distance $r$ from another event is deleted. This results in point pattern data where close neighbor events do not exist.
+An example of this is Matern's Model I model. Here a homogeneous Poisson model first generates a point pattern $Y$, then any event in $Y$ that lies closer than a distance $r$ from another event is deleted. This results in point pattern data where close neighbor events do not exist.
 ```{r}
 plot(rMaternI(kappa = 70, 
               r = .05), main = "")
@@ -298,9 +296,9 @@ Changing $\kappa$ and $r$ will change the event intensity.
 
 ### Markov point process models
 
-Expanding on the earlier notation we write that a homogeneous Poisson process with intensity $\lambda > 0$ has intensity $$\lambda(s, x) = \lambda$$ where $s$ is any location in the window W and $x$ is the set of events.
+Expanding on the earlier notation we write that a homogeneous Poisson model with intensity $\lambda > 0$ has intensity $$\lambda(s, x) = \lambda$$ where $s$ is any location in the window W and $x$ is the set of events.
 
-Then an inhomogeneous Poisson process has conditional intensity $$\lambda(s, x) = \lambda(s)$$. The intensity $\lambda(s)$ depends on a spatial trend or on a covariate.
+Then an inhomogeneous Poisson model has conditional intensity $$\lambda(s, x) = \lambda(s)$$. The intensity $\lambda(s)$ depends on a spatial trend or on an explanatory variable.
 
 There is also a class of Markov point process models that allow for clustering (or regularity) due to event interaction. Markov refers to the fact that the interaction is limited to nearest neighbors. Said another way, a Markov point process generalizes a Poisson process in the case where events are pairwise dependent.
 
