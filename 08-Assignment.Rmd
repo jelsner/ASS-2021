@@ -34,7 +34,7 @@ dim(FL_Fires.sf)
 
 (b) Use the function `st_intersection()` (see Lesson 7) to create a new simple feature data frame called `BayFires.sf` from the `FL_Fires.sf` simple feature data frame that contains only the lightning caused wildfires inside the Bay County polygon. (10)
 
-(c) Create a `ppp` object of the lightning caused wildfire locations in Bay County as unmarked events. Create an `owin` object of the county polygon (see Assignment 17). (10)
+(c) Create a `ppp` object of the lightning caused wildfire locations in Bay County as unmarked events. Create an `owin` object of the county polygon (see Assignment 7). (10)
 
 (d) Plot a map displaying the local intensity. (5)
 
