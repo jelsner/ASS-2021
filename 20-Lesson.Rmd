@@ -12,6 +12,9 @@ editor_options:
 
 Let's compare this to the maple trees in the Lansing woods dataset (`lansing`). We extract the events marked as `maple` and put them in a separate `ppp` object called `MT`.
 ```{r}
+library(spatstat)
+data(lansing)
+
 MT <- unmark(lansing[lansing$marks == "maple"])
 summary(MT)
 ```
@@ -28,14 +31,13 @@ We see there are more maple trees across the southern part of the domain than ac
 
 A plot of the $G$ function summarizes the second-order properties under the assumption of no trend.
 ```{r}
-library(dplyr) 
+library(tidyverse)
+library(ggplot2)
 
 G <- Gest(MT)
 G.df <- as.data.frame(G) %>%
   filter(r < .033) %>%
   mutate(r = r * 924)
-
-library(ggplot2)
 
 ggplot(G.df, aes(x = r, y = km)) +
   geom_line() +

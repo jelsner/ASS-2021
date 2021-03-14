@@ -1,0 +1,430 @@
+---
+title: "Lesson 21"
+author: "James B. Elsner"
+date: "March 22, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+**"Machines take me by surprise with great frequency."** – Alan Turing
+
+## Does terrain roughness influence tornado occurrence rates?
+
+Most thunderstorms fail to produce tornadoes. Tornado initiation is sensitive to an interplay of processes across a range of spatial scales, including the scale of a few hundred meters where the air flow near the ground is converging inward toward the tornado. It stands to reason that the underlying surface can affect this convergent inflow.
+
+To make the analysis and modeling run faster we consider only Kansas tornadoes with an EF2 or higher rating.
+```{r}
+T.ppp25 <- unmark(T.ppp[T.ppp$marks >= 2])
+
+summary(T.ppp25)
+```
+
+There are 626 tornadoes with an average intensity of 29 per 100 sq. km.
+
+Plot the spatial varying intensity.
+```{r}
+par(mfrow = c(1, 1))
+plot(density(T.ppp25))
+```
+
+To quantify the relationship between distance to city and tornado report density we use a model.
+```{r}
+model0 <- ppm(T.ppp25, 
+              trend = ~ Zc, 
+              covariates = list(Zc = Zc))
+model0
+```
+
+As expected the model shows a decreasing trend with increasing distance from cities (negative value on the `Zc` coefficient). The value is on the log scale so we do some arithmetic.
+```{r}
+100 * (1 - exp(coef(model0)[2] * 1000))
+```
+
+The coefficient is interpreted as a 3.7% decrease in the number of tornado reports per kilometer of distance from a city (on average).
+
+Can we do better? Statistically: is the model adequate? Here we check model adequacy by examining model residuals against the assumption of homogeneous Poisson.
+```{r}
+E <- envelope(model0, 
+              fun = Lest, 
+              nsim = 39,
+              global = TRUE)
+plot(E, main = "", legend = FALSE)
+```
+
+We find that, after accounting for distance from nearest town, there is a tendency for tornado reports to cluster at all distances.
+
+#### Elevation and elevation roughness as a covariates
+
+Elevation might be a factor in tornado occurrence rates. In particular the roughness of the underlying surface might make some areas more or less prone to tornadoes. Here we investigate this possibility using elevation data.
+
+Digital elevation data are available from http://www.viewfinderpanoramas.org. The data has been uploaded to my website. Download and unzip the data.
+```{r}
+download.file(url = "http://myweb.fsu.edu/jelsner/temp/data/15-H.tif.zip",
+              destfile = "15-H.tif.zip")
+unzip("15-H.tif.zip")
+```
+
+Import the elevation raster and crop it to the extent of Kansas.  
+```{r}
+library(raster)
+
+Elev <- raster("15-H.tif")
+
+KS.sp2 <- spTransform(KS.sp, CRS(projection(Elev)))
+Elev <- crop(Elev, KS.sp2)
+```
+
+Map the elevation.
+```{r}
+library(tmap)
+
+tm_shape(Elev) +
+  tm_raster() +
+tm_shape(KS.sp2) +
+  tm_borders() +
+tm_layout(title = "Elevation (m)", 
+          legend.outside = TRUE)
+```
+
+Get elevation roughness using the `terrain()` function from the {raster} package. Use the `projectRaster()` function to change the native projection to the projection of the tornado data. This takes a few seconds since the projection is not conformal and the grid spacing needs to be preserved.
+```{r}
+TR <- terrain(Elev, opt = 'roughness')
+ElevP <- projectRaster(Elev, crs = st_crs(Torn.sf)$proj4string)
+TRP <- projectRaster(TR, crs = st_crs(Torn.sf)$proj4string)
+
+#writeRaster(ElevP, filename = "ElevP")
+#writeRaster(TRP, filename = "TRP")
+```
+
+Read projected rasters since the `projectRaster()` function did not work in RStudio Cloud.
+```{r eval=FALSE}
+ElevP <- raster("ElevP")
+TRP <- raster("TRP")
+```
+
+Create image objects from the elevation and roughness rasters. First convert the rasters to a S4 class spatial grid data frame.
+```{r chunk3}
+Elev.grd <- as(ElevP, "SpatialGridDataFrame")
+TR.grd <- as(TRP, "SpatialGridDataFrame")
+El <- as(Elev.grd, "im")
+Tr <- as(TR.grd, "im")
+```
+
+Model the tornado events.
+```{r}
+model1 <- ppm(T.ppp25, 
+             trend = ~ Zc + El + Tr, 
+             covariates = list(Zc = Zc, El = El, Tr = Tr))
+summary(model1)
+```
+
+```{r}
+AIC(model0); AIC(model1)
+2 * (as.numeric(logLik(model1)) - as.numeric(logLik(model0)))/T.ppp25$n
+```
+diff | interpretation
+-----|---------------
+   1 | huge
+  .1 | large
+ .01 | good
+.001 | okay
+
+So we conclude that `model1` is an improvement over `model0` which is an improvement over a CSR.
+
+Diagnostics.
+```{r}
+plot(envelope(model1, 
+              fun = Lest, 
+              nsim = 39, 
+              global = TRUE), 
+     legend = FALSE)
+```
+
+The model is shown in red with the 95% uncertainty bands.
+```{r}
+model2 <- kppm(T.ppp25, 
+               trend = ~ Zc + El + Tr, 
+               covariates = list(Zc = Zc, El = El, Tr = Tr),
+               clusters = "Thomas")
+model2
+```
+
+```{r}
+plot(envelope(model2, 
+              fun = Lest, 
+              nsim = 39, 
+              global = TRUE), 
+     legend = FALSE)
+```
+
+Simulate point patterns from the model.
+```{r}
+X <- simulate.kppm(model2, nsim = 4)
+plot(X)
+```
+
+## Spatial logistic regression
+
+Spatial logistic regression is a popular model for point pattern data. The study domain is divided into a grid of cells; each cell is assigned the value one if it contains at least one event, and zero otherwise. 
+
+Then a logistic regression models the presence probability $p = P(Y = 1)$ as a function of explanatory variables $X$ in the (matrix) form
+$$
+\log \frac{p}{1-p} = \beta X
+$$
+where the left-hand side is the logit (log of the odds ratio) and the $\beta$ are the coefficients to be determined.
+
+If your data are stored as `ppp` objects, a spatial logistic model can be fit directly using functions from the {spatstat} package.
+
+Let's consider a canned example from the package (a good strategy in general).
+
+### Example: Copper ore deposits
+
+Consider the locations of 57 copper ore deposits (events) and 146 line segments representing geological 'lineaments.' Lineaments are linear features that consist of geological faults. 
+
+It is of interest to be able to predict the probability of a copper ore from the lineament pattern. The data are stored as a list in `copper`. The list contains a `ppp` object for the ore deposits and a `psp` object for the lineaments.
+```{r}
+library(spatstat)
+data(copper)
+plot(copper$SouthPoints)
+plot(copper$SouthLines, add = TRUE)
+```
+
+For convenience we first rotate the events (points and lines) by 90 degrees in the anticlockwise direction and save them as separate objects.
+```{r}
+C <- spatstat::rotate(copper$SouthPoints, pi/2)
+L <- spatstat::rotate(copper$SouthLines, pi/2)
+plot(C)
+plot(L, add = TRUE)
+```
+
+We summarize the planar point pattern `C` that we want to model.
+```{r}
+summary(C)
+```
+
+There are 57 ore deposits over a region of size 5584 square km resulting in an intensity of about .01 ore deposits per square km.
+
+Next we create a distance map of the lineaments to be used as a covariate.
+```{r}
+D <- distmap(L)
+plot(D)
+```
+
+Models are fit with the `slrm()` function from the {spatstat} package. 
+```{r}
+model <- slrm(C ~ D)
+model
+```
+
+The model says that the odds of a copper ore along a lineament (D = 0) is exp(-4.723) = .00888. This is slightly less than the overall intensity of .01.
+
+The model also says that for every one unit (one kilometer) increase in distance from a lineament the expected change in the log odds is .0781 [exp(.0781) = 1.0812] or an 8.1% increase in the odds. Ore deposits are more likely between the lineaments.
+
+The fitted method produces an image (raster) of the window giving the local probability of an ore deposit. The values are the probability of a random ore deposit in each pixel.
+```{r}
+plot(fitted(model))
+plot(C, add = TRUE)
+```
+
+Integrating the predictions over the area equals the observed number of ore deposits.
+```{r}
+sum(fitted(model))
+```
+
+## Machine learning on spatial data
+
+https://geocompr.robinlovelace.net/spatial-cv.html
+
+## Interpolating spatial data
+
+Observations of the natural world are made at specific locations in space (and time). But we often want estimates of the observed values everywhere. This is the case when the observations are taken from a continuous field (surface). Data observed or measured at locations across a continuous field are called geostatistical data. Examples: concentrations of heavy metals across a farm field, surface air pressures measured by barometers at cities across the country, minimum air temperature values across the city on a clear, calm night.
+
+Local averaging or spline functions are typically used for interpolation. If it is 20C here and 30C ten miles to the south, then it is 25C five miles to the south. That is a reasonable first-order assumption. But, these methods do not (1) take into account spatial autocorrelation and (2) do not estimate uncertainty about the interpolated values.
+
+Kriging is statistical interpolation (usually spatial). It is the centerpiece of what is called 'geostatistics.' The resulting surface (kriged surface) is composed of three components. (1) Spatial trend: an increase or decrease in the values that depends on direction or a covariate (co-kriging); (2) Local spatial autocorrelation. (3) Random variation. Together the three components provide a model that is used to estimate values at any point in a specified domain.
+
+Geostatistics is used to (1) quantify spatial correlation, (2) predict values at specific locations, (3) provide an estimate of uncertainty on the predicted values, and (4) simulation.
+
+As we've done with areal averaged data and point pattern data (Moran I, Ripley K, etc), we begin with understanding how to quantify spatial autocorrelation. In geostatistics, this involves the covariance function, the correlogram function, and the variogram.
+
+## Interpolation by inverse-distance weighting
+
+Let's start with interpolation via inverse-distance weighting.
+
+See WeatherSTEM.Rmd in project folder KDBI
+
+## Statistical interpolation
+
+* Statistical interpolation assumes the observed values are spatially homogeneous. This implies stationarity and continuity.
+* Stationarity implies that the average difference in values between pairs of observations separated by a given distance (lag) is constant across the domain. 
+* Continuity implies that the spatial autocorrelation depends only on the lag (and orientation) between observations. That is; spatial autocorrelation is independent of location.
+* Stationarity and continuity allow different parts of the domain to be treated as "independent" samples. 
+* Spatial autocorrelation can be described by a single parametric function. 
+
+Stationarity can be weak or intrinsic. Both assume the average of the difference in values at observations separated by a lag distance $h$ is zero. That is, E$[z_i - z_j]$ = 0, where location $i$ and location $j$ are a (lag) distance $h$ apart. This implies that the interpolated surface $Z(s)$ is a random function with a constant mean ($m$) and a residual ($\varepsilon$).
+$$
+Z(s) = m + \varepsilon(s).
+$$
+The expected value (average across all values) in the domain is $m$.
+
+Weak stationarity assumes the covariance is a function of the lag distance $h$.
+$$
+\hbox{cov}(z_i, z_j) = \hbox{cov}(h)
+$$
+where cov($h$) is called the covariogram.
+
+Intrinsic stationarity assumes the variance of the difference in values is a function of the lag: 
+$$
+\hbox{var}(z_i - z_j) = \gamma(h),
+$$
+where $\gamma(h)$ is called the variogram. This means that the variance of $Z$ is constant and that spatial correlation is independent of location.
+
+These assumptions are needed to get started with statistical interpolation.
+
+### Covariogram and correlogram
+
+Our interest will be on a parametric model for the variogram $\gamma(h)$. But to help understand the variogram, let us first consider the covariogram. 
+
+To make things simple but with no loss in generality, we start with a 4 x 6 map of surface air temperatures in degrees C.
+
+  21  21  20  19  18  19 
+  
+  26  25  26  27  29  28 
+  
+  32  33  34  35  30  28   
+  
+  34  35  35  36  32  31   
+
+Put the values into a data vector and determine the mean and variance.
+```{r chapter6}
+temps <- c(21, 21, 20, 19, 18, 19, 
+           26, 25, 26, 27, 29, 28, 
+           32, 33, 34, 35, 30, 28, 
+           34, 35, 35, 36, 32, 31)
+mean(temps); var(temps)
+```
+
+To start, we focus only on the north-south direction. To compute the sample covariance function we first compute the covariance between the observed values one distance unit apart.
+
+Mathematically
+$$
+\hbox{cov}(0, 1) = 1/|N(1)| \sum (z_i - Z)(z_j - Z)
+$$
+where $|N(1)|$ is the number of distinct observation pairs with a distance separation of one unit in the north-south direction and where $Z$ is the average over all observations. Here we let zero in the cov(0, 1) refer to the direction and the one to the distance of one unit apart. Here $|N(1)|$ = 18.
+
+The equation for the covariance can be simplified to:
+$$
+\hbox{cov}(0, 1) = 1/|N(1)| \sum z_i z_j - m_{-1} m_{+1}
+$$
+where $m_{-1}$ is the average temperature over all rows except the first (northern most) and $m_{+1}$ is the average temperature over all rows except the last (southern most).
+
+To simplify the notation we re-index the grid of temperatures using lexicographic (reading) order.
+
+ 1   2   3   4   5   6
+ 
+ 7   8   9   10  11  12 
+ 
+ 13  14  15  16  17  18  
+  
+ 19  20  21  22  23  24 
+
+Then
+```{r}
+mp1 <- mean(temps[1:18])
+mm1 <- mean(temps[7:24])
+cc <- sum(temps[1:18] * temps[7:24])/18
+cc - mm1 * mp1
+```
+
+Or more generally
+```{r}
+N <- 18
+k <- 1:N
+1/N * sum(temps[k] * temps[k + 6]) - mean(temps[k]) * mean(temps[k + 6])
+```
+
+The covariance has units of the field variable squared (here $^\circ C^2$).
+
+We also have observation pairs two units of distance apart. So we compute the cov(0, 2) in a similar way. 
+$$
+\hbox{cov}(0, 2) = 1/|N(2)| \sum z_i z_j - m_{-2} m_{+2}
+$$
+where $m_{-2}$ is the average temperature over all rows except the first two and $m_{+2}$ is the average temperature over all rows except the last two. $|N(2)|$ is the number of pairs two units apart.
+```{r}
+N <- 12
+k <- 1:N
+1/N * sum(temps[k] * temps[k + 12]) - mean(temps[k]) * mean(temps[k + 12])
+```
+
+Similarly we have observation pairs three units apart so we compute cov(0, 3) as
+$$
+\hbox{cov}(0, 3) = 1/|N(3)| \sum z_i z_j - m_{-3} m_{+3}
+$$
+```{r}
+N <- 6
+k <- 1:N
+1/N * sum(temps[k] * temps[k + 18]) - mean(temps[k]) * mean(temps[k + 18])
+```
+
+There are no observation pairs four units apart in the north-south direction so we are finished. The covariogram is a plot of the covariance values as a function of lagged distance. Let h be the lagged distance, then
+
+h      |  cov(h)  
+-------|--------  
+(0, 1) |  15  
+(0, 2) |   3  
+(0, 3) |   1  
+
+It is convenient to have a measure of co-variability that is dimensionless. This is obtained by dividing the covariance at lagged distance $h$ by the covariance at lag zero. This is the correlogram. Values of the correlogram range from 0 to +1.
+
+### Variogram
+
+The covariogram is a decreasing function of lag. The variogram is the multiplicative inverse of the covariogram. 
+
+Mathematically: var($z_i - z_j$) for locations i and j. The semivariogram is 1/2 the variogram. If location i is near location j, the difference in the values will be small and so too will the variance of their differences, in general. If location i is far from location j, the difference in values will be large and so too will the variance of their differences.
+
+In practice we have a set of observations and we compute a variogram. We call this the sample (or empirical) variogram. Let $t_i = (x_i, y_i)$  be the ith location and $h_{i,j} = t_j - t_i$ be the vector connecting location $t_i$ with location $t_j$. Then the sample variogram is defined as
+$$
+\gamma(h) = \frac{1}{2N(h)} \sum^{N(h)} (z_i - z_j)^2
+$$
+where $N(h)$ is the number of observation pairs a distance of $h$ units apart.
+
+The variogram assumes intrinsic stationarity so the values need to be detrended first.
+
+The sample variogram is characterized by a set of points the values of which generally increase as $h$ increases before leveling off (reaching a plateau).
+
+### Terminology
+
+Let's begin with a plot with labels. Make sure the {geoR} package is installed. The code is done using the base graphics commands and the plot method from the package.
+```{r}
+library(geoR)
+plot(variog(s100, max.dist = 1), 
+     xlab = "Lagged Distance (h)",
+     ylab = expression(paste(gamma,"(h)")), 
+     las = 1, pch = 16)
+abline(h = 0)
+abline(h = .15, col = "red")
+arrows(0, 0, x1 = 0, y1 = .15, length = .1)
+text(0, y = .05, labels = "nugget", pos=4)
+abline(h = .9, col = "red")
+arrows(0, .15, x1 = 0, y1 = .9, length = .1)
+text(0, y = .8, labels="sill (partial sill)", pos=4)
+abline(v = .6, col = "red")
+arrows(0, 1, x1 = .6, y1 = 1, length = .1)
+text(.4, y = 1.04, labels = "range")
+```
+
+* Lag (lag distance): Relative distance between observation locations.
+* Nugget (nugget, nugget variance, or nugget effect): The height of the variogram at zero lag. The nugget is the variation in the values at the observation locations without regard to spatial variation. Related to the observation (or measurement) precision.
+* Sill: The height of the variogram at which the values are uncorrelated.
+* Relative nugget effect: The ratio of the nugget to the sill expressed as a percentage.
+* Range: The distance beyond which the values are uncorrelated. The range is indicated on the empirical variogram as the position along the horizontal axis where values of the variogram reach a constant height.
+
+Additional terms.
+* Isotropy: The condition in which spatial correlation is the same in all directions.
+* Anisotropy: (an-I-so-trop-y) spatial correlation is stronger or more persistent in some directions.
+* Directional variogram: Distance and direction are important in characterizing the spatial correlations. Otherwise the variogram is called omni-directional.
+* Azimuth ($\theta$): Defines the direction of the variogram in degrees.The azimuth is measured clockwise from north.
+* Lag spacing: The distance between successive lags is called the lag spacing or lag increment.
+* Lag tolerance: The distance allowable for observational pairs at a specified lag. With arbitrary observation locations there will be no observations exactly a lag distance from any observation. Lag tolerance provides a range of distances to be used for computing values of the variogram at a specified lag.
