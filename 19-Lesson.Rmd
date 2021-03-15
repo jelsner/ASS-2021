@@ -17,7 +17,7 @@ Today's lesson starts with cautionary notes on inferring clustering from these f
 
 ## A cautionary note on inferring event interaction from distance functions
 
-The distance functions are defined and estimated under the assumption that the point process is stationary (homogeneous). We can treat any sub-region of the domain as an identically and identically distributed sample of the data.
+The distance functions are defined and estimated under the assumption that the point process is stationary (homogeneous). We can treat any sub-region of the domain as an independent and identically distributed (iid) sample of the data.
 
 If the spatial distribution of the event locations is influenced by event interaction then the distance functions will deviate from the theoretical model of CSR. But a deviation from CSR does not imply event interaction. Further, the distance functions characterize the spatial arrangement of event locations 'on average' so variability in an interaction as a function of scale may not be detected by the distance function.
 
@@ -201,7 +201,7 @@ The average intensity is 18 wildfires per 10 square km. But the intensity is bas
 
 Further, two event locations are identical if their x,y coordinates are the same, and their marks are the same (if they carry marks).
 
-Remove duplicate points with the `unique()` function, set the domain to be the county border, and set the name for the unit of length to meters.
+Remove duplicate events with the `unique()` function, set the domain to be the county border, and set the name for the unit of length to meters.
 ```{r}
 BFU.ppp <- unique(BFU.ppp)
 
@@ -259,7 +259,7 @@ Cluster models can be derived from a Poisson model. For example, we begin with a
 
 Then we consider each individual event $y_i$ in $Y$ to be a 'parent' that produces a set of 'offspring' events ($x_i$) according to some random mechanism. The resulting set of all offsprings forms clustered point pattern data $X$ which will not be adequately described by a homogeneous Poisson model. Said another way, the model is homogeneous Poisson at an unobserved level but clustered at the level of the observations ($X$). 
 
-One example of this parent-child process is the Matern cluster model. Parent events come from a homogeneous Poisson process with intensity $\kappa$ and then each parent has a Poisson ($\mu$) number of offspring that are independently and uniformly distributed (iid) within a radius $r$ centered on the parent.
+One example of this parent-child process is the Matern cluster model. Parent events come from a homogeneous Poisson process with intensity $\kappa$ and then each parent has a Poisson ($\mu$) number of offspring that are iid within a radius $r$ centered on the parent.
 
 For instance here we use the `rMatClust()` function from the {spatstat} package to produce a clustered `ppp` object. We use a disc radius of .1 units and an offspring rate equal to 5 (`mu = 5`).
 ```{r}
@@ -305,6 +305,13 @@ An example of this is Matern's Model I model. Here a homogeneous Poisson model f
 ```{r}
 plot(rMaternI(kappa = 70, 
               r = .05), main = "")
+
+X <- rMaternI(kappa = 70, 
+              r = .05)
+
+X %>%
+  Kest() %>%
+  plot()
 ```
 
 Changing $\kappa$ and $r$ will change the event intensity.

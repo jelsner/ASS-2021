@@ -27,9 +27,9 @@ plot(density(MT))
 plot(MT, add = TRUE)
 ```
 
-We see there are more maple trees across the southern part of the domain than across the nothern part of the domain.
+We see there are more maple trees across the southern part of the domain than across the northern part of the domain.
 
-A plot of the $G$ function summarizes the second-order properties under the assumption of no trend.
+A plot of the G function summarizes the second-order properties under the assumption of no trend.
 ```{r}
 library(tidyverse)
 library(ggplot2)
