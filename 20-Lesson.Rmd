@@ -11,25 +11,32 @@ editor_options:
 
 **"Sometimes it pays to stay in bed on Monday, rather than spending the rest of the week debugging Monday's code."** - Christopher Thompson
 
+Last time I introduced the mathematical notation for spatial models, today we will look at the practice of modeling point pattern data in more detail. The material is presented to give you some confidence in fitting and interpreting models for point pattern data. We start with the pine sapling and maple tree data sets. I conclude with an example from my research on tornadoes.
+
 ## Modeling spatial point pattern data
 
-Event locations that are more regular than CSR might be the result of event inhibition. Event locations that are more clustered than CSR might be the result of event clusters.
-
-Based on evidence of regularity from the Ripley K function, we fit an inhibition model to the Swedish pine sapling data.
+Event locations that are spread out more than expected under CSR might be the result of between-event inhibition.
 ```{r}
 library(spatstat)
-library(tidyverse)
 
 SP <- swedishpines
+plot(SP)
+```
+
+The event locations of the pine saplings indicate the potential of between-event inhibition.
+
+The K function gives us empirical evidence of this.
+```{r}
+library(tidyverse)
 
 SP %>%
   Kest(correction = "iso") %>%
   plot()
 ```
 
-The red line is the K curve under CSR. The black line is the empirical curve. At relative distances of between 5 and 15 units the empirical curve is below the CSR curve indicating there are fewer events within other events at those scales than would be expected by chance. Suggests a physical process of inhibition (perhaps due to competition for sunlight, etc).
+The red line is the K curve under CSR. The black line is the empirical curve. At distances (values of r) between 5 and 15 units the empirical curve is below the CSR curve indicating there are fewer events close to other events than would be expected by chance suggesting a physical process of inhibition (perhaps due to competition for sunlight, etc).
 
-When inhibition is constant with a fixed radius (r) around each event, we can try a Strauss model. To fit a Strauss model to the pine sapling data we use the `ppm()` function from the {spatstat} package and include the point pattern data as the first argument. We set the trend term to a constant with the argument `trend ~ 1` and the interaction radius to 10 units with the argument `interaction = Strauss(r = 10)`. We use border corrections out to a distance of 10 units from the window with the `rbord =` argument. 
+If we assume the inhibition process is constant across the domain with a fixed interaction radius (r), then we can fit a Strauss model to the data. We use the `ppm()` function from the {spatstat} package and include the point pattern data as the first argument. We set the trend term to a constant (stationarity) with the argument `trend ~ 1` and the interaction radius to 10 units with the argument `interaction = Strauss(r = 10)`. We use border corrections out to a distance of 10 units from the window with the `rbord =` argument. 
 ```{r}
 modelSP <- ppm(SP, 
                trend = ~ 1, 
@@ -37,34 +44,36 @@ modelSP <- ppm(SP,
                rbord = 10)
 ```
 
-The choice of the value for `r` in the `Strauss()` function is based on a visual inspection of the plot of `Kest()`. A value is chosen that represents the distance at which there is the largest departure from a CSR model. 
+The value for the interaction radius `r` in the `Strauss()` function is based on a visual inspection of the plot of `Kest()`. A value is chosen at the distance for which there is the largest departure from a CSR model. 
 
 We inspect the model parameters by typing the object name.
 ```{r}
 modelSP
 ```
 
-The first-order term (`beta`) has a value of .0757. This is the intensity of the 'proposal' events. The value of beta exceeds the average intensity by a factor of ten. Recall the intensity of the events is
+The output indicates that the model corresponds to a stationary (no trend) Strauss process. 
+
+The first-order term (`beta`) has a value of .0757. This is the average intensity of the set of 'proposal' events. The value of beta exceeds the average intensity of the observed events by a factor of ten. Recall the intensity of the events is
 ```{r}
 intensity(SP)
 ```
 
 The interaction parameter (`gamma`) is .275. It is less than one, indicating an inhibition process. The logarithm of gamma, called the interaction coefficient (`Interaction`), is -1.29. Interaction coefficients less than zero imply inhibition.
 
-A table with the coefficients including the standard errors and uncertainty ranges is obtained with the `coef()` method.
+The table of coefficients including the standard errors and uncertainty ranges is obtained with the `coef()` method.
 ```{r}
 modelSP %>%
   summary() %>%
   coef()
 ```
 
-The output includes the `Interaction` coefficient along with it's standard error (`S.E.`) and the associated 95% uncertainty interval. The ratio of the `Interaction` coefficient to its standard error is the `Zval`. A large z-value (in absolute magnitude) translates to a low $p$-value and a rejection of the null hypothesis of no interaction between events.
+The table includes the estimated value for the `(Intercept)` term. It is equal to the logarithm of the beta value, so exp(-2.58) = .0757 is the intensity of the set of 'proposal' events.
 
-We also see here an estimated value for the `(Intercept)`. It is the logarithm of the beta value, so exp(-2.58) = .0757 is the intensity of the proposal events.
+It also includes the `Interaction` coefficient along with it's standard error (`S.E.`) and the associated 95% uncertainty interval. The ratio of the `Interaction` coefficient to its standard error is the `Zval`. A large z-value (in absolute magnitude) translates to a low $p$-value and a rejection of the null hypothesis of no interaction between events.
 
-The model is interpreted as follows. The process producing the spatial pattern of pine saplings is such that we should see .0757 saplings per unit area [unobserved (latent) rate]. But because of event inhibition, where saplings nearby other saplings fail to grow, the number of saplings is reduced to .0074 per unit area. Thus the spatial pattern is suggestive of sibling-sibling interaction. Adults have many off-springs, but only some survive due to limited resources.
+Based on the values for these coefficients, the model is interpreted as follows. The conditions producing the spatial pattern of pine saplings is such that we should see .0757 saplings per unit area [unobserved (latent) intensity]. But because of between-event inhibition, where saplings nearby other saplings fail to grow, the number of saplings is reduced to .0074 per unit area (observed intensity). Thus the spatial pattern is suggestive of sibling-sibling interaction. Adults have many off-springs, but only some survive due to limited resources.
 
-Let's compare this inhibition model for the pine saplings to a cluster model for the maple trees in the Lansing woods data (`lansing`). We extract the events marked as `maple` and put them in a separate `ppp` object called `MT`.
+Let's compare the inhibition model for the pine saplings to a cluster model for the maple trees in the Lansing woods data (`lansing`). We extract the events marked as `maple` and put them in a separate `ppp` object called `MT`.
 ```{r}
 data(lansing)
 
@@ -77,7 +86,7 @@ summary(MT)
 
 There are 514 maples over this square region (924 x 924) square feet.
 
-Plots of the tree locations and the local intensity function help us decribe the first-order property of this point pattern data.
+Plots of the tree locations and the local intensity function help us describe the first-order property of this point pattern data.
 ```{r}
 MT %>%
   density() %>%
@@ -101,20 +110,20 @@ G.df <- MT %>%
 ggplot(G.df, aes(x = r, y = km)) +
   geom_line() +
   geom_line(aes(y = theo), color = "blue") +
-  geom_vline(xintercept = 18.5, lty = 'dashed') +
-  xlab("Distance (ft)") + ylab("G(r): Cumulative % of distances within a distance r of another maple") +
+  geom_vline(xintercept = 18, lty = 'dashed') +
+  xlab("Distance (ft)") + ylab("G(r): Cumulative % of events within a distance r of another maple") +
   theme_minimal()
 ```
 
-The plot indicates the maple trees are clustered. The empirical curve is above the theoretical curve. For example about 74% of the maple trees are within 18.5 feet of another maple tree. If the process resulted in trees was CSR then only 49% of the trees would be within 18.5 feet of another maple.
+The plot indicates the maple trees are clustered. The empirical curve is above the theoretical curve. For example about 74% of the maple trees are within 18 feet of another maple tree (vertical blue line). If the process resulted in trees was CSR then only 49% of the trees would be within 18 feet of another maple.
 
-Model event interaction as a Strauss process with interaction distance of .025 units (23 ft).
+We start by investigating the event interaction using a Strauss model with interaction radius of .019 units (18 ft).
 ```{r}
 ppm(MT, trend = ~ 1, 
-        interaction = Strauss(r = .025))
+        interaction = Strauss(r = .019))
 ```
 
-Here the first order term beta is 301. It is the 'latent' rate of maple trees per unit area. This rate is less than the 514 actual maple trees. The fitted interaction parameter (gamma) is 1.47. It is greater than one since the trees are clustered. The logarithm of gamma is positive at .387.
+Here the first order term beta is 345. It is the 'latent' rate of maple trees per unit area. This rate is less than the 514 actual maple trees. The fitted interaction parameter (gamma) is 1.72. It is greater than one since the trees are clustered. The logarithm of gamma is positive at .545.
 
 The model is interpreted as follows. The process producing the maple trees is such that we expect to see about 301 maples. Because of clustering where other maples are more likely in the vicinity of maples, the number of maples increases to the observed 514 per unit area.
 
@@ -131,7 +140,7 @@ Cluster models are fit using the `kppm()` function from the {spatstat} package. 
                   clusters = "Thomas") )
 ```
 
-Here $\kappa$ is 21.75 and $\bar \mu(s)$ (mean cluster size) is 23.6 trees. The product of kappa and the mean cluster size is the number of events. The cluster model describes a parent-child process. The number of parents is about 22. The distribution of the parents can be described as CSR. Each parent produces about 24 offspring distributed randomly about the location of the parent within a characteristic distance. The physical process might be different from the point pattern process used to describe it.
+Here $\kappa$ is 21.75 and $\bar \mu(s)$ (mean cluster size) is 23.6 trees. The product of kappa and the mean cluster size is the number of events. The cluster model describes a parent-child process. The number of parents is about 22. The distribution of the parents can be described as CSR. Each parent produces about 24 offspring distributed randomly about the location of the parent within a characteristic distance. The physical process might be different from the statistical process used to describe it.
 
 The cluster scale parameter indicating the characteristic size (area units) of the clusters is $\sigma^2$. 
 
@@ -141,7 +150,7 @@ plot(modelMT,
      what = "statistic")
 ```
 
-This is seen by the fact that the model fit (black line) is very close to the cluster process line (red dashed line).
+This is seen by the fact that the model fit (black line) is very close to the cluster process line (red dashed line). Also note that it is far from the CSR model (green line).
 
 The spatial scale of the clustering is visualized with the `what = "cluster"` argument.
 ```{r}
@@ -155,6 +164,7 @@ The color ramp is the spatial intensity (number of events per unit area) about a
 
 * Analyze/plot the intensity and nearest neighbor statistics.
 * Select a model including trend, interaction distance, etc informed by the results of step 1
+* Choose a inhibition or cluster model
 * Fit the model to the event pattern
 * Assess how well the model fits the data by generating samples and comparing statistics from the samples with the statistics from the original data
 
@@ -177,9 +187,9 @@ plot(X[[3]])
 
 ```
 
-The sample point pattern data looks similar to the actual data. 
+The samples of point pattern data look similar to the actual data. 
 
-To better assess the similarity we use the `envelope()` function to compute the distance statistic on 99 samples and actual data. The K values are averaged over all samples and a mean line represents the best model curve. Uncertainty is assessed with a band that ranges from the minimum to the maximum K value for each distance.
+To quantitatively assess the similarity we use the `envelope()` function that computes the K function on 99 samples and actual data. The K function values are averaged over all samples and a mean line represents the best model curve. Uncertainty is assessed with a band that ranges from the minimum to the maximum K at each distance.
 
 We start with the pine sapling model.
 ```{r}
@@ -201,7 +211,7 @@ plot(envelope(modelMT,
               correction = 'border'), legend = FALSE)
 ```
 
-In the case of the maple trees, a cluster model is sufficient. However, it is not satisfying if we know about the inhibition caused by the presence of hickory. Also we saw that there were more trees in the south. So we are not finished modeling these data.
+In the case of the maple trees, a cluster model is sufficient. However, it is not satisfying if we know about the potential for inhibition caused by the presence of hickory trees. Also we saw that there were more trees in the south than the north so the assumption of stationarity is suspect.
 
 Here we fit a second cluster model where the intensity is a linear function of distance in the north-south direction.
 ```{r}
@@ -211,9 +221,9 @@ modelMT2 <- kppm(MT,
 modelMT2
 ```
 
-This is an inhomogeneous cluster point process model. The logarithm of the intensity depends on y. The coefficient is negative as expected with fewer trees as we move north (increasing y direction). There is one spatial unit in the north-south direction so we interpret this coefficient to mean there are 77% fewer trees in the north than in the south [1 - exp(-1.486) = .77].
+This is an inhomogeneous cluster point process model. The logarithm of the intensity depends on y (`Log intensity:  ~y`). The fitted trend coefficient is negative as expected, since we observed fewer trees as we move north (increasing y direction). There is one spatial unit in the north-south direction so we interpret this coefficient to mean there are 77% fewer trees in the north than in the south. The 77% comes from the formula 1 - exp(-1.486) = .77.
 
-The average number of clusters (`kappa`) increases to about 27. The cluster scale parameter (`sigma`), indicating the characteristic size of the cluster (in distance units) decreases to .0536. That makes sense since some of the event-to-event distances are accounted for by the trend term.
+The average number of clusters (`kappa`) is higher at about 27 (it was 22 for stationary model). The cluster scale parameter (`sigma`), indicating the characteristic size of the cluster (in distance units) is lower at .0536. That makes sense since some of the event-to-event distance is accounted for by the trend term.
 
 ### Example 1: Tropical trees
 
@@ -231,7 +241,7 @@ Accompanied by covariate data giving the elevation (altitude) and slope of eleva
 image(bei.extra)
 ```
 
-Compute and plot the K function.
+Compute and plot the K function on the `ppp` object `bei`.
 ```{r}
 plot(envelope(bei, 
               fun = Kest, 
@@ -243,16 +253,16 @@ plot(envelope(bei,
 
 There is significant clustering indicated by the black line far above the CSR line. There are more trees in the vicinity of other trees than expected by chance.
 
-But how much of the clustering is due to terrain (elevation and elevation slope)?.
+But how much of the clustering is due to variations in terrain?
 
-Fit a model that includes elevation and gradient as covariates. This is done with the `trend =` argument naming the image variables and including the argument `covariates =` indicating a data frame or, in this case, a list whose entries are image functions.
+We fit a model that includes elevation and gradient as covariates. This is done with the `trend =` argument naming the image variables and including the argument `covariates =` indicating a data frame or, in this case, a list whose entries are image functions.
 ```{r}
 modelBEI.ppm <- ppm(bei, 
                     trend = ~ elev + grad, 
                     covariates = bei.extra)
 ```
 
-We check to see if the covariates are significant to the model.
+We check to see if these explanatory variables are significant to the model.
 ```{r}
 summary(modelBEI.ppm)
 ```
@@ -272,7 +282,7 @@ plot(E, main = "Inhomogeneous Poisson Model",
      legend = FALSE)
 ```
 
-Better but not by much. We conclude that although elevation and elevation slope are statistically significant, they do not capture all the clustering of trees.
+Better but not much. We conclude that although elevation and elevation slope are statistically significant, they do not capture all the clustering of trees.
 
 An improvement is made by adding a cluster process to the model. This is done with the function `kppm()`.
 ```{r}
@@ -355,7 +365,7 @@ Locations of the violent tornadoes.
 plot(V.ppp)
 ```
 
-In Lesson 16 we saw that the spatial intensity of tornado reports was a function of distance to nearest city. So we want to include this as an explanatory variable. Import the data, set the CRS, and transform the CRS to match that of the tornadoes. Exclude cities with fewer than 1000 people.
+In Lesson 16 we saw that the spatial intensity of tornado reports was a function of distance to nearest city. So we include this as an explanatory variable. Import the data, set the CRS, and transform the CRS to match that of the tornadoes. Exclude cities with fewer than 1000 people.
 ```{r}
 C.sf <- us_cities() %>%
   filter(population >= 1000) %>%
