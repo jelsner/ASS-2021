@@ -77,7 +77,7 @@ Locations of the violent tornadoes.
 plot(V.ppp)
 ```
 
-In Lesson 16 we saw that the spatial intensity of tornado reports was a function of distance to nearest city. So we include this as an explanatory variable. Import the data, set the CRS, and transform the CRS to match that of the tornadoes. Exclude cities with fewer than 1000 people.
+In Lesson 16 we quantified the spatial intensity tornado reports as a function of distance to nearest city. We found there was a statistically significant relationship so we include this as an explanatory variable. Import the data, set the CRS, and transform the CRS to match that of the tornadoes. Exclude cities with fewer than 1000 people.
 ```{r}
 C.sf <- us_cities() %>%
   filter(population >= 1000) %>%
@@ -107,7 +107,8 @@ The resulting object an `im` class indicating a pixel image. Pixel values are di
 Our interest lies with the distance to nearest non-violent tornado. We check to see if this might be a useful variable in a model.
 ```{r}
 Znv <- distmap(NV.ppp)
-rhat <- rhohat(V.ppp, Znv, 
+rhat <- rhohat(V.ppp, 
+               covariate = Znv, 
                adjust = 1.5, 
                smoother = "kernel", 
                method = "transform")
