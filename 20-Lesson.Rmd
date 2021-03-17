@@ -13,6 +13,8 @@ editor_options:
 
 Last time I introduced the mathematical notation for spatial models, today we will look at the practice of modeling point pattern data in more detail. The material is presented to give you some confidence in fitting and interpreting models for point pattern data. We start with the pine sapling and maple tree data sets. I conclude with an example from my research on tornadoes.
 
+No lesson or assignment on Friday.
+
 ## Modeling spatial point pattern data
 
 Event locations that are spread out more than expected under CSR might be the result of between-event inhibition.
@@ -117,15 +119,16 @@ ggplot(G.df, aes(x = r, y = km)) +
 
 The plot indicates the maple trees are clustered. The empirical curve is above the theoretical curve. For example about 74% of the maple trees are within 18 feet of another maple tree (vertical blue line). If the process resulted in trees was CSR then only 49% of the trees would be within 18 feet of another maple.
 
-We start by investigating the event interaction using a Strauss model with interaction radius of .019 units (18 ft).
+We start by investigating the event interaction using a stationary Strauss model with interaction radius of .019 units (18 ft).
 ```{r}
-ppm(MT, trend = ~ 1, 
-        interaction = Strauss(r = .019))
+ppm(MT, 
+    trend = ~ 1, 
+    interaction = Strauss(r = .019))
 ```
 
-Here the first order term beta is 345. It is the 'latent' rate of maple trees per unit area. This rate is less than the 514 actual maple trees. The fitted interaction parameter (gamma) is 1.72. It is greater than one since the trees are clustered. The logarithm of gamma is positive at .545.
+Here the first order term beta is 345. It is the 'latent' rate (intensity) of maple trees per unit area. This rate is less than the 514 actual maple trees. The fitted interaction parameter (gamma) is 1.72. It is greater than one since the trees are clustered. The logarithm of gamma is positive at .545.
 
-The model is interpreted as follows. The process producing the maple trees is such that we expect to see about 301 maples. Because of clustering where other maples are more likely in the vicinity of maples, the number of maples increases to the observed 514 per unit area.
+The model is interpreted as follows. The process producing the maple trees is such that we expect to see about 345 maples. Because of clustering where other maples are more likely in the vicinity of maples, the number of maples increases to the observed 514 per unit area.
 
 Here the physical explanation could be event interaction. But it also could be explained by inhibition with hickory trees. We can model this using a term for cross event type interaction.
 
@@ -201,7 +204,7 @@ plot(envelope(modelSP,
               correction = 'border'), legend = FALSE)
 ```
 
-The black line is the empirical (data) curve and the red line is the average over the 99 samples. The two lines are close and the black line falls nearly completely within the gray uncertainty band indicating the model fits the data well. The kink in the red curve is the result of specifying 10 units for the interaction distance. From these results we conclude that an inhibition model is sufficient for describing the pine sapling data. 
+The black line is the empirical (data) curve and the red line is the average over the 99 samples. The two lines are close and the black line falls nearly completely within the gray uncertainty band indicating the model fits the data well. The kink in the red curve is the result of specifying 10 units for the interaction distance. From these results we conclude that a homogeneous inhibition model is sufficient for describing the pine sapling data. 
 
 What about the model for the maple trees? The model is saved as `modelMT`.
 ```{r}

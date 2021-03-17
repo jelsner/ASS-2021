@@ -1,7 +1,7 @@
 ---
 title: "Lesson 21"
 author: "James B. Elsner"
-date: "March 22, 2021"
+date: "March 24, 2021"
 output:
   html_document: null
 editor_options:
@@ -9,6 +9,176 @@ editor_options:
 ---
 
 **"Machines take me by surprise with great frequency."** – Alan Turing
+
+## Modeling the occurrence of violent tornadoes
+
+The vast majority of tornadoes have winds of less than 60 m/s (120 mph). A violent tornado, with winds exceeding 90 m/s, is rare. Most of these potentially destructive and deadly tornadoes occur from rotating thunderstorms called supercells, with formation contingent on local (storm-scale) meteorological conditions. 
+
+The long-term risk of a tornado at a given location is assessed using historical records, however, the rarity of the most violent tornadoes make these rate estimates unstable. Here we use the more stable rate estimates from the larger set of less violent tornadoes to create more reliable estimates of violent tornado frequency.
+
+For this exercise we restrict our attention to tornadoes occurring in Kansas over the period 1954--2018.
+```{r}
+library(sf)
+
+Torn.sf <- st_read(dsn = "1950-2018-torn-initpoint") %>%
+  st_transform(crs = 3082) %>%
+  filter(mag >= 0, yr >= 1954) %>%
+  mutate(EF = mag,
+         EFf = as.factor(EF)) %>%
+  dplyr::select(yr, EF, EFf)
+
+library(USAboundaries)
+library(maptools)
+
+W.sfc <- us_states(states = "Kansas") %>%
+  st_transform(crs = st_crs(Torn.sf)) %>%
+  st_geometry()
+
+Torn.sf <- Torn.sf[W.sfc, ]
+```
+
+Create a `owin` and `ppp` objects. Note that although we've already subsetted by Kansas tornadoes above we need to subset on the `ppp` object to assign the KS boundary as the analysis window.
+```{r}
+KS.win <- W.sfc %>%
+  as_Spatial() %>%
+  as.owin()
+
+T.ppp <- Torn.sf["EF"] %>%
+  as_Spatial() %>%
+  as.ppp()
+
+T.ppp <- T.ppp[KS.win]
+
+summary(T.ppp)
+```
+
+There are 4079 tornadoes over the period with an average intensity of 189 per 100 square kilometer (multiply the average intensity in square meters by 10^10).
+
+Here we separate the point pattern data into non-violent tornadoes and violent tornadoes. The non-violent tornadoes include those with an EF rating of 0, 1, 2 or 3. The violent tornadoes include those with an EF rating of 4 or 5.
+```{r}
+NV.ppp <- T.ppp %>%
+  subset(marks <= 3 & marks >= 0) %>%
+  unmark()
+
+summary(NV.ppp)
+
+
+V.ppp <- T.ppp %>%
+  subset(marks >= 4) %>% 
+  unmark()
+
+summary(V.ppp)
+```
+
+The spatial intensity of the non-violent tornadoes is 187 per 100 sq km. The spatial intensity of the violent tornadoes is 1.8 per 100 square kilometer.
+
+Locations of the violent tornadoes.
+```{r}
+plot(V.ppp)
+```
+
+In Lesson 16 we saw that the spatial intensity of tornado reports was a function of distance to nearest city. So we include this as an explanatory variable. Import the data, set the CRS, and transform the CRS to match that of the tornadoes. Exclude cities with fewer than 1000 people.
+```{r}
+C.sf <- us_cities() %>%
+  filter(population >= 1000) %>%
+  st_transform(crs = st_crs(Torn.sf))
+```
+
+Then create a `ppp` object of events from the city/town locations. First create an S4 class spatial data frame and convert this data frame to a `ppp` object before removing the marks. Then subset the events by the window.
+```{r}
+C.ppp <- C.sf %>%
+  as_Spatial() %>%
+  as.ppp()
+
+C.ppp <- C.ppp[KS.win] %>%
+  unmark()
+
+plot(C.ppp)
+```
+
+Next create a distance map of the city/town locations using the `distmap()` function.
+```{r}
+Zc <- distmap(C.ppp)
+plot(Zc)
+```
+
+The resulting object an `im` class indicating a pixel image. Pixel values are distances is meters. Blue indicates locations that are less than 20 km from a city or town with a population of at least 1000.
+
+Our interest lies with the distance to nearest non-violent tornado. We check to see if this might be a useful variable in a model.
+```{r}
+Znv <- distmap(NV.ppp)
+rhat <- rhohat(V.ppp, Znv, 
+               adjust = 1.5, 
+               smoother = "kernel", 
+               method = "transform")
+
+dist <- rhat$Znv
+rho <- rhat$rho
+hi <- rhat$hi
+lo <- rhat$lo
+Rho.df <- data.frame(dist = dist, rho = rho, hi = hi, lo = lo)
+
+ggplot(Rho.df) + 
+  geom_ribbon(aes(x = dist, ymin = lo, ymax = hi), alpha = .3) + 
+  geom_line(aes(x = dist, y = rho), col = "black") + 
+  ylab("Spatial intensity of violent tornadoes") + xlab("Distance from nearest non-violent tornado (m)") + 
+  theme_minimal()
+```
+
+This shows that regions that get non-violent tornadoes also see higher rates of violent tornadoes.
+
+So our model includes two trend terms.
+```{r}
+model <- ppm(V.ppp, 
+             trend = ~ Zc + Znv, 
+             covariates = list(Zc = Zc, Znv = Znv))
+
+coef(summary(model))
+```
+
+As expected the model shows fewer violent tornadoes with increasing distance from the nearest city (negative coefficient on `Zc`) and fewer violent tornadoes with increasing distance from a non-violent tornado (negative coefficient on `Znv`).
+
+Since the spatial unit is meters the coefficient of -3.06e-05 is interpreted as a [1 - exp(-.0306)] * 100% or 3% decrease in violent tornado reports per kilometer of distance from a city. Similarly the coefficient on distance from nearest non-violent tornado is interpreted as a 23% decrease in violent tornado reports per kilometer of distance from nearest non-violent tornado.
+
+We check if there is any residual nearest neighbor correlation.
+```{r}
+E <- envelope(model, 
+              fun = Kest, 
+              nsim = 39,
+              global = TRUE)
+plot(E, main = "Inhomogeneous Poisson Model", legend = FALSE)
+```
+
+There appears to be a bit of regularity at smaller scales. The empirical curve (black line) falls slightly below the model (dashed red line). There are fewer nearby violent tornadoes than one would expect.
+
+To see if this is statistically significant, we add an inhibition process to the model.
+```{r}
+model2 <- ppm(V.ppp, 
+              trend = ~ Zc + Znv, 
+              covariates = list(Zc = Zc, Znv = Znv),
+              interaction = Strauss(r = 40000))
+
+coef(summary(model2))
+```
+
+We see a negative sign on the interaction coefficient as expected from the above plot, but the standard error is relatively large so it is not significant.
+
+Remove the inhibition process and add a trend term in the east-west direction.
+```{r}
+model3 <- ppm(V.ppp, 
+              trend = ~ Zc + Znv + x, 
+              covariates = list(Zc = Zc, Znv = Znv))
+
+coef(summary(model3))
+```
+
+There is a significant eastward trend but it appears to confound the distance to city term. Why is this? 
+
+Plot simulated data.
+```{r}
+plot(V.ppp)
+plot(simulate(model, nsim = 6))
+```
 
 ## Does terrain roughness influence tornado occurrence rates?
 
@@ -54,8 +224,6 @@ plot(E, main = "", legend = FALSE)
 ```
 
 We find that, after accounting for distance from nearest town, there is a tendency for tornado reports to cluster at all distances.
-
-#### Elevation and elevation roughness as a covariates
 
 Elevation might be a factor in tornado occurrence rates. In particular the roughness of the underlying surface might make some areas more or less prone to tornadoes. Here we investigate this possibility using elevation data.
 
@@ -178,8 +346,6 @@ where the left-hand side is the logit (log of the odds ratio) and the $\beta$ ar
 If your data are stored as `ppp` objects, a spatial logistic model can be fit directly using functions from the {spatstat} package.
 
 Let's consider a canned example from the package (a good strategy in general).
-
-### Example: Copper ore deposits
 
 Consider the locations of 57 copper ore deposits (events) and 146 line segments representing geological 'lineaments.' Lineaments are linear features that consist of geological faults. 
 
