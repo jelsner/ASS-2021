@@ -12,15 +12,17 @@ editor_options:
 
 ## Interpolating spatial data
 
-Observations of the natural world are made at specific locations in space (and time). But we often want estimates of the observed values everywhere. This is the case when the observations are taken from a continuous field (surface). Data observed or measured at locations across a continuous field are called geostatistical data. Examples: concentrations of heavy metals across a farm field, surface air pressures in cities across the country, air temperatures within a city during the night.
+Observations of the natural world are made at specific locations in space (and time). But we often want estimates of the observed values everywhere. The temperature reported at the airport is 75F, but what is it at my house 10 miles away? This is the case when the observations are taken from a continuous field (surface). Data observed or measured at locations across a continuous field are called geostatistical data. Examples: concentrations of heavy metals across a farm field, surface air pressures in cities across the country, air temperatures within a city during the night.
 
-Local averaging or spline functions are typically used for interpolation. If it is 20C here and 30C ten miles to the south, then it is 25C five miles to the south. That is a reasonable first-order assumption. But, these methods do not (1) take into account spatial autocorrelation and (2) do not estimate uncertainty about the interpolated values.
+Local averaging, spline functions, or inverse-distance weighting are typically used for interpolation. If it is 20C here and 30C ten miles to the south, then it is 25C five miles to the south. That is a reasonable first-order assumption. But these methods do not (1) take into account spatial autocorrelation and (2) do not estimate uncertainty about the interpolated values.
 
-Kriging is statistical interpolation (usually spatial). It is the centerpiece of what is called 'geostatistics.' The resulting surface (kriged surface) is composed of three components. (1) Spatial trend: an increase or decrease in the values that depends on direction or a covariate (co-kriging); (2) Local spatial autocorrelation. (3) Random variation. Together the three components provide a model that is used to estimate values at any point in a specified domain.
+Kriging is statistical spatial interpolation. It is the centerpiece of what is called 'geostatistics.' The resulting surface (kriged surface) is composed of three parts. (1) Spatial trend: an increase or decrease in the values that depends on direction or a covariate (co-kriging); (2) Local spatial autocorrelation. (3) Random variation. Together the three components provide a model that is used to estimate values at any point within a specified domain.
 
 Geostatistics is used to (1) quantify spatial correlation, (2) predict values at specific locations, (3) provide an estimate of uncertainty on the predicted values, and (4) simulation.
 
-As we've done with areal averaged data and point pattern data (Moran I, Ripley K, etc), we begin with understanding how to quantify spatial autocorrelation. In geostatistics, this involves the covariance function, the correlogram function, and the variogram.
+As we've done with areal averaged data and point pattern data (Moran I, Ripley K), we begin with understanding how to quantify spatial autocorrelation. In geostatistics, this involves the covariance function, the correlogram function, and the variogram.
+
+To get started we need a few definitions.
 
 * Statistical interpolation assumes the observed values are spatially homogeneous. This implies stationarity and continuity.
 * Stationarity implies that the average difference in values between pairs of observations separated by a given distance (lag) is constant across the domain. 
