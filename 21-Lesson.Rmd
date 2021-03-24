@@ -11,7 +11,7 @@ editor_options:
 
 **"Machines take me by surprise with great frequency."** – Alan Turing
 
-Today: This will be the final lesson on point pattern data analysis and modeling. I will show two examples from my research on tornadoes. Friday's assignment (Assignment 9) will be to write a short paragraph (5 or 6 sentences) describing your research interest as it relates to spatial statistics. You will write the paragraph in the Rmd file. I will give you a rubric and an example. I will post it to Canvas today and it is due on Friday (March 26) at 3p. I will not be available for Zoom Friday morning.
+Today: This will be the final lesson on point pattern data analysis and modeling. As a way to wrap up this material I will show two examples of modeling from my research on tornadoes. Friday's assignment (Assignment 9) will ask you to write a short paragraph (5 or 6 sentences) describing your research interest as it relates to spatial statistics. You will write the paragraph in the Rmd file. I will give you a rubric and an example. I will post it to Canvas today and it is due on Friday (March 26) at 3p. I will not be available for Zoom Friday morning.
 
 https://rfia.netlify.app/ {rFIA} is a package aimed at increasing the accessibility and use of the USFS Forest Inventory and Analysis (FIA) Database
 
