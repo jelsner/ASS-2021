@@ -11,13 +11,13 @@ editor_options:
 
 **"Machines take me by surprise with great frequency."** – Alan Turing
 
-Today: Last lesson on point pattern data analysis and modeling. I will show two examples from my research on tornadoes. Friday's assignment (Assignment 9) will be to write a short paragraph (5 or 6 sentences) describing you research interest as it relates (or might relate) to spatial statistics. You will write the paragraph in the Rmd file. I will give you an example. I will post it to Canvas tomorrow (Thu) and it will be due Friday at 3p. I will not be available for Zoom Friday morning.
+Today: This will be the final lesson on point pattern data analysis and modeling. I will show two examples from my research on tornadoes. Friday's assignment (Assignment 9) will be to write a short paragraph (5 or 6 sentences) describing your research interest as it relates to spatial statistics. You will write the paragraph in the Rmd file. I will give you a rubric and an example. I will post it to Canvas today and it is due on Friday (March 26) at 3p. I will not be available for Zoom Friday morning.
 
 https://rfia.netlify.app/ {rFIA} is a package aimed at increasing the accessibility and use of the USFS Forest Inventory and Analysis (FIA) Database
 
 ## Modeling the occurrence of violent tornadoes
 
-The long-term risk of a tornado is estimated using historical records. The rarity of the most violent tornadoes make these risk estimates unstable. Here we use point pattern data models together with the more stable risk estimates from the larger set of less violent tornadoes to create more reliable estimates of the risk of a violent tornado.
+The long-term risk of a tornado is estimated using historical records. The rarity of the most violent tornadoes makes the risk estimates for these most destructive events unstable. Here we use point pattern data models together with the more stable risk estimates from the larger set of less violent tornadoes to create more reliable estimates of the risk of a violent tornado.
 
 We restrict our attention to tornadoes occurring across the state of Kansas during the period 1954--2018.
 ```{r}
@@ -41,7 +41,7 @@ W.sfc <- us_states(states = "Kansas") %>%
 Torn.sf <- Torn.sf[W.sfc, ]
 ```
 
-Create a `owin` and `ppp` objects. Note that although we've already subsetted by Kansas tornadoes above we need to subset on the `ppp` object to assign the KS boundary as the analysis window. Keep this in mind: Point pattern analysis and modeling are done with a set of event locations occurring within a boundary. If the boundary is not defined a bounding box is used as the boundary.
+Create a `owin` and `ppp` objects. Note: we've already subset by Kansas tornadoes above but we need to subset on the `ppp` object to assign the KS boundary as the analysis window. Keep this in mind: Point pattern analysis and modeling are done with a set of event locations occurring within a boundary. If the boundary is not defined then a bounding box is used.
 ```{r}
 library(spatstat)
 
@@ -60,7 +60,7 @@ summary(T.ppp)
 
 There are 4079 tornadoes over the period with an average intensity of 189 per 100 square kilometer (multiply the average intensity in square meters by 10^10).
 
-We separate the point pattern data into non-violent tornadoes and violent tornadoes. The non-violent tornadoes include those with an EF rating of 0, 1, 2 or 3. The violent tornadoes include those with an EF rating of 4 or 5.
+We separate the point pattern data into non-violent tornadoes and violent tornadoes. Non-violent tornadoes include those with an EF damage rating of 0, 1, 2 or 3. Violent tornadoes include those with an EF rating of 4 or 5. Note: Even non-violent tornadoes are capable of considerable damage and casualties. 
 ```{r}
 NV.ppp <- T.ppp %>%
   subset(marks <= 3 & marks >= 0) %>%
