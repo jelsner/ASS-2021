@@ -10,9 +10,18 @@ editor_options:
 
 **"Rarely is anyone thanked for the work they did to prevent the disaster that didn't happen."** – Mikko Hypponen
 
+Last time we were introduced to some of the terminology and maths of spatial statistical interpolation. To review, the steps for spatial interpolation (statistical) are:
+
+Step 1: Examine the observed data for trends, check for normality
+Step 2: Compute empirical variograms
+Step 3: Fit a variogram model to the empirical variogram
+Step 4: Create the kriged surface. Kriging uses the variogram model and the observed data to estimate data values at any location of interest. The kriged estimates are a weighted average of the neighborhood values where the weights are taken from the variogram model. 
+
+Today we consider some concrete examples using functions from the {geoR} package.
+
 ## Interpolating spatial data using functions from the {geoR} package
 
-The {geoR} package contains functions for spatial interpolation. There are other packages that have functions for spatial interpolation, but {geoR} was one of the first comprehensive packages devoted to it. The functions are helpful in learning the required steps. They require the data to be of class `geodata`.
+The {geoR} package was one of the first comprehensive packages devoted spatial statistical interpolation. The functions are helpful in learning the required steps.
 
 Suppose we have the following set of observations (`zobs`) at locations (`sx`, `sy`).
 ```{r}
@@ -32,16 +41,7 @@ ggplot(data = df,
   theme_minimal()
 ```
 
-Lag distance (distance between locations) is the independent variable in the variogram function. We get all pairwise distances by applying the `dist()` function to a matrix of spatial coordinates.
-```{r}
-dist(cbind(sx, sy))
-max(dist(cbind(sx, sy)))
-min(dist(cbind(sx, sy)))
-```
-
-The function computes a pairwise distance matrix. The distance between the first and second observation is 2.16 units and so on. The largest lag distance is 8.04 units and the smallest lag distance is 2.05 units.
-
-The functions in the {geoR} package work with objects of class `geodata`. Thus we first need to convert the data frame of observations and locations into a `geodata` object.
+The functions in the {geoR} package only work with objects of class `geodata`. Thus we first need to convert the data frame of observations and locations into a `geodata` object.
 
 This is done with the `as.geodata()` function. The default for the function is to assume that the first two columns of the data frame contain the coordinates and the third column contains the observed data values. This is the way we constructed the data frame so we can use the defaults.
 ```{r}
@@ -169,24 +169,22 @@ ggplot(data.frame(u = topo.v$u, n = topo.v$n), aes(x = u, y = n)) +
 
 ## Interpolating head heights in the Wolfcamp aquifer
 
-Some years ago there were three nuclear waste repository sites being proposed in Nevada, Texas, and Washington. The site needs to be larger enough for more than 68,000 high-level waste containers placed underground, about 9 m (~30 feet) apart, in trenches surrounded by salt. In July of 2002 the Congress approved [Yucca Mountain](https://en.wikipedia.org/wiki/Yucca_Mountain_nuclear_waste_repository), Nevada, as the nation’s first long-term geological repository for spent nuclear fuel and high-level radioactive waste.
+Let's look at another example. Some years ago there were three nuclear waste repository sites being proposed in Nevada, Texas, and Washington. The site needs to be larger enough for more than 68,000 high-level waste containers placed underground, about 9 m (~30 feet) apart, in trenches surrounded by salt. In July of 2002 the Congress approved [Yucca Mountain](https://en.wikipedia.org/wiki/Yucca_Mountain_nuclear_waste_repository), Nevada, as the nation’s first long-term geological repository for spent nuclear fuel and high-level radioactive waste.
 
-The site must isolate the waste for 10,000 years. Leaks could occur, however, or radioactive heat could cause tiny quantities of water in the salt to migrate toward the heat until eventually each canister is surrounded by 22.5 liters of water (~6 gallons). A chemical reaction of salt and water can create hydrochloric acid that might corrode the canisters.
+The site must isolate the waste for 10,000 years. Leaks could occur, however, or radioactive heat could cause tiny quantities of water in the salt to migrate toward the heat until eventually each canister is surrounded by 22.5 liters of water (~6 gallons). A chemical reaction of salt and water can create hydrochloric acid that might corrode the canisters. The piezometric-head data at the site were obtained by drilling a narrow pipe into the aquifer and letting water seeks its own level in the pipe (piezometer).
 
-The piezometric-head data at the site were obtained by drilling a narrow pipe into the aquifer and letting water seeks its own level in the pipe (piezometer). 
-
-The head measurements, given in units of feet above sea level, are from drill stem tests and indicate the total energy of the water in units of height. The higher the head height, the greater the potential energy. 
-
-Water flows away from areas of high potential energy so aquifer discharge is proportional to the gradient of the piezometric head.
+The head measurements, given in units of feet above sea level, are from drill stem tests and indicate the total energy of the water in units of height. The higher the head height, the greater the potential energy.  Water flows away from areas of high potential energy so aquifer discharge is proportional to the gradient of the piezometric head.
 
 The data are in `wolfcamp.csv` on my website.
 
 Step 1: Examine the observed data for trends, check for normality
 
-Get the data.
+Import the data.
 ```{r}
+library(tidyverse)
+
 L <- "http://myweb.fsu.edu/jelsner/temp/data/wolfcamp.csv"
-wca.df <- read.csv(L, header = TRUE)
+wca.df <- read_csv(L)
 ```
 
 Create a simple feature data frame and then map the locations and head heights.
@@ -196,9 +194,11 @@ wca.sf <- st_as_sf(x = wca.df,
                    coords = c("lon", "lat"),
                    crs = "+proj=longlat +datum=WGS84")
 
-library(mapview)
-mapView(wca.sf, 
-        zcol = "head")
+library(tmap)
+tmap_mode("view")
+
+tm_shape(wca.sf) +
+  tm_dots("head")
 ```
 
 Convert the data frame to a `geodata` object. Note there is no method to do this from a simple feature.
@@ -208,12 +208,14 @@ wca.gdf <- as.geodata(wca.df,
                       data.col = 3)
 ```
 
+Note we can also specify the coordinates and data by column names (`coords.col = c("lon", "lat")`, `data.col = "head"`).
+
 Find the duplicate location(s).
 ```{r}
 dup.coords(wca.gdf)
 ```
 
-The locations are the same, but the data values are different. This may represent an error or multiple measurements at this one location.  
+The locations are the same, but the data values are different. This may represent an error or it may represent multiple measurements at this location.  
 
 We can average the values or we can exclude a row. Here we remove the row 30 observation.
 ```{r}
@@ -278,19 +280,19 @@ plot(variog(wca.gdf, trend  ="1st",
      main = "Modulus")
 ```
 
-The two variograms are nearly identical.
+In this case the two variograms are nearly identical.
 
 Variogram cloud
 
-We can examine the makeup of the variogram in more detail using a 'variogram cloud'. Consider again the simulated data set `s100`.
+We examine the makeup of the variogram in more detail with a 'variogram cloud'. Consider again the simulated data set `s100`.
 ```{r}
 par(mfrow = c(1, 1))
 plot(s100)
 ```
 
-There appears to be a trend in the east-west direction with higher values in the east. This is seen clearly in the bottom left panel.
+There appears to be a trend in the east-west direction with higher values to the east. This is seen clearly in the bottom left panel of the plot.
 
-Remove this first-order trend.
+We remove this first-order trend and plot again.
 ```{r}
 plot(s100, 
      trend = "1st")
@@ -389,7 +391,7 @@ Directional variograms
 
 Recall that the assumption of isotropy implies the same spatial autocorrelation function regardless of direction.
 
-To examine the assumption of isotropy we compute variograms using observational pairs located along the same orientation. Instead of considering all observational pairs within a lag distance $h$ and lag tolerance $\delta h$, we consider only pairs within a wedge-shaped segment of this annulus.
+To examine the assumption of isotropy we compute variograms using observational pairs located along the same orientation. Instead of considering all observational pairs within a lag distance $h$ and lag tolerance $\delta h$, we consider only pairs within a wedge-shaped segment of this annulus (a ring bounded by two concentric circles).
 
 This is done with the `variog()` function and specifying a `direction =` argument in units of radians. Radians are fractions of `pi`. We also need to specify the angle tolerance.
 
