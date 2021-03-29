@@ -3,6 +3,7 @@ title: "Lesson 22"
 author: "James B. Elsner"
 date: "March 29, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -199,7 +200,7 @@ Additional terms.
 * Isotropy: The condition in which spatial correlation is the same in all directions.
 * Anisotropy: (an-I-so-trop-y) spatial correlation is stronger or more persistent in some directions.
 * Directional variogram: Distance and direction are important in characterizing the spatial correlations. Otherwise the variogram is called omni-directional.
-* Azimuth ($\theta$): Defines the direction of the variogram in degrees.The azimuth is measured clockwise from north.
+* Azimuth ($\theta$): Defines the direction of the variogram in degrees. The azimuth is measured clockwise from north.
 * Lag spacing: The distance between successive lags is called the lag spacing or lag increment.
 * Lag tolerance: The distance allowable for observational pairs at a specified lag. With arbitrary observation locations there will be no observations exactly a lag distance from any observation. Lag tolerance provides a range of distances to be used for computing values of the variogram at a specified lag.
 
@@ -263,8 +264,8 @@ A kriged estimate is a weighted average of the observations where the weights ar
 To review, the steps for spatial interpolation (statistical) are:
 
 1. Examine the observations for trends and isotropy.
-2. Compute an empirical variogram.
-3. Fit a variogram model to the empirical variogram.
+2. Compute an empirical variogram(s).
+3. Fit a variogram model(s) to the empirical variogram(s).
 4. Create an interpolated surface using kriging.
 
 ## Interpolating spatial data using functions from the {geoR} package
