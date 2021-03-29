@@ -12,25 +12,24 @@ editor_options:
 
 ## Interpolating spatial data
 
-Observations of the natural world are made at specific locations in space (and time). But we often want estimates of the values everywhere. The temperature reported at the airport is 75F, but what is it at my house 10 miles away? This assumes the observations are taken from a _continuous_ field (surface). Data observed or measured at locations across a continuous field are called geostatistical data. Examples: concentrations of heavy metals across a farm field, surface air pressures in cities across the country, air temperatures within a city during the night.
+Observations of the natural world are made at specific locations in space (and time). But we often want estimates of the values everywhere. The temperature reported at the airport is 15C, but what is it at my house 10 miles away? This assumes the observations are taken from a _continuous_ field (surface). Data observed or measured at locations across a continuous field are called geostatistical data. Examples: concentrations of heavy metals across a farm field, surface air pressures in cities across the country, air temperatures within a city during the night.
 
 Local averaging, spline functions, or inverse-distance weighting are often used for interpolation. If it is 20C five miles north of here and 30C files miles to the south, then it is 25C here. This type of interpolation is a reasonable first-order assumption. But these types of interpolation methods do not (1) take into account spatial autocorrelation and (2) do not estimate uncertainty about the interpolated values.
 
-Kriging is statistical spatial interpolation. It is the centerpiece of what is called 'geostatistics.' The resulting surface (kriged surface) is composed of three parts. (1) Spatial trend: an increase or decrease in the values that depends on direction or a covariate (co-kriging); (2) Local spatial autocorrelation. (3) Random variation. This should now sound familar. Together the three components provide a model that is used to estimate values everywhere within a specified domain.
+Kriging is statistical spatial interpolation. It is the centerpiece of what is called 'geostatistics.' The resulting surface (kriged surface) is composed of three parts. (1) Spatial trend: an increase or decrease in the values that depends on direction or a covariate (co-kriging); (2) Local spatial autocorrelation. (3) Random variation. This should sound familiar. Together the three components provide a model that is used to estimate values everywhere within a specified domain.
 
-In short, geostatistics is used to (1) quantify spatial correlation, (2) predict values at specific locations, (3) provide an estimate of uncertainty on the predicted values, and (4) simulation.
+In short, geostatistics is used to (1) quantify spatial correlation, (2) predict values at locations where values were not observed, (3) estimate uncertainty on the predicted values, and (4) simulate data.
 
-As we've done with areal averaged data and point pattern data (Moran I, Ripley K), we begin with understanding how to quantify spatial autocorrelation in geostatistical data.
+As we've done with areal data and point pattern data (Moran I, Ripley K), we begin with quantifying spatial autocorrelation.
 
-To get started we need a few definitions.
+To get started we need some definitions.
 
 * Statistical interpolation assumes the observed values are spatially homogeneous. This implies stationarity and continuity.
-* Stationarity implies that the average difference in values between pairs of observations separated by a given distance (lag) is constant across the domain. 
-* Continuity implies that the spatial autocorrelation depends only on the lag (and orientation) between observations. That is; spatial autocorrelation is independent of location.
-* Stationarity and continuity allow different parts of the domain to be treated as "independent" samples. 
-* Spatial autocorrelation can be described by a single parametric function. 
+* Stationarity means that the average difference in values between pairs of observations separated by a given distance (lag) is constant across the domain. 
+* Continuity means that the spatial autocorrelation depends only on the lag (and orientation) between observations. That is; spatial autocorrelation is independent of location and can be described by a single function.
+* Stationarity and continuity allow different parts of the region to be treated as "independent" samples. 
 
-Stationarity can be weak or intrinsic. Both assume the average of the difference in values at observations separated by a lag distance $h$ is zero. That is, E$[z_i - z_j]$ = 0, where location $i$ and location $j$ are a (lag) distance $h$ apart. This implies that the interpolated surface $Z(s)$ is a random function with a constant mean ($m$) and a residual ($\varepsilon$).
+Stationarity can be weak or intrinsic. Both types of stationarity assume the average of the difference in values at observations separated by a lag distance $h$ is zero. That is, E$[z_i - z_j]$ = 0, where location $i$ and location $j$ are a (lag) distance $h$ apart. This implies that the interpolated surface $Z(s)$ is a random function with a constant mean ($m$) and a residual ($\varepsilon$).
 $$
 Z(s) = m + \varepsilon(s).
 $$
@@ -48,11 +47,11 @@ $$
 $$
 where $\gamma(h)$ is called the variogram. This means that spatial autocorrelation is independent of location.
 
-These assumptions are needed to get started with statistical interpolation.
+These assumptions are needed to get us started with statistical interpolation. If the assumptions are not met, we remove the trends and interpolate the residuals.
 
 ## Estimating the covariogram and the correlogram
 
-Our interest will focus on a model for the variogram $\gamma(h)$. But to understand the variogram it helps to first consider the covariogram. 
+In practice we will focus on a model for the variogram $\gamma(h)$. But to understand the variogram it helps to first consider the covariogram. This is because we are familiar with the idea of nearby things being more correlated than things farther away.
 
 To make things simple but with no loss in generality, we start with a 4 x 6 grid of equally spaced surface air temperatures in degrees C.
 
@@ -268,9 +267,9 @@ To review, the steps for spatial interpolation (statistical) are:
 3. Fit a variogram model to the empirical variogram.
 4. Create an interpolated surface using kriging.
 
-## Interpolation using functions from the {geoR} package
+## Interpolating spatial data using functions from the {geoR} package
 
-The {geoR} package contains functions for spatial interpolation. There are others but it was one of the first comprehensive packages devoted to spatial interpolation. It is useful for learning how things work.
+The {geoR} package contains functions for spatial interpolation. There are other packages that have functions for spatial interpolation, but {geoR} was one of the first comprehensive packages devoted to it. The functions are helpful in learning the required steps. They require the data to be of class `geodata`.
 
 Suppose we have the following set of observations (`zobs`) at locations (`sx`, `sy`).
 ```{r}
@@ -375,7 +374,7 @@ plot(topo.gdf, trend = "2nd")
 
 The residuals from a second-order polynomial fit are symmetric and the trends are gone. However, the residuals appear to show spatial autocorrelations (areas with above and below residuals). 
 
-### Estimating the empirical variogram
+## Estimating the empirical variogram
 
 Consider the dataset `s100` available from the {geoR} package. The `points.geodata()` function produces a bubble plot showing the locations of the observations and the relative magnitude of the `z` variable.
 ```{r}
