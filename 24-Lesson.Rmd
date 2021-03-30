@@ -10,6 +10,122 @@ editor_options:
 
 **"The first step of any project is to grossly underestimate its complexity and difficulty."** – Nicoll Hunt
 
+Variogram model for the Wolfcamp aquifer data
+
+Let's fit a variogram model to the Wolfcamp aquifer data. First plot the empirical variogram. We've seen that directional variograms are not needed.
+```{r}
+wca.v <- variog(wca.gdf, 
+                trend = "1st", 
+                max.dist = 2.3)
+plot(wca.v)
+```
+
+Begin with a spherical model with a range of .8, a sill of 40000, and a nugget of 10000.  
+```{r}
+plot(wca.v)
+lines.variomodel(cov.model = "sph", 
+                 cov.pars = c(30000, .8),
+                 nug = 10000, max.dist = 2.3)
+```
+ 
+In the `cov.pars` argument the first value is the "partial" sill and the second is the range. With the nugget set at 10000 and partial sill at 30000, the sill is 400000. The sill and nugget are variance measures so they have units of square feet. The range is distance so it has the corresponding spatial units.
+
+The model looks reasonable. Perhaps the sill should be a bit higher, say 43000. We increase the partial sill accordingly,
+```{r}
+plot(wca.v)
+lines.variomodel(cov.model="sph", 
+                 cov.pars = c(33000, .8),
+                 nug = 10000, max.dist = 2.3,
+                 col = "red")
+```
+
+Better still. We try an exponential model with the same sill but the same range.
+```{r}
+plot(wca.v)
+lines.variomodel(cov.model = "exp", 
+                 cov.pars = c(33000, .8/3),
+                 nug = 10000, max.dist = 2.3,
+                 col = "green")
+```
+
+Not as good. The exponential model does not have the sharp turn at the sill. We settle on the spherical model with a sill of 43000, a range of .8, and a nugget of 10000.
+
+Fine tune the parameter values
+
+Next we tune the parameter estimates using the `variofit()` function. The function takes a set of initial parameter values and improves upon them using the method of weighted least squares. Alternatively we can use the `likfit()` function to fine tune the parameters. Here we use it to adjust the variogram model parameters estimated above. We save the model in the object `wca.vm`.
+```{r}
+wca.vm <- likfit(wca.gdf, 
+                 trend = "1st", 
+                 ini = c(33000, .8),
+                 nug = 10000, 
+                 cov.model = "spherical")
+wca.vm
+```
+
+The function improves on the initial set of model parameters until the log-likelihood value is maximized. Any other set of parameters will produce a log likelihood value smaller than -553.  
+
+The output includes values for the trend surface. It is a linear trend in two dimensions so it's represented by a plane with a single z-intercept value (`beta0`) and two slope values corresponding to the x (`beta1`) and y (`beta2`) directions.  
+
+The units on the slope parameters are data units per unit spatial distance.  Thus the `beta1` value is -400 ft/deg longitude.  For every one deg longitude east, the piezometric head height decreases by 400 ft. We saw a trend in the SW-NE direction (exploratory plot). The `beta1` (`beta2`) value quantifies this slope in the east-west (north-south) direction.
+
+The output also includes the parameter values for the nugget (`tausq`), the partial sill (`sigmasq`) and the range (`phi`).
+
+Overlay the maximum likelihood solution to the spherical model by typing
+```{r}
+plot(variog(wca.gdf, 
+            trend = "1st", 
+            max.dist = 2.3))
+lines.variomodel(cov.model = "sph", 
+                 cov.pars = c(33000, .8),
+                 nug = 10000, max.dist = 2.3,
+                 col = "red")
+lines(wca.vm, col = "blue")
+```
+
+We see the maximum likelihood solution is better at fitting the points at lag distances between .5 and 1. At these lags, the variogram estimates are most reliable as n (number of observation pairs) is largest.
+```{r}
+variog(wca.gdf)$n
+```
+
+The `likfit()` function is iterative and should find the same solution using somewhat different starting values. Try it using a partial sill of 30000 a nugget of 5000 and a range of 1. 
+```{r}
+likfit(wca.gdf, 
+                 trend = "1st", 
+                 ini = c(30000, 1),
+                 nug = 5000, 
+                 cov.model = "spherical")
+```
+
+A summary function on the `likfit` output provides more information about the fitted variogram model.
+```{r}
+summary(wca.vm)
+```
+
+The summary provides parameters of the trend model and values of the spatial model parameters. Importantly the summary gives the log likelihood along with the AIC and BIC values. It also gives those values for a non-spatial model. A non-spatial model in this context is the trend plus spatially uncorrelated random variation.
+
+Since the log likelihood value is larger for the spatial model and the AIC and BIC values are smaller, it is clear that a spatial model is better than the non-spatial model.
+
+Profile likelihood
+
+The `proflik()` function gives a matrix of log likelihood values for a range of model parameters. The matrix can then be plotted to get a synoptic view of the relationship between the parameters and the likelihood. This can take a few seconds to compute.
+```{r}
+prof <- proflik(wca.vm, geodata = wca.gdf, 
+                sill.val = seq(30000, 60000, length = 6),
+                range.val = seq(.3, 2.3, length = 6), 
+                nug.val = 10000, uni.only = FALSE)
+plot(prof, nlevels = 16)
+```
+
+The horizontal axis is the partial sill ($\sigma^2$) and the vertical axis is the range ($\phi$). The nugget is set at 10000. The best fit parameters are indicated by the circle. At this location the log-likelihood is maximized. The likelihood is near the maximum for a broad set of range and partial sill values.
+
+The marginal profiles are also available and can be plotted alongside the contour plot using
+```{r}
+par(mfrow = c(1, 3))
+plot(prof, nlevels = 8)
+```
+
+
+
 ## Another example: A variogram model for April temperatures in the Midwest
 
 Let's finish with another example.
