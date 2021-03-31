@@ -285,129 +285,47 @@ plot(variog(wca.gdf,
 Here we see an increase in the variance with lag distance until about one degree, then the values fluctuate about a variance of about 41000 (ft$^2$).
 
 What does the variogram look like if we do not first remove the trend?
-
-This continuously increasing set of variances with little fluctuation about a best fit curve indicates a trend in the data that must be removed before the variogram is modeled. 
-
-There are two sources of variation in the field values: trend and spatial correlation. Trends are modeled with smooth curves and correlations are modeled with the variogram.
-
-The `variog()` function has options for specifying a classical or modulus estimator. By default the function uses the classical estimator. To override this, include the `estimator.type = "modulus"` argument. The modulus estimator of the variogram is more resistant to outliers in the data.
-
-Compare the classical with the modulus variograms for the Wolfcamp aquifer data.
 ```{r}
-par(mfrow = c(1, 2))
-plot(variog(wca.gdf, trend = "1st", 
-            max.dist = 2.3), 
-     main = "Classical")
-plot(variog(wca.gdf, trend  ="1st", 
-            max.dist = 2.3, 
-            estimator.type = "modulus"),
-     main = "Modulus")
+plot(variog(wca.gdf, 
+            max.dist = 2.3))
 ```
 
-In this case the two variograms are nearly identical.
+The continuously increasing set of variances with little fluctuation indicates a trend in the data that should be removed before the variogram is modeled. Said another way. There are at least two sources of variation in any set of geostatistical data: trend and spatial correlation. Trends are modeled with smooth curves and correlations are modeled with the variogram.
 
-We can examine the makeup of the variogram in some detail with a 'variogram cloud'. Consider again the simulated data set `s100`.
+Let's save the variogram object computed on the residuals after removing the first-order trend.
 ```{r}
-par(mfrow = c(1, 1))
-plot(s100)
+wca.v <- variog(wca.gdf, 
+                trend = "1st", 
+                max.dist = 2.3)
 ```
-
-There appears to be a trend in the east-west direction with higher values to the east. This is seen clearly in the bottom left panel of the plot.
-
-We remove this first-order trend and plot again.
-```{r}
-plot(s100, 
-     trend = "1st")
-```
-
-We can see that the trend is adequately modeled with a 1st-order surface. Residuals appear symmetric about zero. 
-
-A summary of the data indicates the maximum lag distance of 1.3 so the `max.dist` argument is set to .6. 
-```{r}
-summary(s100)
-```
-
-Here we specify the eleven variogram estimates between 0 and .6 using the `uvec` argument.
-```{r}
-plot(variog(s100, 
-            trend = "1st", 
-            uvec = 11, 
-            max.dist = .6))
-```
-
-We 'decompose' the variogram estimates with the `option = "cloud"`.
-```{r}
-c1 <- variog(s100, trend = "1st", 
-             option = "cloud", 
-             max.dist = .6)
-plot(c1)
-```
-
-Each point on the plot is the difference (absolute value) between two observed values (y-axis) a lag distance apart (x-axis). There are 100 observations so there are 100 * 99/2 = 4950 possible points on this plot. Actually here only 3131 since we limit the distance to less than .6 degrees.
-
-There is a tendency for more large differences as the lag increases but most differences are small for a given lag. The variability in observational differences is quite large especially for longer lag distances.
-
-The variogram is the sum of the squared differences as a function of lag distance grouped by a lag tolerance. Here we indirectly specify the lag tolerance with the `uvec` argument and compare the variogram with the variogram cloud.
-```{r}
-par(mfrow = c(1, 2))
-v1 <- variog(s100, 
-             trend = "1st", 
-             uvec = seq(0, .6, l = 11))
-layout(matrix(c(1, 2), byrow = TRUE, ncol = 2), 
-       respect = TRUE)
-plot(v1); plot(c1)
-```
-
-Note the difference in the scale on the y-axis between the variogram cloud and the variogram is a factor of 10.
-
-The individual variances can be grouped into lag distance classes (bins) and displayed with a box plot. This gives an idea of the general shape the variogram model should take.
-```{r}
-par(mfrow = c(1, 1))
-b1 <- variog(s100, 
-             trend = "1st", 
-             max.dist = .6, 
-             bin.cloud = TRUE, 
-             estimator.type = "classical")
-plot(b1, bin.cloud = TRUE)
-```
-
-The box plot summarizes the squared differences for a given lag (and lag tolerance) with the median. There is a box plot for each lag but the lag distance is given as a bin number. 
 
 We can use this information to anticipate the type of variogram model, especially when combined with a local smoothed curve from a `geom_smooth()` layer.
 ```{r}
-ggplot(data = data.frame(u = b1$u, v = b1$v), 
-       mapping = aes(u, v)) + 
+( p <- ggplot(data = data.frame(h = wca.v$u, v = wca.v$v), 
+       mapping = aes(x = h, y = v)) + 
   geom_point() + 
   geom_smooth() +
-  scale_y_continuous(limits = c(0, .6)) +
+  scale_y_continuous(limits = c(0, NA)) +
   ylab(expression(paste("Variogram [", gamma,"(h)]"))) +
-  xlab("Lag distance (h)")
+  xlab("Lag distance (h)") +
+  theme_minimal() )
 ```
 
-The blue line is a least-squares regression smoother through the variogram estimates. The fact that it is not a flat horizontal line indicates spatial autocorrelation in the residuals that is separate from the first-order trend. The shape of the blue line gives an idea of the type of variogram family of models we should consider.
+The blue line is a least-squares regression smoother through the variogram estimates. The fact that it is not a flat horizontal line indicates spatial autocorrelation in the residuals that is distinct from the first-order trend. The shape of the blue line gives us an idea of the type of variogram family of models we should consider.
 
-Now we can guess at a family for the variogram model and eyeball the parameters. Recall the plot from the last lesson.
+Now we can guess at a family for the variogram model and eyeball the parameters. Recall that the spherical model had a nearly linear increase in variances with lag distance before an abrupt flattening. 
+
+The parameters for the spherical model can be estimated from the graph as follows.
 ```{r}
-s100.v <- s100 %>%
-  variog() 
-df <- data.frame(h = s100.v$u[1:10], 
-                 v = s100.v$v[1:10])
-
-ggplot(data = df,
-       mapping = aes(x = h, y = v)) +
-  geom_point(size = 2) +
-  scale_y_continuous(limits = c(0, 1.15), breaks = seq(0, 1.2, .2)) +
-  scale_x_continuous(limits = c(0, 1)) +
-  geom_hline(yintercept = c(.9, .15), color = "red") +
-  geom_vline(xintercept = .6, color = "red") +
-  xlab("Lag distance (h)") + ylab(expression(paste(gamma,"(h)"))) +
-  geom_segment(aes(x = 0, y = 0, xend = 0, yend = .15,), arrow = arrow(angle = 15, length = unit(.3, "cm"))) +
-  geom_label(aes(x = .06, y = .12, label = "nugget")) +
-  geom_segment(aes(x = 0, y = .15, xend = 0, yend = .9,), arrow = arrow(angle = 15, length = unit(.3, "cm"))) +
-  geom_label(aes(x = .1, y = .87, label = "sill (partial sill)")) +
-  geom_segment(aes(x = 0, y = .93, xend = .6, yend = .93,), arrow = arrow(angle = 15, length = unit(.3, "cm"))) +
-  geom_label(aes(x = .55, y = .97, label = "range")) +
-  theme_minimal()
+p +
+  geom_hline(yintercept = c(12000, 45000), color = "red") +
+  geom_vline(xintercept = .85, color = "red") +
+  geom_segment(aes(x = 0, y = 0, xend = 0, yend = 12000,), arrow = arrow(angle = 15, length = unit(.3, "cm"))) +
+  geom_label(aes(x = .1, y = 11000, label = "nugget")) +
+  geom_segment(aes(x = 0, y = 12000, xend = 0, yend = 45000,), arrow = arrow(angle = 15, length = unit(.3, "cm"))) +
+  geom_label(aes(x = .1, y = 44000, label = "sill")) +
+  geom_segment(aes(x = 0, y = 47000, xend = .85, yend = 47000,), arrow = arrow(angle = 15, length = unit(.3, "cm"))) +
+  geom_label(aes(x = .55, y = 48000, label = "range"))
 ```
 
 * Lag (lag distance): Relative distance between observation locations.
