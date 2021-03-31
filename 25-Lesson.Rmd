@@ -1,7 +1,7 @@
 ---
 title: "Lesson 25"
 author: "James B. Elsner"
-date: "April 9, 2021"
+date: "April 7, 2021"
 output:
   html_document: null
 editor_options:
@@ -9,6 +9,223 @@ editor_options:
 ---
 
 **"Statistics is such a powerful language for describing data in ways that reveal nothing about their causes. Of course statistics is powerful for revealing causes as well. But it takes some care. Like the difference between talking and making sense."** -- Richard McElreath
+
+
+## Example 2: April temperatures in the Midwest
+
+The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April. The goal is a spatial interpolation of these values onto a 56 by 35 grid.
+
+Step 1: Examine the data for spatial trends and normality.
+```{r}
+L <- "http://myweb.fsu.edu/jelsner/temp/data/MidwestTemps.txt"
+t.df <- read.table(L, header = TRUE)
+summary(t.df)
+```
+
+Map the values.
+```{r}
+t.sf <- st_as_sf(x = t.df, 
+                 coords = c("lon", "lat"),
+                 crs = "+proj=longlat +datum=WGS84")
+
+tm_shape(t.sf) +
+  tm_text(text = "temp", size = .6) +
+tm_shape(sts) +
+  tm_borders() 
+```
+
+Create a `geodata` object from the data frame.
+```{r}
+t.gdf <- as.geodata(t.df)
+summary(t.gdf)
+plot(t.gdf)
+```
+
+The maximum pairwise distance is 11.5 degrees. There is a pronounced 1st order trend in the north/south direction as we might expect with air temperatures.
+
+Remove the trend and examine the residuals.
+```{r}
+plot(t.gdf, trend = "1st")
+```
+
+There is some evidence of a 2nd-order trend in the west-east direction. 
+```{r}
+plot(t.gdf, trend = "2nd")
+```
+
+By specifying a higher order trend, the lower order trends are taken care of. The distribution of residuals is approximately normal as we might expect. The data are monthly means.
+
+Step 2: Compute empirical variograms. Check for anisotropy by plotting directional variograms.
+```{r}
+par(mfrow = c(1, 1))
+plot(variog4(t.gdf, trend = "2nd", 
+             max.dist = 5.5), 
+     omni = TRUE, legend = FALSE)
+```
+
+There is no strong evidence to reject isotropy.
+
+Step 3: Fit a variogram model to the data. Here we consider several likelihood fits to an exponential model and examine the AIC for final parameter selection. 
+
+The AIC is used as a selection criterion and is a function of the maximized likelihood function but includes a penalty for model complexity that favors simpler models. Recall the best fit has the largest log-likelihood and smallest AIC.  
+
+Set initial values for the sill and range. From the variograms start with 3 for the sill and 4 for the range.
+```{r}
+iv <- c(3, 4)  
+summary(likfit(t.gdf, 
+               ini = iv, 
+               cov.model = "exp", 
+               trend = "2nd",
+               fix.nug = TRUE, 
+               message = FALSE))$likelihood$AIC
+summary(likfit(t.gdf, 
+               ini = iv, 
+               cov.model = "exp", 
+               trend = "2nd",
+               fix.nug = FALSE, 
+               message = FALSE))$likelihood$AIC
+summary(likfit(t.gdf, ini = iv, 
+               cov.model = "sph", 
+               trend = "2nd",
+               fix.nug = TRUE, 
+               message = FALSE))$likelihood$AIC
+summary(likfit(t.gdf, ini = iv, 
+               cov.model = "sph", 
+               trend = "2nd",
+               fix.nug = FALSE, 
+               message = FALSE))$likelihood$AIC
+```
+
+It appears that a good variogram model would be on the residuals of a 2nd order trend using an exponential function with fixed nugget equal to zero. A spherical function with a nugget is also a reasonable model.
+
+To obtain the model parameters, type
+```{r}
+likfit(t.gdf, ini = iv, cov.model = "exp", 
+       trend = "2nd", fix.nug = TRUE)
+likfit(t.gdf, ini = iv, cov.model = "sph", 
+       trend = "2nd", fix.nug = FALSE)
+```
+
+Plot the competing models on the empirical variogram.
+```{r}
+plot(variog(t.gdf, trend = "2nd", 
+            uvec = seq(0, 5.5, l = 29)))
+lines.variomodel(cov.model = "exp", 
+                 cov.pars = c(2.114, .4139), 
+                 nug = 0, max.dist = 5.5, col = "red")
+lines.variomodel(cov.model = "sph", 
+                 cov.pars = c(1.638, 1.307),
+                 nug =.5, max.dist = 5.5, col = "green")
+```
+
+Save the models.
+```{r}
+modelE <- likfit(t.gdf, ini = iv, cov.model = "exp", 
+                  trend = "2nd", fix.nug = TRUE)
+modelS <- likfit(t.gdf, ini = iv, cov.model = "sph", 
+                  trend = "2nd", fix.nug = FALSE)
+```
+
+Step 4: Create an interpolated surface. We create a grid of locations at which we want the temperatures to be interpolated. Here we use the `expand.grid` function where the arguments are the sequence of longitudes and latitudes, respectively. We then use the `krige.conv()` function to interpolate the values to the grid. We save the interpolation in `kcE` when we use the exponential variogram model to weight the observations and save the interpolation in `kcS` when we use the spherical model to weight the observations.
+```{r}
+pgrid.df<- expand.grid(lon = seq(-99, -88, l = 224), 
+                       lat = seq(38.4, 45.4, l = 136))
+kcE <- krige.conv(t.gdf, 
+                  loc = pgrid.df, 
+                  krige = krige.control(trend.d = "2nd", 
+                                       trend.l = "2nd",
+                                       obj.m = modelE))
+kcS <- krige.conv(t.gdf, 
+                  loc = pgrid.df,
+                  krige = krige.control(trend.d = "2nd", 
+                                       trend.l = "2nd",
+                                       obj.m = modelS))
+```
+
+Plot the interpolated surface generated using the exponential variogram. function.
+```{r}
+pgrid.df$temp <- kcE$predict
+pgrid.df$var <- kcE$krige.var
+
+spdf <- pgrid.df
+coordinates(spdf) <- c("lon", "lat")
+spdf <- as(spdf, "SpatialPixelsDataFrame")
+proj4string(spdf) <- st_crs(t.sf)$proj4string
+
+library(raster)
+r <- raster(spdf)
+
+tm_shape(r) +
+  tm_raster(n = 9, palette = "OrRd") +
+tm_shape(sts) +
+  tm_borders() +
+tm_shape(t.sf) +
+  tm_text("temp", size = .5)
+```
+
+Plot the interpolated surface generated using the spherical variogram.
+```{r}
+pgrid.df$temp <- kcS$predict
+pgrid.df$var <- kcS$krige.var
+
+spdf <- pgrid.df
+coordinates(spdf) <- c("lon", "lat")
+spdf <- as(spdf, "SpatialPixelsDataFrame")
+proj4string(spdf) <- st_crs(t.sf)$proj4string
+
+library(raster)
+r <- raster(spdf)
+
+tm_shape(r) +
+  tm_raster(n = 9, palette = "OrRd") +
+tm_shape(sts) +
+  tm_borders() +
+tm_shape(t.sf) +
+  tm_text("temp", size = .5)
+```
+
+The model with a non-zero nugget is smoother. The greater the nugget relative to the sill (relative nugget effect), the smoother the interpolation.
+
+## Combine prediction and uncertainty in a single map
+
+See `Pixelate.Rmd`.
+
+## Synthetic data
+
+Synthetic data are useful as input to a deterministic model. An example is rainfall as input to spatially-distributed rainfall-runoff model. Interpolated values of precipitation and their variances might be of little value, but running the rainfall-runoff model with a large number of simulated rainfall fields can give a realistic assessment of the uncertainty in runoff arising from the variability in the rainfall.
+
+The `grf()` function in the {geoR} package generates synthetic data from Gaussian random fields on regular or irregular sets of locations. For example, to generate 100 randomly spaced points with values at the points being a sample from a Gaussian random field with an exponential variogram (default with zero nugget) having a sill of 1 and a range of .25, type
+```{r}
+set.seed(3042)
+sim1 <- grf(100, cov.pars = c(1, .25))
+```
+
+Plot the points and the variograms.
+```{r}
+layout(matrix(c(1, 2), byrow = TRUE, ncol = 2), 
+       respect = TRUE)
+points.geodata(sim1, 
+               main = "simulated locations and values")
+plot(sim1, max.dist = .5, 
+     main = "true and empirical variograms")
+```
+
+The random fields can be put on a regular grid.
+```{r}
+sim2 <- grf(441, grid = "reg", cov.pars = c(1, .25))
+image(sim2, col = gray(seq(1, .1, l = 30)))
+sim3 <- grf(4441, grid = "reg", cov.pars = c(1, .25))
+image(sim3, col = gray(seq(1, .1, l = 30)))
+par(mfrow = c(1, 1))
+```
+
+For an even higher resolution simulation it is necessary to have the {RandomFields} package.
+```{r, eval=FALSE}
+library(RandomFields)
+sim4 <- grf(40401, grid = "reg", cov.pars = c(10, .2))
+image(sim4, main = "simulation on a fine grid", 
+      col = gray(seq(1, .1, l = 30)))
+```
 
 ## Interpolation using functions from the {gstat} package
 
@@ -93,87 +310,6 @@ tm_shape(meuse) +
 IDW tends to generate 'bulls-eye' patterns.
 
 The spatial class makes it easier to create maps and export them to different platforms.
-
-### Create a geoTIF file that can be read into ENVI or ArcMap.
-
-Here you repeat the analysis but this time use a planar projection for the interpolation grid, interpolate the logarithm of the zinc, and create a `geoTIF` file for output.
-
-Again make `meuse.grid` a spatial pixels data frame.
-```{r}
-data(meuse.grid)
-coordinates(meuse.grid) <- ~ x + y
-gridded(meuse.grid) <- TRUE
-proj4string(meuse.grid) <- CRS(paste("+init=epsg:28992", 
-                                     "+towgs84=565.237,50.0087,465.658,-0.406857,0.350733,-1.87035,4.0812"))
-```
-
-Make `meuse` a spatial points data frame with the same projection.
-```{r}
-data(meuse)
-coordinates(meuse) <- ~ x + y
-proj4string(meuse) <- CRS(proj4string(meuse.grid))
-```
-
-Use the `krige` function in the {gstat} package and perform inverse-distance predictions. Since no variogram is specified in the function, the method defaults to inverse-distance weighting.
-```{r}
-logZinc <- krige(log(zinc) ~ 1, 
-                meuse, 
-                meuse.grid)["var1.pred"]
-summary(logZinc)
-```
-
-### Create a KML file that can be read by Google Earth [Extra]
-
-We export a colored raster of interpolated log zinc ppm values to a PNG file with an alpha channel for viewing it in Google Earth. Since GE requires geographical coordinates, a number of steps are needed.
-
-First we make a polygon to bound the study area and project it to geographical coordinates.
-```{r}
-library(maptools)
-grd <- as(meuse.grid, "SpatialPolygons")
-proj4string(grd) <- CRS(proj4string(meuse.grid))
-grd.union <- unionSpatialPolygons(grd, rep("x", length(slot(grd, "polygons"))))  
-ll <- CRS("+proj=longlat +datum=WGS84")
-grd.union.ll <- spTransform(grd.union, ll)
-plot(grd.union.ll, axes = TRUE) 
-```
-
-The result is a single polygon as the union of all polygons in grd in geographic coordinates. Next, we construct a grid in geographical coordinates as our target object for export using the `GE_SpatialGrid` function. This grid is the container for the output PNG graphics file. `GE_SpatialGrid` returns values that will be used in setting up the PNG graphics device.
-
-We use the `over()` method to set grid cells outside the river bank area to NA and then discard them by coercion.
-```{r}
-llGRD <- GE_SpatialGrid(grd.union.ll)
-llGRD_in <- over(llGRD$SG, grd.union.ll)
-llSGDF <- SpatialGridDataFrame(grid = slot(llGRD$SG, "grid"), 
-                              proj4string = CRS(proj4string(llGRD$SG)), 
-                              data = data.frame(in0 = llGRD_in))
-llSPix <- as(llSGDF, "SpatialPixelsDataFrame")
-```
-
-Next we interpolate. Here again we use the `idw` function to make an inverse-distance weighted interpolation of zinc values in ppm.
-```{r}
-meuse_ll <- spTransform(meuse, 
-                       CRS("+proj=longlat +datum=WGS84"))
-llSPix$pred <- idw(log(zinc) ~ 1, 
-                   meuse_ll, 
-                   llSPix)$var1.pred
-spplot(llSPix["pred"])
-```
-
-Since `GE_SpatialGrid` was set to the size of an PNG graphics device, we can use it with the `image()` function. Other base graphics methods and functions can be used to create an image overlay. First open the graphics device, then set the plotting margins, then use `image`, and finally turn off the device.
-```{r}
-png(file <- "zincIDW.png", width = llGRD$width, 
-    height = llGRD$height, bg = "transparent")
-par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
-image(llSPix, "pred", col = bpy.colors(20))
-dev.off()
-```
-
-After closing the graphics device, we use the `kmlOverlay` to write the interpolated grid to a KML file giving the location of the overlay. This will load the image at the position when opened in Google Earth.
-```{r}
-kmlOverlay(llGRD, "zincIDW.kml", "zincIDW.png")
-```
-
-Open the `zincIDW.kml` file in Google Earth.
 
 ### Distance to river as a covariate
 
@@ -333,424 +469,3 @@ tmap_arrange(m1, m2, m3, ncol = 3)
 Simple and ordinary kriging treat all spatial variation as autocorrelation. Universal kriging lets some of the variation be due to trend and covariates.
 
 Predictive skill.
-
-## Example 1: Tropical cyclone rainfall
-
-In 2008, Tropical Cyclone Fay formed from a tropical wave near the Dominican Republic, passed over the island of Hispaniola, Cuba, and the Florida Keys, then crossed the Florida peninsula and moved westward across portions of the panhandle producing heavy rains in parts of the state.
-
-Storm total rainfall amounts from stations in and around the state are in `FayRain.txt`. They are a compilation of reports from the U.S. NOAA/NWS official weather sites and coop sites.
-
-The coop sites are the Community Collaborative Rain, Hail and Snow Network (CoCoRaHS), a community-based, high density precipitation network made up of volunteers who take measurements of precipitation in their backyards. The data were obtained from NOAA/NCEP/HPC and from the Florida Climate Center.
-
-Load the data.
-```{r}
-L <- "http://myweb.fsu.edu/jelsner/temp/data/FayRain.txt"
-FR.df <- read.table(L, header = TRUE)
-names(FR.df)
-```
-
-The data frame contains 803 rainfall sites. Longitude and latitude coordinates of the sites are given in the first two columns and total rainfall in inches and millimeters are given in the second two columns. Create a spatial points data frame by specifying columns that contain the spatial coordinates. Then assign a geographic coordinate system and convert the rainfall from millimeters to centimeters.
-```{r}
-library(sf)
-
-FR.sf <- st_as_sf(x = FR.df,
-                 coords = c("lon", "lat"),
-                 crs = 4326)
-
-FR.sf$tpm <- FR.sf$tpm/10
-summary(FR.sf$tpm)
-```
-
-The median value is 15.8 cm and the maximum is 60.2 cm. 
-
-Next get the Florida county boundaries from the {USAboundaries} package.
-```{r}
-FL.sf <- USAboundaries::us_counties(states = "Florida")
-```
-
-Next we create a character string specifying the tags for a planar projection and transform the geographic coordinates of the site locations and map polygons to the projected coordinates. Here we use Florida GDL Albers (EPSG:3087) with meter as the distance unit.
-
-```{r}
-FR.sf <- st_transform(FR.sf, crs = 3087)
-FL.sf <- st_transform(FL.sf, crs = 3087)
-```
-
-A map of the rainfall sites and storm totals with the state boundaries is made by typing
-```{r}
-library(tmap)
-
-tm_shape(FR.sf) +
-  tm_dots(col = "tpm", size = 1) +
-tm_shape(FL.sf) +
-  tm_borders()
-```
-
-Two areas of heavy rainfall are noted.  One running north-south along the east coast and another across the north. Rainfall collection sites are clustered in and around cities. This will make it difficult to use a spline interpolation.
-
-### Empirical variogram
-
-Rainfall is an example of geostatistical data. In principle it can be measured anywhere, but typically we have values at a sample of sites. The pattern of observation sites is not of much interest as it is a consequence of constraints (convenience, opportunity, economics, etc) unrelated to the phenomenon. Interest centers on inference about how much rain fell across the region.
-
-The empirical variogram is computed using the `variogram()` function. The first argument is the model formula specifying the rainfall column from the data frame and the second argument is the data frame name.  Here `~ 1` in the model formula indicates no covariates or trends in the data. Trends can be included by specifying coordinate names through the `st_coordinates()` function.
-
-We compute the empirical variogram for Fay's rainfall and save it by typing
-```{r}
-FR.v <- variogram(tpm ~ 1, 
-                  data = FR.sf)
-```
-
-We plot the variogram values as a function of lag distance and add text indicating the number of point pairs for each lag distance.
-```{r}
-library(ggplot2)
-
-v.df <- data.frame(dist = FR.v$dist/1000,
-                   gamma = FR.v$gamma,
-                   np = FR.v$np)
-
-( pv <- ggplot(v.df, aes(x = dist, y = gamma)) +
-  geom_point() +
-  geom_text(aes(label = np), nudge_y = -5) +
-  scale_y_continuous(limits = c(0, 220)) +
-  scale_x_continuous(limits = c(0, 400)) +
-  xlab("Lagged distance (h) [km]") +
-  ylab(expression(paste("Semivariance (", gamma, ") [", cm^2, "]"))) +
-  theme_minimal() )
-```
-
-Values start low (~50 cm$^2$) at short lag distance, then increase to over 200 cm$^2$ at lag distance of about 200 km.
-
-The zero-lag semivariance is called the 'nugget' and the semivariance at a level where the variogram values no longer increase is called the 'sill.'  The lag distance to the sill is called the 'range.'  These three parameters (nugget, sill, and range) are used to fit a model to the variogram.
-
-### Variogram model
-
-Next we fit a model to the empirical variogram. The variogram model is a mathematical relationship defining the semivariance as a function of lag distance. We first save the family and the initial parameter guesses in a variogram model (`FR.vmi`) object by typing
-```{r}
-FR.vmi <- vgm(model = "Gau", 
-              psill = 150, 
-              range = 200 * 1000, 
-              nugget = 50)
-FR.vmi
-```
-
-The `psill` argument is the partial sill as the difference between the sill and the nugget. We get estimates of the parameter values from looking at the empirical variogram. 
-
-Next we use the `fit.variogram()` function to improve the fit.  Given a set of initial parameter values, the method of weighted least squares improves the parameter estimates. Ordinary least squares is not appropriate as the semivariances are correlated across the lag distances and the precision on the estimates varies depending on the number of site pairs for a given lag.
-```{r}
-FR.vm <- fit.variogram(object = FR.v, 
-                       model = FR.vmi)
-FR.vm
-```
-
-The result is a variogram model with a nugget of 46.8 cm$^2$, a partial sill of 157 cm$^2$, and a range on the sill of 129 km. 
-
-Let $r$ be the range, $c$ the partial sill and $c_o$ the nugget, then the equation defining the curve over the set of lag distances $h$ is
-$$
-\gamma(h)=c\left(1-\exp\left(-\frac{h^2}{r^2}\right)\right)+c_o
-$$
-
-We create a data frame with values of h and gamma using this equation.
-
-```{r}
-nug <- FR.vm$psill[1]
-ps <- FR.vm$psill[2]
-r <- FR.vm$range[2] / 1000
-h <- seq(0, 400, .2)
-gamma <- ps * (1 - exp(-h^2 / (r^2))) + nug
-
-vm.df <- data.frame(dist = h,
-                    gamma = gamma)
-
-pv + geom_line(aes(x = dist, y = gamma), data = vm.df)
-```
-
-Check for anisotropy.
-```{r}
-plot(variogram(tpm ~ 1, 
-               data = FR.sf, 
-               alpha = c(0, 45, 90, 135)), 
-     xlab = "Lag Distance (m)")
-```
-
-We see the range of correlations is longer (about 300 km) in the north-south direction (0 degrees). We refit the variogram defining an anistropy ellipse with the `anis =` argument. The first parameter is the direction of longest range and the second parameter is the ratio of the longest to shortest. Here about (200/300 = .67).
-```{r}
-FR.vmi <- vgm(model = "Gau", 
-              psill = 150, 
-              range = 300 * 1000, 
-              nugget = 50,
-              anis = c(0, .67))
-FR.vm <- fit.variogram(FR.v, FR.vmi)
-```
-
-### Kriging
-
-The final step is to use the variogram model together with the rainfall values at the observation sites to create an interpolated surface. The process is called kriging. As Edzer Pebesma notes, 'krige' is to 'kriging' as 'predict' is to 'predicting.' Here we use ordinary kriging as there are no spatial trends in the rainfall.
-
-Interpolation is done using the `krige()` function. The first argument is the model specification and the second is the data. Two other arguments are needed. One is the variogram model using the argument name model and the other is a set of locations identifying where the interpolations are to be made. This is specified with the argument name `newdata =`.
-
-#### Interpolate to point loctions
-
-Here we interpolate to locations on a regular grid. We create a grid of locations within the boundary of Florida using the `st_sample()` function.
-```{r}
-grid.sf <- st_sample(FL.sf,
-                     size = 5000,
-                     type = "regular")
-```
-
-We specify the number of locations using the argument `size =`. Note that the actual number of locations will be somewhat different because of the irregular boundary. 
-
-First we use the `krige()` function to interpolate the observed rainfall to the grid locations. Recall that for a given location, the interpolation is a weighted average of the rainfall across the entire region where the weights are determined by the variogram model.
-```{r}
-ipl <- krige(tpm ~ 1, 
-             locations = FR.sf, 
-             newdata = grid.sf,
-             model = FR.vm)
-```
-
-If the variogram model is not included then inverse distance weighted interpolation is performed. The function will not work if different values share the same location. 
-
-The saved object (`ipl`) inherits the spatial object specified in the `newdata` argument, but extends it to a spatial data frame. The data frame with two variables.  The first `var1.pred` is the interpolated rainfall and the second `var1.var` is the prediction variance.
-
-We plot the interpolated field.
-```{r}
-tm_shape(ipl) +
-  tm_dots("var1.pred",
-          size = .1,
-          palette = "Greens",
-          title = "Rainfall (cm)") +
-  tm_shape(FL.sf) +
-  tm_borders() +
-  tm_layout(legend.position = c("left", "bottom"),
-            title = "Tropical Cyclone Fay (2008)",
-            title.position = c("left", "bottom"))
-```
-
-Note that a portion of the data values where outside of the state but our interest is only to have values on a grid within the state. 
-
-The spatial interpolation shows that parts of east central and north Florida were deluged by Fay.
-
-#### Interpolate to the counties (block kriging)
-
-We use block kriging to estimate average rainfall within each county. The county-wide rainfall average is relevant for water resource managers. Block kriging produces a smoothed estimate of this area average, which will differ from a simple average over all sites within the county because of spatial autocorrelation.
-
-We use the same function to interpolate but specify the spatial polygons rather than the spatial grid as the new data.
-```{r}
-ipl2 <- krige(tpm ~ 1, 
-              locations = FR.sf, 
-              newdata = FL.sf, 
-              model = FR.vm)
-```
-
-Again we plot the interpolations.
-```{r}
-tm_shape(ipl2) +
-  tm_polygons(col = "var1.pred",
-            palette = "Greens",
-            title = "Rainfall (cm)") +
-  tm_layout(legend.position = c("left", "bottom"),
-            title = "Tropical Cyclone Fay (2008)",
-            title.position = c("left", "bottom"))
-```
-
-The overall pattern of rainfall from Fay featuring the largest amounts along the central east coast and over the eastern panhandle are similar in both maps.
-
-We compare the kriged average with the simple average at the county level with `aggregate()` from the {sf} package.
-```{r}
-ipl3 <- aggregate(FR.sf, by = FL.sf, FUN = mean)
-```
-
-The function returns a simple feature data frame of the average rainfall in each county.
-
-The state-wide mean of the kriged estimates at the county level is 
-```{r}
-round(mean(ipl2$var1.pred), 2)
-```
-
-This compares with a state-wide mean from the simple averages.
-```{r}
-round(mean(ipl3$tpm), 2)
-```
-
-The correlation between the two estimates across the 67 counties is 
-```{r}
-round(cor(ipl3$tpm, ipl2$var1.pred), 2)
-```
-
-The variogram model reduces the standard deviation of the kriged estimate relative to the standard deviation of the simple averages because of the local smoothing.
-```{r}
-round(sd(ipl2$var1.pred), 2)
-round(sd(ipl3$tpm), 2)
-```
-
-This can be seen with a scatter plot of simple averages versus kriged averages at the county level.
-```{r}
-compare.df <- data.frame(simpleAvg = ipl3$tpm,
-                         krigeAvg = ipl2$var1.pred)
-ggplot(compare.df, aes(x = simpleAvg,
-                       y = krigeAvg)) +
-  geom_point() +
-  geom_abline(slope = 1) +
-  geom_smooth(method = lm, se = FALSE)
-```
-
-### Uncertainty
-
-Another advantage of kriging as a method of spatial interpolation is the accompanying uncertainty estimates.  
-
-The prediction variances are listed in a column in the spatial data frame saved from apply the `krige()` function. Variances are smaller in regions with more rainfall observations.  
-
-Prediction variances are also smaller with block kriging as much of the variability within the county averages out. To compare the distribution characteristics of the prediction variances for the point and block kriging of the rainfall observations, type
-```{r}
-round(summary(ipl$var1.var), 1)
-round(summary(ipl2$var1.var), 1)
-```
-
-The median prediction variance (in cm$^2$) for our point kriging is close to the value of the nugget.
-```{r}
-round(fivenum(ipl$var1.var)[3], 1)
-```
-
-In contrast the median prediction variance for our block kriging is a much smaller 
-```{r} 
-round(fivenum(ipl2$var1.var)[3], 1)
-```
-
-Simulations exploit this uncertainty and provide synthetic data for use in deterministic models. 
-
-Conditional simulation, where the simulated field (realization) is generated given the data and the variogram model, is done using the same `krige()` function by adding the argument `nsim` to specify the number of simulations.  
-
-For a large number it may be necessary to limit the number neighbors in the kriging. This is done using the `nmax` argument. For a given location, the weights assigned to observations far away are very small, so it is efficient to limit how many are used in the simulation.
-
-As an example, here we generate four realizations of the county-level storm total rainfall for Fay and limit the neighborhood to 50 of the closest observation sites. Note that it may take a few seconds.
-```{r}
-ipl.sim <- krige(tpm ~ 1, 
-                 locations = FR.sf, 
-                 newdata = FL.sf, 
-                 model = FR.vm, 
-                 nsim = 4, 
-                 nmax = 50)
-```
-
-Simulations are conditional on the observed rainfall and the variogram model using block kriging on the counties.
-
-```{r}
-library(tmap)
-
-tm_shape(ipl.sim) +
-    tm_polygons(col = c("sim1", "sim2", "sim3", "sim4"),
-                palette = "Greens",
-                title = "Simulated Rainfall [cm]") +
-    tm_facets(free.scales = FALSE) 
-```
-
-The overall pattern of rainfall remains the same, but there are differences especially in counties with fewer observations and in counties where the rainfall gradients are sharp.
-
-
-## Example 2: Beauregard Tornado
-
-BeauregardTornado.Rmd
-
-## Cokriging
-
-Statistical interpolation can be extended to obtain surfaces of multiple field variables. The idea is that if two field variables are correlated then information about the spatial correlation in one field variable can help provide information about values in the other field variable. The spatial variability of one variable is correlated with the spatial variability of the other variable. And this idea is not limited to only two variables. 
-
-Here we return to the Meuse River data. Concentrations of heavy metals in the flood plain of the Meuse River in Holland.
-```{r}
-library(gstat)
-library(sp)
-
-data(meuse)
-names(meuse)
-coordinates(meuse) <- ~ x + y
-prj <- paste("+init=epsg:28992", 
-             "+towgs84=565.237,50.0087,465.658,-0.406857,0.350733,-1.87035,4.0812")
-proj4string(meuse) <- CRS(prj)
-```
-
-Suppose we are interested in the spatial distribution of all the heavy metals in the soils along the river (Not just zinc like we looked in Lesson 22). 
-
-First we need to organize the data as a `gstat` object. This is done with the `gstat()` function which orders (and copies) the field variables into a single object. It is done successively with the `gstat()` function.
-
-Here we specify the trend using the square root of the distance to river as we did previously.
-```{r}
-g <- gstat(NULL, "logCd", log(cadmium) ~ sqrt(dist), meuse)
-g <- gstat(g, "logCu", log(copper) ~ sqrt(dist), meuse)
-g <- gstat(g, "logPb", log(lead) ~ sqrt(dist), meuse)
-g <- gstat(g, "logZn", log(zinc) ~ sqrt(dist), meuse)
-g
-```
-
-Next we use the `variogram()` function to compute empirical variograms. The function, when operating on a `gstat` object, computes all direct and cross variograms.
-```{r}
-v <- variogram(g)
-plot(v)
-```
-
-The plot method displays the set of direct and cross variograms. The direct variograms are shown in the four panels along the diagonal of the triangle of plots.
-
-The cross variograms are shown in the six panels below the diagonal. For example, the cross variogram between the values of cadmium and copper is given in the second row of the first column. 
-
-Q: The cross variogram is similar to what function from the `spatstat` package?
-
-Next we use `fit.lmc()` to fit separate models to each of the empirical variograms. We use an initial partial sill and nugget equal to one and a range of 800.
-```{r}
-vm <- fit.lmc(v, g, 
-              vgm(psill = 1, model = "Sph", 
-              range = 800, nugget = 1))
-plot(v, vm)
-```
-
-As the variograms indicate, the variables have a strong cross correlations. Because these variables are co-located, we can also compute direct correlations.
-```{r}
-cor(as.data.frame(meuse)[c("cadmium", "copper", "lead", "zinc")])
-```
-
-The correlation matrix confirms strong cross correlation among the four variables at zero lag. The cross variogram generalizes these correlations across lag distance.
-
-Given the variogram models, cokriged maps are produced using the `predict()` method after setting the grid locations for interpolation. The CRS for the grid locations matches the CRS of the data.
-```{r}
-data(meuse.grid)
-coordinates(meuse.grid) <- ~ x + y
-proj4string(meuse.grid) <- CRS(proj4string(meuse))
-cok <- predict(vm, meuse.grid)
-names(cok)
-```
-
-The predictions for logarithm of zinc concentration are plotted.
-```{r}
-spplot(cok, "logZn.pred")
-```
-
-Compare with predictions using only zinc.
-```{r}
-v2 <- variogram(log(zinc) ~ sqrt(dist), 
-               data = meuse)
-vm2 <- fit.variogram(v2, vgm(psill = .15, model = "Sph", 
-                             range = 800, nugget = .1))
-uk <- krige(log(zinc) ~ sqrt(dist), meuse, newdata = meuse.grid, 
-              model = vm2)
-spplot(uk, "var1.pred")
-```
-
-The predicted covariances between zinc and cadmium are plotted.
-```{r}
-spplot(cok, "cov.logCd.logZn")
-```
-
-The map shows areas of the flood plain with high (and low) correlations between cadmium and zinc.
-
-Obtaining a quality statistical interpolation is a nuanced process but with practice kriging can be an important tool in a spatial analyst's toolbox.
-
-## Assignment
-
-Consider the data set `parana` from the {geoR} package containing rainfall values from the state of Paran\`a. The data are average rainfall (mm) over the period May-June.
-
-1. Plot the values. Plot the residuals after a 1st order trend is removed.
-2. Compute and plot an empirical variogram on the residuals after removing the 1st-order trend. Check for anisotropy.
-3. Fit a variogram model from the gaussian family to the empirical variogram. Assume isotropy. Set the initial values of the nugget to 500, the partial sill to 800 and the range to 100. Plot the modeled variogram on top of the empirical variogram.
-4. Create a kriged surface by interpolating the rainfall values to locations on a regular grid. Use the `pred_grid(parana$borders, by = 2)` function to generate the grid.
-5. Plot the interpolated surface. Note this can be done with the `image()` function. Use `col = rev(terrain.colors(21))`. 
-6. Compute the cross-validated prediction errors assuming a constant variogram model. Plot the observed versus predicted values as a scatter plot. Include the best fit line and the y = x line.
-
-## Block cross validation for species distribution models
-
-See `BCVforSDM.Rmd`.

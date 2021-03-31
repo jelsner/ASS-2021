@@ -1,0 +1,1535 @@
+---
+title: "Lesson 27"
+author: "James B. Elsner"
+date: "April 14, 2021"
+output:
+  html_document: null
+editor_options:
+  chunk_output_type: console
+---
+
+**"A programming language is low level when its programs require attention to the irrelevant."** – Alan Perlis
+
+## Machine learning for spatial prediction
+
+Modified from https://geocompr.robinlovelace.net/spatial-cv.html
+
+The lesson uses the following packages:
+```{r}
+library(sf)
+library(raster)
+library(mlr)
+library(dplyr)
+library(parallelMap)
+```
+
+Statistical learning is concerned with the use of models for identifying patterns in data and predicting from these patterns. Statistical learning combines methods from statistics and machine learning and its methods can be categorized into supervised and unsupervised techniques. Both are increasingly used in disciplines ranging from physics, biology and ecology to geography and economics.
+
+This lesson focuses on supervised techniques in which there is a training dataset, as opposed to unsupervised techniques such as clustering. Response variables can be binary (such as landslide occurrence), categorical (land use), integer (species richness count) or numeric (soil acidity measured in pH). Supervised techniques model the relationship between such responses — which are known for a sample of observations — and one or more predictors.
+
+The primary aim of machine learning is to make good predictions, as opposed to statistical/Bayesian inference, which is good at helping to understand underlying mechanisms and uncertainties in the data. Machine learning is used in predicting the future behavior of customers, in recommending services (music, movies, what to buy next), in recognizing faces, in autonomous driving, in classifying text classification and in predicting maintenance (infrastructure, industry).
+
+### Example: Landslide susceptibility
+
+Here we show how machine learning is used to predict landslides. The case is based on a dataset of landslide locations in Southern Ecuador described in detail in Muenchow, Brenning, and Richter (2012). A subset of the dataset used in that paper is provided in the {RSAGA} package, which can be loaded as follows.
+```{r}
+library(RSAGA)
+
+data("landslides", package = "RSAGA")
+```
+
+This should load three objects: a data frame named `landslides`, a list named `dem`, and an sf object named `study_area`. `landslides` contains a factor column `lslpts` where `TRUE` corresponds to an observed landslide ‘initiation point’, with the coordinates stored in columns `x` and `y`.
+
+There are 175 landslide points and 1360 non-landslide, as shown by `summary(landslides)`. The 1360 non-landslide points were sampled randomly from the study area, with the restriction that they must fall outside a small buffer around the landslide polygons.
+
+To make the number of landslide and non-landslide points balanced (not sure why they need to be balanced?), let us sample 175 from the 1360 non-landslide points.
+```{r}
+non_pts <- landslides %>%
+  dplyr::filter(lslpts == FALSE)
+
+lsl_pts <- landslides %>%
+  dplyr::filter(lslpts == TRUE)
+
+set.seed(11042018)
+non_pts_sub <- non_pts %>%
+  dplyr::sample_n(size = nrow(lsl_pts))
+```
+
+Create smaller landslide dataset (`lsl`).
+```{r}
+lsl <- non_pts_sub %>%
+  dplyr::bind_rows(lsl_pts)
+```
+
+The object `dem` is a digital elevation model consisting of two elements: `dem$header`, a list which represents a raster ‘header’, and `dem$data`, a matrix with the altitude of each pixel. `dem` is converted into a raster object with:
+```{r}
+dem <- raster(dem$data, 
+  crs = dem$header$proj4string,
+  xmn = dem$header$xllcorner, 
+  xmx = dem$header$xllcorner + dem$header$ncols * dem$header$cellsize,
+  ymn = dem$header$yllcorner,
+  ymx = dem$header$yllcorner + dem$header$nrows * dem$header$cellsize)
+```
+
+Make a map.
+```{r}
+library(tmap)
+
+lsl.sf <- lsl
+coordinates(lsl.sf) = ~ x + y
+lsl.sf <- st_as_sf(lsl.sf)
+
+tm_shape(dem) +
+  tm_raster() +
+tm_shape(lsl.sf) +
+  tm_dots(col = "lslpts", size = 1)
+```
+
+Landslide initiation points (red) and points unaffected by landsliding (white) in Southern Ecuador.
+
+To model landslide susceptibility, we need some predictors. Terrain attributes are frequently associated with landsliding, and these can be computed from the digital elevation model (dem). 
+
+slope: slope angle (°).
+cplan: plan curvature (rad m−1) expressing the convergence or divergence of a slope and thus water flow.
+cprof: profile curvature (rad m-1) as a measure of flow acceleration, also known as downslope change in slope angle.
+elev: elevation (m a.s.l.) as the representation of different altitudinal zones of vegetation and precipitation in the study area.
+log10_carea: the decadic logarithm of the catchment area (log10 m2) representing the amount of water flowing towards a location.
+
+Data containing the landslide points, with the corresponding terrain attributes, is provided in the **spDataLarge** package, along with the terrain attribute raster stack from which the values were extracted.
+
+Attach landslide points with terrain attributes
+```{r}
+install.packages("remotes")
+
+remotes::install_github("Nowosad/spDataLarge")
+data("lsl", package = "spDataLarge")
+
+head(lsl)
+```
+
+Attach terrain attribute raster stack
+```{r}
+data("ta", package = "spDataLarge")
+```
+
+Before introducing the **mlr** package, an umbrella-package providing a unified interface to dozens of learning algorithms, it is worth taking a look at the conventional modeling interface in R. 
+
+This introduction to supervised statistical learning provides the basis for doing spatial CV, and contributes to a better grasp on the mlr approach presented subsequently.
+
+Supervised learning involves predicting a response variable as a function of predictors. The following command specifies and fits a generalized linear model:
+```{r}
+fit <- glm(lslpts ~ slope + cplan + cprof + elev + log10_carea,
+           family = binomial(),
+           data = lsl)
+
+fit
+```
+
+The model object `fit`, of class glm, contains the coefficients defining the fitted relationship between response and predictors. 
+
+It can also be used for prediction. This is done with the generic `predict()` method, which in this case calls the function `predict.glm()`. Setting type to response returns the predicted probabilities (of landslide occurrence) for each observation in `lsl`, as illustrated below (see ?predict.glm):
+```{r}
+pred_glm <- predict(object = fit, type = "response")
+head(pred_glm)
+```
+
+Spatial predictions are made by applying the coefficients to the predictor rasters. This is done manually or with `raster::predict()`. In addition to a model object (`fit`), this function also expects a raster stack with the predictors named as in the model’s input data frame.
+
+```{r}
+pred <- raster::predict(ta, model = fit, type = "response")
+
+tm_shape(pred) + 
+  tm_raster()
+```
+
+Here, when making predictions we neglect spatial autocorrelation since we assume that on average the predictive accuracy remains the same with or without spatial autocorrelation structures.
+
+Spatial prediction maps are one very important outcome of a model. Even more important is how good the underlying model is at making them since a prediction map is useless if the model’s predictive performance is bad. 
+
+The most popular measure to assess the predictive performance of a binomial model is the Area Under the Receiver Operator Characteristic Curve (AUROC). This is a value between 0.5 and 1.0, with 0.5 indicating a model that is no better than random and 1.0 indicating perfect prediction of the two classes. Thus, the higher the AUROC, the better the model’s predictive power. 
+
+The following code chunk computes the AUROC value of the model with `roc()`, which takes the response and the predicted values as inputs. `auc()` returns the area under the curve.
+```{r}
+library(pROC)
+
+pROC::auc(pROC::roc(lsl$lslpts, fitted(fit)))
+```
+
+An AUROC value of 0.83 represents a good fit. However, this is an overoptimistic estimation since we have computed it on the complete dataset. To derive a biased-reduced assessment, we have to use cross-validation and in the case of spatial data should make use of spatial CV.
+
+### Spatial cross-validation
+
+Cross-validation belongs to the family of resampling methods (James et al. 2013). The basic idea is to split (repeatedly) a dataset into training and test sets whereby the training data is used to fit a model which then is applied to the test set. 
+
+Comparing the predicted values with the known response values from the test set (using a performance measure such as the AUROC in the binomial case) gives a bias-reduced assessment of the model’s capability to generalize the learned relationship to independent data. For example, a 100-repeated 5-fold cross-validation means to randomly split the data into five partitions (folds) with each fold being used once as a test set. 
+
+This guarantees that each observation is used once in one of the test sets, and requires the fitting of five models. Subsequently, this procedure is repeated 100 times. Of course, the data splitting will differ in each repetition. Overall, this sums up to 500 models, whereas the mean performance measure (AUROC) of all models is the model’s overall predictive power.
+
+However, geographic data is special. Points close to each other are, generally, more similar than points farther away. This means these points are not statistically independent because training and test points in conventional CV are often too close to each other. 
+
+‘Training’ observations near the ‘test’ observations can provide a kind of ‘sneak preview’: information that should be unavailable to the training dataset. To alleviate this problem ‘spatial partitioning’ is used to split the observations into spatially disjointed subsets (using the observations’ coordinates in a k-means clustering; A. Brenning (2012b); second row of Figure 11.3).
+
+[Partioning](13_partitioning.png)
+
+This partitioning strategy is the only difference between spatial and conventional CV. As a result, spatial CV leads to a bias-reduced assessment of a model’s predictive performance, and hence helps to avoid overfitting.
+
+There are dozens of packages for statistical learning, as described for example in the CRAN machine learning task view. Getting acquainted with each of these packages, including how to undertake cross-validation and hyperparameter tuning, can be time-consuming. Comparing model results from different packages can be even more laborious. 
+
+The {mlr} package was developed to address these issues. It acts as a ‘meta-package’, providing a unified interface to popular supervised and unsupervised statistical learning techniques including classification, regression, survival analysis and clustering. 
+
+The {mlr} modeling process consists of three main stages. First, a task specifies the data (including response and predictor variables) and the model type (such as regression or classification). Second, a learner defines the specific learning algorithm that is applied to the created task. Third, the resampling approach assesses the predictive performance of the model, i.e., its ability to generalize to new data).
+
+To implement a GLM using the functions from the {mlr} package, we create a task containing the landslide data. Since the response is binary (two-category variable), we create a classification task with the `makeClassifTask()` function (for regression tasks, use `makeRegrTask()`, see `?makeRegrTask` for other task types). 
+
+The first argument of these `make*()` functions is data. The target argument expects the name of a response variable and positive determines which of the two factor levels of the response variable indicate the landslide initiation point (in our case this is TRUE). 
+
+All other variables of the `lsl` dataset will serve as predictors except for the coordinates (see the result of getTaskFormula(task) for the model formula). For spatial CV, the coordinates parameter is used which expects the coordinates as a xy data frame.
+```{r}
+library(mlr)
+
+coords <- lsl[, c("x", "y")] # coordinates needed for the spatial partitioning
+data <- dplyr::select(lsl, -x, -y) # select response and predictors to use in the modeling
+task <- makeClassifTask(data = data, 
+                        target = "lslpts",
+                        positive = "TRUE", 
+                        coordinates = coords)
+```
+
+The function `makeLearner()` determines the statistical learning method to use. All classification learners start with `classif.` and all regression learners with `regr.` (see `?makeLearners` for details).
+
+Sample of available learners for binomial tasks in the mlr package.
+
+classif.binomial	Binomial Regression	binomial	stats
+classif.featureless	Featureless classifier	featureless	mlr
+classif.fnn	Fast k-Nearest Neighbour	fnn	FNN
+classif.gausspr	Gaussian Processes	gausspr	kernlab
+classif.knn	k-Nearest Neighbor	knn	class
+classif.ksvm	Support Vector Machines	ksvm	kernlab
+
+This yields all learners able to model two-class problems (landslide yes or no). We opt for the binomial classification method used and implemented as `classif.binomial` in mlr. 
+
+Additionally, we must specify the link-function, logit in this case, which is also the default of the binomial() function. predict.type determines the type of the prediction with prob resulting in the predicted probability for landslide occurrence between 0 and 1 (this corresponds to `type = response` in predict.glm).
+```{r}
+lrn <- makeLearner(cl = "classif.binomial",
+                  link = "logit",
+                  predict.type = "prob",
+                  fix.factors.prediction = TRUE)
+```
+
+To find out from which package the specified learner is taken and how to access the corresponding help pages, we can run:
+```{r}
+getLearnerPackages(lrn)
+helpLearner(lrn)
+```
+
+The set-up steps for modeling with {mlr} may seem tedious. But this single interface provides access to the 150+ learners shown by `listLearners()`. It would be far more tedious to learn the interface for each learner!
+
+Further advantages are simple parallelization of resampling techniques and the ability to tune machine learning hyperparameters. Also (spatial) resampling in {mlr} is straightforward, requiring only two more steps: specifying a resampling method and running it. 
+
+We will use a 100-repeated 5-fold spatial CV: five partitions will be chosen based on the provided coordinates in our task and the partitioning will be repeated 100 times:65
+```{r}
+perf_level <- makeResampleDesc(method = "SpRepCV", 
+                               folds = 5, 
+                               reps = 100)
+```
+
+To execute the spatial resampling, we run `resample()` using the specified learner, task, resampling strategy and of course the performance measure, here the AUROC. This takes some time (around 10 seconds on a modern laptop) because it computes the AUROC for 500 models. Setting a seed ensures the reproducibility of the obtained result and will ensure the same spatial partitioning when re-running the code.
+```{r}
+set.seed(012348)
+sp_cv <- mlr::resample(learner = lrn, task = task,
+                      resampling = perf_level, 
+                      measures = mlr::auc)
+```
+
+The output of the preceding code chunk is a bias-reduced assessment of the model’s predictive performance, as illustrated in the following code chunk.
+
+Summary statistics of the 500 models
+```{r}
+summary(sp_cv$measures.test$auc)
+mean(sp_cv$measures.test$auc)
+```
+
+To put these results in perspective, let us compare them with AUROC values from a 100-repeated 5-fold non-spatial cross-validation. As expected, the spatially cross-validated result yields lower AUROC values on average than the conventional cross-validation approach, underlining the over-optimistic predictive performance due to spatial autocorrelation of the latter.
+
+Machine learning, more specifically the field of predictive modeling, is primarily concerned with minimizing the error of a model or making the most accurate predictions possible, at the expense of explainability. In applied machine learning we will borrow, reuse and steal algorithms from many different fields, including statistics and use them towards these ends.
+
+### Support vector machines (SVM)
+
+This section introduces support vector machines (SVM) for the same purpose. Random forest models might be more popular than SVMs; however, the positive effect of tuning hyperparameters on model performance is much more pronounced in the case of SVMs. Since (spatial) hyperparameter tuning is the major aim of this section, we will use an SVM.
+
+SVMs search for the best possible ‘hyperplanes’ to separate classes (in a classification case) and estimate ‘kernels’ with specific hyperparameters to allow for non-linear boundaries between classes (James et al. 2013). Hyperparameters should not be confused with coefficients of parametric models, which are sometimes also referred to as parameters. 
+
+Coefficients can be estimated from the data, while hyperparameters are set before the learning begins. Optimal hyperparameters are usually determined within a defined range with the help of cross-validation methods. This is called hyperparameter tuning.
+
+Some SVM implementations such as that provided by kernlab allow hyperparameters to be tuned automatically, usually based on random sampling. This works for non-spatial data but is of less use for spatial data where ‘spatial tuning’ should be undertaken.
+
+Before defining spatial tuning, we will set up the {mlr} building blocks, introduced for the SVM. The classification task remains the same, hence we can simply reuse the task object created earlier. Learners implementing SVM can be found using `listLearners()` as follows:
+
+```{r}
+lrns <- listLearners(task, warn.missing.packages = FALSE)
+filter(lrns, grepl("svm", class)) %>% 
+  dplyr::select(class, name, short.name, package)
+```
+
+Of the options illustrated above, we will use `ksvm()` from the **kernlab** package (Karatzoglou et al. 2004). To allow for non-linear relationships, we use the popular radial basis function (or Gaussian) kernel which is also the default of `ksvm()`.
+```{r}
+lrn_ksvm = makeLearner("classif.ksvm",
+                        predict.type = "prob",
+                        kernel = "rbfdot")
+```
+
+The next stage is to specify a resampling strategy. Again we will use a 100-repeated 5-fold spatial CV.
+
+```{r}
+perf_level <- makeResampleDesc(method = "SpRepCV", 
+                               folds = 5, 
+                               reps = 100)
+```
+
+Note that this is the exact same code as used for the GLM. We have simply repeated it here as a reminder.
+
+The next step is to tune the hyperparameters. Using the same data for the performance assessment and the tuning would potentially lead to overoptimistic results (Cawley and Talbot 2010). This can be avoided using nested spatial CV.
+
+Schematic of hyperparameter tuning and performance estimation levels in CV (from Schratz et al. 2018).
+[Hyperparameter tuning](13_cv.png)
+
+This means that we split each fold again into five spatially disjoint subfolds which are used to determine the optimal hyperparameters. To find the optimal hyperparameter combination, we fit 50 models (ctrl object in the code chunk below) in each of these subfolds with randomly selected values for the hyperparameters C and Sigma. The random selection of values C and Sigma is additionally restricted to a predefined tuning space (ps object). The range of the tuning space was chosen with values recommended in the literature (Schratz et al. 2018).
+
+```{r}
+# five spatially disjoint partitions
+tune_level <- makeResampleDesc("SpCV", iters = 5)
+# use 50 randomly selected hyperparameters
+ctrl <- makeTuneControlRandom(maxit = 50)
+# define the outer limits of the randomly selected hyperparameters
+ps <- makeParamSet(
+  makeNumericParam("C", lower = -12, upper = 15, trafo = function(x) 2^x),
+  makeNumericParam("sigma", lower = -15, upper = 6, trafo = function(x) 2^x)
+  )
+```
+
+The next stage is to modify the learner `lrn_ksvm` in accordance with all the characteristics defining the hyperparameter tuning with the `makeTuneWrapper()` function.
+```{r}
+wrapped_lrn_ksvm <- makeTuneWrapper(learner = lrn_ksvm, 
+                                    resampling = tune_level,
+                                    par.set = ps,
+                                    control = ctrl, 
+                                    show.info = TRUE,
+                                    measures = mlr::auc)
+```
+
+The mlr is now set-up to fit 250 models to determine optimal hyperparameters for one fold. Repeating this for each fold, we end up with 1250 (250 * 5) models for each repetition. Repeated 100 times means fitting a total of 125,000 models to identify optimal hyperparameters. 
+
+These are used in the performance estimation, which requires the fitting of another 500 models (5 folds * 100 repetitions). To make the performance estimation processing chain even clearer, let us write down the commands we have given to the computer:
+
+Performance level: split the dataset into five spatially disjoint (outer) subfolds.
+Tuning level: use the first fold of the performance level and split it again spatially into five (inner) subfolds for the hyperparameter tuning. Use the 50 randomly selected hyperparameters in each of these inner subfolds, i.e., fit 250 models.
+Performance estimation: Use the best hyperparameter combination from the previous step (tuning level) and apply it to the first outer fold in the performance level to estimate the performance (AUROC).
+Repeat steps 2 and 3 for the remaining four outer folds.
+Repeat steps 2 to 4, 100 times.
+
+The process of hyperparameter tuning and performance estimation is computationally intensive. Model runtime can be reduced with parallelization, which can be done in a number of ways, depending on the operating system.
+Before starting the parallelization, we ensure that the processing continues even if one of the models throws an error by setting `on.learner.error = warn`. This avoids the process stopping just because of one failed model, which is desirable on large model runs. To inspect the failed models once the processing is completed, we dump them:
+```{r}
+configureMlr(on.learner.error = "warn", on.error.dump = TRUE)
+```
+
+To start the parallelization, we set the mode to multicore which will use `mclapply()` in the background on a single machine in the case of a Unix-based operating system. Equivalenty, `parallelStartSocket()` enables parallelization under Windows. level defines the level at which to enable parallelization, with `mlr.tuneParams()` determining that the hyperparameter tuning level should be parallelized (see lower left part of Figure 11.6, ?parallelGetRegisteredLevels, and the mlr parallelization tutorial for details). We will use half of the available cores (set with the cpus parameter), a setting that allows possible other users to work on the same high performance computing cluster in case one is used (which was the case when we ran the code). Setting mc.set.seed to TRUE ensures that the randomly chosen hyperparameters during the tuning can be reproduced when running the code again. Unfortunately, mc.set.seed is only available under Unix-based systems.
+```{r}
+library(parallelMap)
+if (Sys.info()["sysname"] %in% c("Linux", "Darwin")) {
+parallelStart(mode = "multicore", 
+              # parallelize the hyperparameter tuning level
+              level = "mlr.tuneParams", 
+              # just use half of the available cores
+              cpus = round(parallel::detectCores() / 2),
+              mc.set.seed = TRUE)
+}
+
+if (Sys.info()["sysname"] == "Windows") {
+  parallelStartSocket(level = "mlr.tuneParams",
+                      cpus =  round(parallel::detectCores() / 2))
+}
+```
+
+Now we are set up for computing the nested spatial CV. Using a seed allows us to recreate the exact same spatial partitions when re-running the code. Specifying the resample() parameters follows the exact same procedure as presented when using a GLM, the only difference being the extract argument. This allows the extraction of the hyperparameter tuning results which is important if we plan follow-up analyses on the tuning. After the processing, it is good practice to explicitly stop the parallelization with parallelStop(). Finally, we save the output object (result) to disk in case we would like to use it another R session. Before running the subsequent code, be aware that it is time-consuming: the 125,500 models took ~1/2hr on a server using 24 cores (see below).
+
+```{r}
+set.seed(12345)
+result <- mlr::resample(learner = wrapped_lrn_ksvm, 
+                       task = task,
+                       resampling = perf_level,
+                       extract = getTuneResult,
+                       measures = mlr::auc)
+```
+```{r}
+# stop parallelization
+parallelStop()
+```
+```{r}
+# save your result, e.g.:
+saveRDS(result, "svm_sp_sp_rbf_50it.rds")
+```
+In case you do not want to run the code locally, we have saved a subset of the results in the book’s GitHub repo. They can be loaded as follows:
+```{r}
+result <- readRDS("svm_sp_sp_rbf_50it.rds")
+```
+Note that runtime depends on many aspects: CPU speed, the selected algorithm, the selected number of cores and the dataset.
+
+Runtime in minutes
+```{r}
+round(result$runtime / 60, 2)
+```
+Even more important than the runtime is the final aggregated AUROC: the model’s ability to discriminate the two classes.
+
+Final aggregated AUROC 
+```{r}
+result$aggr
+mean(result$measures.test$auc)
+```
+
+It appears that the GLM (aggregated AUROC was 0.78) is slightly better than the SVM in this specific case. However, using more than 50 iterations in the random search would probably yield hyperparameters that result in models with a better AUROC (Schratz et al. 2018). On the other hand, increasing the number of random search iterations would also increase the total number of models and thus runtime.
+
+The estimated optimal hyperparameters for each fold at the performance estimation level can also be viewed. The following command shows the best hyperparameter combination of the first fold of the first iteration (recall this results from the first 5 * 50 model runs):
+
+Winning hyperparameters of tuning step, i.e. the best combination out of 50 * 5 models
+```{r}
+result$extract[[1]]$x
+```
+
+The estimated hyperparameters have been used for the first fold in the first iteration of the performance estimation level which resulted in the following AUROC value:
+```{r}
+result$measures.test[1, ]
+```
+
+So far spatial CV has been used to assess the ability of learning algorithms to generalize to unseen data. For spatial predictions, we often tune the hyperparameters on the complete dataset.
+
+Cross-validation is used to assess predictive performance of models. Spatial CV reduces bias introduced by spatial autocorrelation.
+
+The {mlr} package facilitates (spatial) resampling techniques in combination with the most popular statistical learning techniques including linear regression, semi-parametric models such as generalized additive models and machine learning techniques such as random forests, SVMs, and boosted regression trees (Bischl et al. 2016; Schratz et al. 2018). Machine learning algorithms often require hyperparameter inputs, the optimal ‘tuning’ of which can require thousands of model runs which require large computational resources, consuming much time, RAM and/or cores. mlr tackles this issue by enabling parallelization.
+
+Machine learning overall, and its use to understand spatial data, is a large field and this chapter has provided the basics, but there is more to learn. We recommend the following resources in this direction:
+
+* The {mlr} tutorials on Machine Learning in R and Handling of spatial Data. 
+* An academic paper on hyperparameter tuning (Schratz et al. 2018). 
+* In case of spatio-temporal data, one should account for spatial and temporal autocorrelation when doing CV (Meyer et al. 2018).
+
+## Block cross validation for species distribution models
+
+The use of spatial and environmental blocks to separate training and testing sets is needed for realistic error estimation in datasets with dependence structures, and for estimating the predictive performance of models involving mapped distributions [@RobertsEtAl2017]. 
+
+Package {blockCV} provides functions to separate train and test sets using buffers, spatial and environmental blocks. It provides several options for how those blocks are constructed. It also has a function that applies geostatistical techniques to investigate the existing level of spatial autocorrelation in the covariates to inform the choice of a suitable distance band by which to separate the data sets. In addition, some visualization tools are provided to help the user choose the block size and explore generated folds.
+
+The package has been written with Species Distribution Modelling (SDM) in mind, and the functions allow for a number of common scenarios (including presence-absence and presence-background species data, rare and common species, raster data for predictor variables). Although it can be applied to any spatial modelling e.g. multi-class responses for remote sensing image classification.
+
+You can find more information about blocking strategies of blockCV package and in general block cross-validation technique in the package associated paper [@ValaviEtAl2018].
+
+This chapter presents the main functions of the package and illustrates its usage with three examples: modelling using {randomForest}, {maxnet} (new implementation of Maxent software in R) and {biomod2} packages.
+
+The package contains the raw format of the following data:
+* Raster covariates of Australian Wet Tropic region (`.tif`)
+* Simulated species data (`.csv`)
+
+These data are used to illustrate how the package is used. The raster data include several bioclimatic and topographic variables from Australian Wet Tropic region aggregated to 800 m resolution. The species data contains records of a species, simulated based on the above environmental variables for the region. There are two .csv files with presence-absence and presence-background data.
+
+First we load the packages and import the raster data.
+```{r}
+library(blockCV)
+library(raster)
+library(sf)
+
+awt <- raster::brick(system.file("extdata", "awt.grd", package = "blockCV"))
+```
+
+The presence absence species data include 116 presence points and 138 absence points. The appropriate format of species data for the blockCV package is simple features (sf) or SpatialPointsDataFrame. We convert the data frame to simple feature data frame as follows:
+```{r}
+PA.df <- read.csv(system.file("extdata", "PA.csv", package = "blockCV"))
+PA.sf <- st_as_sf(PA.df, 
+                  coords = c("x", "y"), 
+                  crs = crs(awt))
+PA.sf
+```
+
+Map these data.
+```{r}
+library(tmap)
+
+tm_shape(awt[[1]]) +
+  tm_raster() +
+tm_shape(PA.sf[PA.sf$Species == 1,]) +
+  tm_bubbles(size = .4, col = "red") +
+tm_shape(PA.sf[PA.sf$Species == 0,]) +
+  tm_bubbles(size = .4, col = "gray")
+```
+
+The presence background data include the 116 presence points and 10,000 random background points (0s here).
+```{r}
+PB.df <- read.csv(system.file("extdata", "PB.csv", package = "blockCV"))
+PB.sf <- st_as_sf(PB.df, 
+                  coords = c("x", "y"), 
+                  crs = crs(awt))
+
+table(PB.sf$Species)
+```
+
+The function `spatialBlock()` creates spatially separated folds based on a pre-specified distance (cell size of the blocks). It then assigns blocks to the training and testing folds with random, checkerboard pattern or in a systematic manner. The function can also divide the study region into vertical and horizontal bins with a given number of rows and columns.
+
+The range argument (`theRange`) needs to be in meters. When the input map has geographic coordinate system (decimal degrees), the block size is calculated based on dividing `theRange` by 111325 (the standard distance of a degree in meters, on the Equator).
+
+The xOffset and yOffset can be used to shift the spatial position of the blocks in horizontal and vertical axes, respectively. This only works when the block have been built based on theRange. The blocks argument allows users to define an external spatial polygon as blocking layer. The polygon layer must cover all the species points. In addition, blocks can be masked by species spatial data. This option keeps the blocks that cover species data and remove the rest.
+
+Here we block by specified range with random assignment.
+```{r}
+sb <- spatialBlock(speciesData = PA.sf,
+                   species = "Species",
+                   rasterLayer = awt,
+                   theRange = 70000, # size of the blocks
+                   k = 5,
+                   selection = "random",
+                   iteration = 100, # find evenly dispersed folds
+                   biomod2Format = TRUE,
+                   xOffset = 0, # shift the blocks horizontally
+                   yOffset = 0)
+```
+
+Here we block by rows and columns with checkerboard assignment.
+```{r}
+sb2 <- spatialBlock(speciesData = PA.sf, # presence-background data
+                    species = "Species",
+                    rasterLayer = awt,
+                    rows = 5,
+                    cols = 6,
+                    k = 5,
+                    selection = "systematic",
+                    biomod2Format = TRUE)
+```
+
+For visualising the species data on top of the spatial blocks, one can use `geom_sf()` function of the {ggplot2} package. However, a more sophisticated way of plotting each fold separately is presented in the visualisation tools section.
+```{r}
+library(ggplot2)
+
+sb$plots + 
+  geom_sf(data = PA.sf, alpha = 0.5)
+```
+
+The function `buffering()` generates spatially separated training and testing folds by considering buffers of specified distance around each observation point. This approach is a form of leave-one-out cross-validation. Each fold is generated by excluding nearby observations around each testing point within the specified distance (ideally the range of spatial autocorrelation). In this method the test set never directly abuts a training presence or absence.
+
+When working with presence-background (presence and pseudo-absence) data (specified by `spDataType` argument), only presence records are used for specifying the folds. Consider a target presence point. The buffer is defined around this target point, using the specified range (`theRange`). The testing fold comprises the target presence point and all background points within the buffer. Any non-target presence points inside the buffer are excluded. All points (presence and background) outside of buffer are used for training set. The method cycles through all the presence data, so the number of folds is equal to the number of presence points in the dataset.
+
+For presence-absence data, folds are created based on all records, both presences and absences. As above, a target observation (presence or absence) forms a test point, all presence and absence points other than the target point within the buffer are ignored, and the training set comprises all presences and absences outside the buffer. 
+
+Apart from the folds, the number of training-presence, training-absence, testing-presence and testing-absence records is stored and returned in the records table. If `species = NULL` (no column with 0s and 1s is defined), the procedure is like presence-absence data. All other types of data (continuous, count or multi-class response) should be used like this.
+
+Buffering with presence-absence data
+```{r}
+bf1 <- buffering(speciesData = PA.sf,
+                 theRange = 70000,
+                 species = "Species", # to count the number of presences and absences/backgrounds
+                 spDataType = "PA", # presence-absence  data type
+                 progress = TRUE)
+```
+
+In the following buffering example, presence-background data are used. As explained above, by default the background data within any target point will remain in the testing fold. This can be changed by setting `addBG = FALSE` (this option only works when `spDataType = "PB"`; note the default value is `"PA"`).
+
+Buffering with presence-background data
+```{r eval=FALSE}
+bf2 <- buffering(speciesData = PB.sf, # presence-background data
+                 theRange = 70000,
+                 species = "Species",
+                 spDataType = "PB", # presence-background data type
+                 addBG = TRUE, # add background data to testing folds
+                 progress = TRUE)
+```
+
+The function `envBlock()` uses clustering methods to specify sets of similar environmental conditions based on the input covariates. Species data corresponding to any of these groups or clusters are assigned to a fold.
+
+As k-means algorithms use Euclidean distance to estimate clusters, the input covariates should be quantitative variables. Since variables with wider ranges of values might dominate the clusters and bias the environmental clustering (Hastie et al., 2009), all the input rasters are first standardized within the function. This is done either by normalizing based on subtracting the mean and dividing by the standard deviation of each raster (the default) or optionally by standardizing using linear scaling to constrain all raster values between 0 and 1. 
+
+By default, the clustering is done in the raster space. In this approach, the clusters will be consistent throughout the region and across species (in the same region). However, this may result in cluster(s) that cover none of the species records especially when species data is not dispersed throughout the region or the number of clusters (k or folds) is high. In this case, the number of folds is less than the specified k. If `rasterBlock = FALSE`, the clustering will be done based only on the values of the predictors at the species presence and absence/background points. In this case, and the number of the folds will be the same as k.
+
+Note that the input raster layer should cover all the species points, otherwise an error will rise. The records with no raster value should be deleted prior to the analysis.
+```{r}
+eb <- envBlock(rasterLayer = awt,
+               speciesData = PA.sf,
+               species = "Species",
+               k = 5,
+               standardization = "standard", # rescale variables between 0 and 1
+               rasterBlock = FALSE,
+               numLimit = 50)
+```
+
+To support a first choice of block size, prior to any model fitting, package {blockCV} includes the option for the user to look at the existing autocorrelation in the predictors, as an indication of landscape spatial structure in their study area. The tool does not suggest any absolute solution to the problem, but serves as a guide to the user. 
+
+The function works by automatically fitting variograms to each continuous raster and finding the effective range of spatial autocorrelation. Variogram is a fundamental geostatistical tool for measuring spatial autocorrelation. It does so by assessing variability between all pairs of points. It provides information about the effective range of spatial autocorrelation which is the range over which observations are independent.
+```{r}
+sac <- spatialAutoRange(rasterLayer = awt,
+                        sampleNumber = 5000,
+                        doParallel = TRUE,
+                        showPlots = TRUE)
+
+summary(sac)
+
+library(automap)
+
+plot(sac$variograms[[1]])
+```
+
+Another data set: PRISM temperatures
+
+Clear, calm days in April "1991-04-02" "1992-04-15" "1993-04-11" "1994-04-02" "1995-04-09"
+```{r}
+CCdates <- "2020-04-09" # record hot day 94F at airport
+CCdates <- c("1991-04-02", "1992-04-15", "1993-04-11", "1994-04-02", "1995-04-09")
+CCstring <- gsub("-", "", CCdates)
+```
+
+```{r}
+library(prism)
+options(prism.path = "PRISM")
+```
+
+```{r}
+i <- 1
+
+get_prism_dailys(
+  type = "tmax",
+  minDate = CCdates[i], 
+  maxDate = CCdates[i], 
+  keepZip = FALSE 
+)
+get_prism_dailys(
+  type = "tmin",
+  minDate = CCdates[i], 
+  maxDate = CCdates[i], 
+  keepZip = FALSE 
+)
+
+tmin.r <- raster(paste0("PRISM/PRISM_tmin_provisional_4kmD2_", CCstring[i], "_bil/PRISM_tmin_provisional_4kmD2_", CCstring[i], "_bil.bil"))
+tmax.r <- raster(paste0("PRISM/PRISM_tmax_provisional_4kmD2_", CCstring[i], "_bil/PRISM_tmax_provisional_4kmD2_", CCstring[i], "_bil.bil"))
+
+Leon.sf <- USAboundaries::us_counties(states = "FL") %>%
+  dplyr::filter(name %in% c("Leon", "Gadsden", "Liberty", "Wakulla", "Jefferson", "Jackson", "Calhoun")) %>%
+  sf::st_transform(crs = projection(tmax.r))
+
+tmin.r2 <- crop(tmin.r, Leon.sf)
+tmax.r2 <- crop(tmax.r, Leon.sf)
+
+#Moran(tmin.r2)
+#Moran(tmax.r2)
+
+temps <- brick(tmin.r2, tmax.r2)
+#tempsp <- projectRaster(temps, crs = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+
+sac <- spatialAutoRange(rasterLayer = temps,
+                        sampleNumber = 100,
+                        doParallel = TRUE,
+                        showPlots = TRUE)
+
+summary(sac)$range
+
+#plot(sac$variograms[[1]])
+```
+
+Package {blockCV} provides two major visualisation tools for graphical exploration of the generated folds and assisting in block size selection. These tools have been developed as local web applications using R-package shiny. With `rangeExplorer()`, the user can choose among block sizes in a specified range, visualise the resulting blocks interactively, viewing the impact of block size on number and arrangement of blocks in the landscape (and optionally on the distribution of species data in those blocks). The `foldExplorer()` tool displays folds and the number of records in each fold; it works for all three blocking methods.
+
+Explore generated folds
+```{r}
+foldExplorer(blocks = sb, 
+             rasterLayer = awt, 
+             speciesData = PA.sf)
+```
+
+Explore the block size
+```{r}
+rangeExplorer(rasterLayer = awt) # the only mandatory input
+```
+
+Add species data to add them on the map
+```{r}
+rangeExplorer(rasterLayer = awt,
+              speciesData = PA.sf,
+              species = "Species",
+              rangeTable = NULL,
+              minRange = 30000, # limit the search domain
+              maxRange = 100000)
+```
+
+### Example 1: Evaluating presence-background models: {maxnet}
+
+In this section, we show how to use the folds generated by {blockCV} in the previous sections for the evaluation of species distribution models constructed on the species data available in the package. The {blockCV} package stores training and testing folds in three different formats. The common format for all three blocking strategies is a list of the id of observations in each fold. 
+
+For `spatialBlock()` and `envBlock()` (but not buffering), the folds are also stored in a matrix format suitable for the {biomod2} package and a vector of fold’s number for each observation. This is equal to the number of observation in species spatial data. These three formats are stored in the blocking objects as folds, `biomodTable()` and `foldID()` respectively. We show three modelling examples which cover both the use of presence-absence and presence-background methods.
+
+The code below shows how to evaluate a presence-background model, where {maxnet} package is used for model fitting; a newly developed package by Phillips et. al., (2017) to model species distributions from occurrences and environmental variables, using glmnet for model fitting. The {maxnet} package is the implementation of Maxent software in R programming language.
+
+Loading the packages
+```{r}
+library(maxnet)
+library(precrec)
+library(ggplot2)
+```
+
+Extract the raster values for the species points as a data frame.
+```{r}
+mydata <- raster::extract(awt, PB.sf)
+mydata.df <- as.data.frame(mydata)
+```
+
+Create a vector of 1 (for presence) and 0 (for background samples)
+```{r}
+pb <- PB.sf$Species
+```
+
+Extract the folds in the {spatialBlock} object created in the previous section (with presence-background data). The `foldID` only works for `spatialBlock()` and `envBlock()` folds.
+```{r}
+folds <- sb2$foldID
+```
+
+Create an empty vector to store the AUC of each fold.
+```{r}
+AUCs <- vector(mode = "numeric")
+
+for(k in seq_len(5)){
+  # extracting the training and testing indices this way only works with foldID
+  trainSet <- which(folds != k) # training set indices
+  testSet <- which(folds == k) # testing set indices
+  # fitting a maxent model using linear, quadratic and hinge features
+  mx <- maxnet(p = pb[trainSet], 
+               data = mydata.df[trainSet, ], 
+               maxnet.formula(p = pb[trainSet], 
+                              data = mydata.df[trainSet, ], 
+                              classes = "default"))
+  testTable <- PB.sf[testSet, ] # a table for testing predictions and reference data
+  testTable$pred <- predict(mx, mydata.df[testSet, ], type = "cloglog") # predict the test set
+  # calculate area under the ROC curve
+  precrec_obj <- evalmod(scores = testTable$pred, labels = testTable$Species)
+  AUCs[k] <- auc(precrec_obj)[1,4] # extract AUC-ROC
+}
+
+print(mean(AUCs))
+```
+
+### Example 2: Evaluating presence-absence models: {randomForest}
+
+In the second example, we use blocking for evaluating a presence-absence model created using the Random Forest algorithm. Folds generated by buffering function are used here (a training and testing fold for each record).
+
+Note that with buffering using presence-absence data or with `species = NULL`, there is only one point in each testing fold, and therefore AUC cannot be calculated for each fold separately. Instead, the value of each point is first predicted, and then a unique AUC is calculated for the full set of predictions.
+
+Load the libraries
+```{r}
+library(randomForest)
+library(precrec)
+```
+
+Extract the raster values for the species points as a data frame
+```{r}
+mydata <- raster::extract(awt, PA.sf, df = TRUE)
+```
+
+Add species column to the dataframe
+```{r}
+mydata$Species <- as.factor(PA.sf$Species)
+```
+
+Remove the extra column (ID)
+```{r}
+mydata <- mydata[,-1]
+```
+
+Extract the `foldIDs` in the {spatialBlock} object created in the previous section. The folds (list) works for all three blocking strategies.
+```{r}
+folds <- bf1$folds
+```
+
+Create a data frame to store the prediction of each fold (record).
+```{r}
+testTable <- PA.sf
+testTable$pred <- NA
+
+for(k in seq_len(length(folds))){
+  # extracting the training and testing indices this way works with folds list (but not foldID)
+  trainSet <- unlist(folds[[k]][1]) # training set indices
+  testSet <- unlist(folds[[k]][2]) # testing set indices
+  rf <- randomForest(Species ~ ., mydata[trainSet, ], ntree = 250) # model fitting on training set
+  testTable$pred[testSet] <- predict(rf, mydata[testSet, ], type = "prob")[ ,2] # predict the test set
+}
+```
+
+Calculate the area under the ROC and PR curves and plot the result.
+```{r}
+precrec_obj <- evalmod(scores = testTable$pred, labels = testTable$Species)
+
+autoplot(precrec_obj)
+```
+
+## Geostatistical modeling using the SPDE approach
+
+Here we see how to fit a geostatistical model to predict malaria prevalence in The Gambia using the stochastic partial differential equation (SPDE) approach and the R-INLA package [@RueEtAl2014]. The chapter is adopted from Chapter 9 of @Moraga2020. https://www.paulamoraga.com/book-geospatial/sec-geostatisticaldataexamplespatial.html
+
+We use data of malaria prevalence in children obtained at 65 villages in The Gambia which are contained in the {geoR} package [@RibeiroEtAl2020], and high-resolution environmental covariates downloaded with the {raster} package [@Hijmans2020]. We show how to create a triangulated mesh that covers The Gambia, the projection matrix and the data stacks to fit the model. 
+
+Then we show how to manipulate the results to obtain the malaria prevalence predictions, and 95% credible intervals denoting uncertainty. We also show how to compute exceedance probabilities of prevalence being greater than a given threshold value of interest for policy making. 
+
+Results are presented with interactive maps created with functions from the {tmap} package.
+
+First, we load the {geoR} package and attach the data `gambia` which contains information about malaria prevalence in children obtained at 65 villages in The Gambia.
+```{r}
+library(geoR)
+data(gambia)
+```
+
+Next we inspect the data and see it is a data frame with 2035 observations and the following 8 variables:
+
+`x`: x coordinate of the village (UTM),
+`y`: y coordinate of the village (UTM),
+`pos`: presence (1) or absence (0) of malaria in a blood sample taken from the child,
+`age`: age of the child in days,
+`netuse`: indicator variable denoting whether the child regularly sleeps under a bed net,
+`treated`: indicator variable denoting whether the bed net is treated,
+`green`: satellite-derived measure of the greenness of vegetation in the vicinity of the village,
+`phc`: indicator variable denoting the presence or absence of a health center in the village.
+
+```{r}
+head(gambia)
+```
+
+Data in gambia are given at an individual level. Here, we do the analysis at the village level by aggregating the malaria tests by village. We create a data frame called d with columns containing, for each village, the longitude and latitude, the number of malaria tests, the number of positive tests, the prevalence, and the altitude.
+
+We can see that `gambia` has 2035 rows and the matrix of the unique coordinates has 65 rows. This indicates that 2035 malaria tests were conducted at 65 locations.
+```{r}
+dim(gambia)
+dim(unique(gambia[, c("x", "y")]))
+```
+
+We create a data frame called `df` containing, for each village, the coordinates (`x`, `y`), the total number of tests performed (`total`), the number of positive tests (`positive`), and the malaria prevalence (`prev`). 
+
+In data `gambia`, column `pos` indicates the tests results. Positive tests have `pos` equal to 1 and negative tests have `pos` equal to 0. Therefore, we can calculate the number of positive tests in each village by adding up the elements in `gambia$pos`. Then we calculate the prevalence in each village by calculating the proportion of positive tests (number of positive results divided by the total number of tests in each village). 
+
+We create the data frame `df` using the {dplyr} package as follows:
+```{r}
+library(dplyr)
+
+df <- gambia %>%
+  group_by(x, y) %>%
+  summarize(
+    total = n(),
+    positive = sum(pos),
+    prev = positive / total
+    )
+head(df)
+```
+
+Next we create a simple feature data frame by making the `x` and `y` columns the spatial coordinates. We make a map of prevalence using functions from the {tmap} package.
+```{r}
+library(sf)
+
+sfdf <- st_as_sf(x = df, 
+                 coords = c("x", "y"),
+                 crs = 32628)
+
+library(tmap)
+tmap_mode(mode = "view")
+
+tm_shape(sfdf) +
+  tm_dots(col = "prev", size = .1)
+```
+
+We model malaria prevalence using a covariate that indicates the altitude in The Gambia. This covariate can be obtained with the `getData()` function of the {raster} package. This package can be used to obtain geographic data from anywhere in the world. 
+
+In order to get the altitude values in The Gambia, we need to call `getData()` with the three following arguments:
+
+* name of the data equal to "alt",
+* country equal to the 3 letters of the International Organization for Standardization (ISO) code of The Gambia (GMB),
+* mask equal to TRUE so the neighboring countries are set to NA.
+
+```{r}
+library(raster)
+
+r <- getData(name = "alt", 
+             country = "GMB", 
+             mask = TRUE)
+```
+
+We make a map with the altitude raster.
+```{r}
+library(tmap)
+
+tm_shape(r) +
+  tm_raster() +
+tm_shape(sfdf) +
+  tm_dots(col = "prev", size = .1)
+```
+
+We add the the altitude values to the data frame `df` to be able to use it as a covariate in the model. Since the raster is longitude/latitude we convert the village locations to longitude/latitude adding them to the data frame.
+```{r}
+sfdfT <- sfdf %>%
+  st_transform(crs = 4326)
+
+df[, c("long", "lat")] <- st_coordinates(sfdfT)
+```
+
+Now we get the altitude values at the village locations using the `extract()` function from {raster}. The first argument of this function is the altitude raster (`r`). The second argument is a two-column matrix with the coordinates where we want to know the values, that is, the coordinates of the villages given by `d[, c("long", "lat")]`. We assign the altitude vector to the column `altitude` of the data frame `df`.
+```{r}
+df$altitude <- raster::extract(r, df[, c("long", "lat")])
+
+head(df)
+```
+
+Here we specify the model (mathematically and heuristically) to predict the prevalence of malaria in The Gambia using the stochastic partial differential equation (SPDE) approach and functions from the {INLA} package.
+
+Mathematically, we assume that conditional on the true prevalence $P({\bf x}_i)$ at location ${\bf x}_i$, i = 1, $\ldots, n$, the number of positive results $Y_i$ out of $N_i$ people sampled follows a binomial distribution
+$$
+Y_i|P({\bf x}_i) \sim \hbox{Binomial}(N_i, P({\bf x}_i)) \\
+\hbox{logit}[P({\bf x}_i)] = \beta_0 + \beta_1 \hbox{altitude} + S({\bf x}_i)
+$$
+
+Here $\beta_0$ is the intercept, $\beta_1$ is the coefficient on altitude and $S({\bf x}_i))$ is a spatial random effect (spatial autocorrelation) that follows a zero-mean Gaussian process with a Mat'ern covariance function
+$$
+\hbox{Cov}(S({\bf x}_i), S({\bf x}_j)) = \frac{\sigma^2}{2^{\nu-1}\Gamma(\nu)}(\kappa ||{\bf x}_i - {\bf x}_j||)^\nu K_\nu (\kappa ||{\bf x}_i - {\bf x}_j||)
+$$
+where $K_\nu$($\cdot$) is the modified Bessel function of the second kind with order $\nu$ > 0. $\nu$ is the smoothness parameters, $\sigma^2$ is the variance, and $\kappa$ > 0 is related to the practical range $\rho = \sqrt{8\nu}/\kappa$ which is the distance at which the spatial correlation is close to .1.
+
+First we extract the locations of the malaria cases as longitude and latitude coordinates.
+```{r}
+LonLat <- sfdf %>%
+  st_transform(crs = 4326) %>%
+  st_coordinates() 
+head(LonLat)
+```
+
+We need to build a triangulated mesh using the longitude and latitude coordinates that covers The Gambia over which to make the random field discretization. We do this using Delauney triangulation. We use the `inla.mesh.2d()` function passing the following parameters:
+
+* `loc`: location coordinates that are used as initial mesh vertices,
+* `max.edge`: values denoting the maximum allowed triangle edge lengths in the region and in the extension,
+* `cutoff`: minimum allowed distance between points.
+
+Here, we call `inla.mesh.2d()` setting `loc` equal to the matrix with the coordinates `coo`. We set `max.edge = c(.1, 5)` to use small triangles within the region, and larger triangles in the extension. We also set `cutoff = .01` to avoid building many small triangles where we have some very close points.
+```{r}
+library(INLA)
+
+coo <- cbind(LonLat[, 1], LonLat[, 2])
+mesh <- inla.mesh.2d(loc = coo, 
+                     max.edge = c(.1, 5),
+                     cutoff = .01)
+```
+
+The number of the mesh vertices is given by `mesh$n` and we can plot the mesh with `plot(mesh)`.
+```{r}
+mesh$n
+
+plot(mesh)
+points(coo, col = "red")
+```
+
+Then, we use the `inla.spde2.matern()` function to define the spatial random effect on the mesh.
+```{r}
+sre <- inla.spde2.matern(mesh = mesh, 
+                         alpha = 2, 
+                         constr = TRUE)
+```
+Here, we set `constr = TRUE` to impose an integrate-to-zero constraint and `alpha is a parameter related to the smoothness parameter of the process, namely, $\alpha = \nu + d/2$. 
+
+In this example, we set the smoothness parameter $\nu$ is set to 1 and in the spatial case $d$ = 2 so $alpha$ =  1 + 2/2 = 2.
+
+Next we need to index each of the mesh nodes (vertices). We do this with the `inla.spde.make.index()` function where we specify the name of the effect and the number of nodes in the spatial random effect term (`sre$n.spde`).
+```{r}
+indexs <- inla.spde.make.index(name = "s",
+                               n.spde = sre$n.spde)
+lengths(indexs)
+```
+
+This creates a list with vector `s` equal to `1:sre$n.spde`, and vectors `s.group` and `s.repl` that have all elements equal to 1s and length given by the number of mesh nodes.
+
+Next we need to build a matrix A that projects the locations of the observations to the mesh nodes. The projection matrix is built with the `inla.spde.make.A()` function as follows.
+```{r}
+A <- inla.spde.make.A(mesh = mesh,
+                      loc = coo)
+```
+
+Next we need to define where we want the predictions to be made. The raster of elevations provides a set of locations and we can extract the raster cells as points with the `rasterToPoints()` function from the {raster} package. Since there are many cells we first reduce this number by a factor of five with the `aggregate()` function taking the mean elevation over five cells in each direction.
+```{r}
+ra <- raster::aggregate(r,
+                        fact = 5,
+                        fun = mean) 
+dp <- rasterToPoints(ra)
+
+dim(dp)
+head(dp)
+```
+
+Next we extract just the spatial coordinates of the prediction locations and project these locations to the mesh.
+```{r}
+coop <- dp[, c("x", "y")]
+
+Ap <- inla.spde.make.A(mesh = mesh,
+                       loc = coop)
+```
+
+We use the `inla.stack()` function to organize data, effects, and projection matrices with the following arguments:
+
+* `tag`: string to identify the data,
+* `data`: list of data vectors,
+* `A`: list of projection matrices,
+* `effects`: list with fixed and random effects.
+
+We construct a stack called `stk.e` with data for estimation and we tag it with the string "est". 
+
+The fixed effects are the intercept (b0) and a covariate (altitude). The random effect is the spatial Gaussian random field (s). Therefore, the `effects` argument gets a list with a data.frame with the fixed effects, and s containing the indices of the random effect (`indexs)`. 
+
+The argument `A` is set to a list where the second element is `A`, the projection matrix for the random effects, and the first element is 1 to indicate the fixed effects are mapped one-to-one to the response. 
+
+In the `data` argument we specify the response vector and the number of trials. 
+```{r}
+stk.e <- inla.stack(tag = "est",
+                    data = list(y = df$positive, numtrials = df$total),
+                    A = list(1, A),
+                    effects = list(data.frame(b0 = 1, altitude = df$altitude), s = indexs))
+```
+
+We also construct a stack for prediction that called `stk.p`. This stack has tag equal to "pred", the response vector is set to NA, and the data is specified at the prediction locations. Note the `altitude` variable is in column 3 of the array `dp` from above. Finally, we put `stk.e` and `stk.p` together in a `stk.full`.
+```{r}
+stk.p <- inla.stack(tag = "pred",
+                    data = list(y = NA, numtrials = NA),
+                    A = list(1, Ap),
+                    effects = list(data.frame(b0 = 1, altitude = dp[, 3]), s = indexs))
+
+stk.full <- inla.stack(stk.e, stk.p)
+```
+
+We specify the model formula by including the response on the left-hand side, and the fixed and random effects on the right-hand side. We remove the intercept (adding 0) and add it as a covariate term (adding `b0`) so that all the covariate terms can be captured in the projection matrix.
+```{r}
+formula <- y ~ 0 + b0 + altitude + f(s, model = sre)
+```
+
+Finally we fit the model by calling the `inla()` function and using the default priors. We specify the formula, family, data, and options. With the `control.predictor` argument we set `compute = TRUE` to compute the posteriors of the predictions. We set `link = 1` to compute the fitted values (`res$summary.fitted.values` and `res$marginals.fitted.values`) with the same link function as the family specified in the model.
+```{r}
+fit <- inla(formula,
+            family = "binomial", 
+            Ntrials = numtrials,
+            control.family = list(link = "logit"),
+            data = inla.stack.data(stk.full),
+            control.predictor = list(compute = TRUE, link = 1, A = inla.stack.A(stk.full)))
+```
+
+The mean prevalence and lower and upper limits of 95% credible intervals are in the data frame `fit$summary.fitted.values`. The rows of the data frame correspond to the prediction locations and can be obtained by selecting the indices of the stack `stk.full` that are tagged with `tag = "pred"`.
+```{r}
+index <- inla.stack.index(stack = stk.full, tag = "pred")$data
+```
+
+We create vectors with the mean prevalence and lower and upper limits of 95% credible intervals with the values of the columns `mean`, `0.025quant` and `0.975quant` and the rows given by index. These vectors are included as columns in the `coop.df` data frame.
+```{r}
+coop.df <- as.data.frame(coop)
+coop.df$prev_mean <- fit$summary.fitted.values[index, "mean"]
+coop.df$prev_ll <- fit$summary.fitted.values[index, "0.025quant"]
+coop.df$prev_ul <- fit$summary.fitted.values[index, "0.975quant"]
+```
+
+Now we create a map with the predicted prevalence (`prev_mean`) at the prediction locations `coop`.
+```{r}
+coop.sfdf <- st_as_sf(x = coop.df, 
+                      coords = c("x", "y"),
+                      crs = 4326)
+
+tmap_mode(mode = "view")
+
+tm_shape(coop.sfdf) +
+  tm_dots(col = "prev_mean", size = .1)
+```
+
+Instead of showing the prevalence predictions at points, we can plot them using a raster. Here, the prediction locations `coop` are not on a regular grid; therefore, we need to create a raster with the predicted values using the `rasterize()` function. 
+
+We transfer the predicted values `prev_mean` from the locations `coop.df` to the raster `ra` that we used to get the prediction locations with the following arguments.
+
+`x = coop`: coordinates where we made the predictions,
+`y = ra`: raster where we transfer the values,
+`field = coop.df$prev_mean`: values to be transferred (prevalence predictions in locations coop),
+`fun = mean`: to assign the mean of the values to cells that have more than one point.
+
+```{r}
+r_prev_mean <- rasterize(x = coop, 
+                         y = ra, 
+                         field = coop.df$prev_mean,
+                         fun = mean)
+
+tm_shape(r_prev_mean) +
+  tm_raster(palette = "YlOrRd", alpha = .5)
+```
+
+We can follow the same approach to create maps with the lower and upper limits of the prevalence predictions.
+
+We can also calculate the exceedance probabilities of malaria prevalence being greater than a given threshold value that is of interest for policymaking. For example, we can be interested in knowing what are the probabilities that malaria prevalence is greater than 20%. Let  $p_i$ be the malarie prevalence at location ${\bf x}_i$. Then the probability that the malaria prevalence $p_i$ exceeds some value $c$ can be written $P(p_i > c)$.
+
+This probability is calculated by subtracting $P(p_i \le c)$ from 1. With {inla} $P(p_i \le c)$ is obtained from the `inla.pmarginal()` function as
+```{r, eval=FALSE}
+1 - inla.pmarginal(q = c, marginal = marg)
+```
+where `marg` is the marginal distribution of the predictions, and `c` is the threshold value.
+
+In our example, we can calculate the probabilites that malaria prevalence exceeds 20% as follows. First, we obtain the posterior marginals of the predictions for each location. These marginals are in the list object `fit$marginals.fitted.values[index]` where `index` is the vector of the indices of the stack `stk.full` corresponding to the predictions. In the previous section, we obtained these indices by using the `inla.stack.index()` function and specifying `tag = "pred"`.
+```{r}
+index <- inla.stack.index(stack = stk.full, tag = "pred")$data
+```
+
+The first element of the list, `fit$marginals.fitted.values[index][[1]]`, contains the marginal distribution of the prevalence prediction corresponding to the first location. The probability that malaria prevalence exceeds 20% at this location is given by
+```{r}
+marg <- fit$marginals.fitted.values[index][[1]]
+1 - inla.pmarginal(q = .20, marginal = marg)
+```
+
+To compute the exceedance probabilities for all the prediction locations, we can use the `sapply()` function with two arguments. The first argument denotes the marginal distributions of the predictions (`fit$marginals.fitted.values[index]`) and the second argument denotes the function to compute the exceedance probabilities (`1- inla.pmarginal()`). Then the `sapply()` function returns a vector of the same length as the list `fit$marginals.fitted.values[index]`, where each element is the result of applying the function `1 - inla.pmarginal()` to the corresponding element of the list of marginals.
+```{r}
+excprob <- sapply(fit$marginals.fitted.values[index],
+                  FUN = function(marg){1-inla.pmarginal(q = .20, marginal = marg)})
+
+head(excprob)
+```
+
+Finally we rasterize these values and make a map.
+```{r}
+r_excprob <- rasterize(x = coop, 
+                       y = ra, 
+                       field = excprob,
+                       fun = mean)
+
+tm_shape(r_excprob) +
+  tm_raster(palette = "RdPu", alpha = .5)
+```
+
+The map shows the probability that malaria prevalence exceeds 20% in The Gambia. This map quantifies the uncertainty relating to the exceedance of the threshold value 20%, and highlights the locations most in need of targeted interventions. In this map, locations with probabilities close to 0 are locations where it is very unlikely that prevalence exceeds 20%, and locations with probabilities close to 1 correspond to locations where it is very likely that prevalence exceeds 20%. Locations with probabilities around .5 have the highest uncertainty and correspond to locations where malaria prevalence is with equal probability below or above 20%.
+
+## Standardized incidence ratios
+
+This material is derived from Chapters 5 & 6 of @Moraga2020. We make use of simple features and mapping with {ggplot2} and {tmap}. https://www.paulamoraga.com/book-geospatial/sec-geostatisticaldataexamplespatial.html
+
+The standardized incidence ratio (SIR) is defined as the ratio of the observed to the expected number of disease cases. But, small areas may present extreme SIRs due to low population sizes or small samples. In these situations, SIRs may be misleading and unreliable for reporting. In these cases it is better to estimate disease risk using a spatial statistical model. Models can incorporate information from neighboring areas and covariate information resulting in smoothing (shrinking) of extreme values.
+
+The Besag-York-Mollié (BYM) model [@BesagEtAl1991] is a popular way to account for spatial autocorrelation. The model smooths the data according to a neighborhood structure. In spatio-temporal settings where disease counts are observed over time, spatio-temporal models that account for spatial structure and temporal correlations and their interactions are used.
+
+The example here is based on data of lung cancer in Pennsylvania counties, US, obtained from the {SpatialEpi} package [@KimWakefield2018], and show results with maps created with the {ggplot2} package [@Wickham2016].
+
+The county bounderies for the state are in the list object `pennLC` with element name `spatial.polygon`. We change the native spatial polygons S4 object to an S3 simple feature data frame using the `st_as_sf()` function from the {sf} package [@Pebesma2018]. We use the `plot()` method on the `geometry` column to make a simple map.
+```{r}
+library(SpatialEpi)
+library(sf)
+
+spdf <- pennLC$spatial.polygon
+sfdf <- st_as_sf(spdf)
+plot(sfdf$geometry)
+```
+
+We obtain the neighbors of each county using the `poly2nb()` function from the {spdep} package [@BivandEtAl2008]. This function returns a neighbors list, here saved as `nb`, based on counties with contiguous boundaries. Each element of the list `nb` represents one county and contains the indices of its neighbors. For example, `nb[[2]]` contains the neighbors of county 2.
+```{r}
+library(spdep)
+
+nb <- poly2nb(sfdf)
+head(nb)
+```
+
+We show the neighbors of each county on a map highlighting neighbors of counties 2, 44 and 58. First, we create a `SpatialPolygonsDataFrame` object with the map of Pennsylvania, and data that contains a variable called county with the county names, and a dummy variable called `neigh` that indicates the neighbors of counties 2, 44 and 58. neigh is equal to 1 for counties that are neighbors of counties 2, 44 and 58, and 0 otherwise.
+```{r}
+df <- data.frame(county = names(spdf), 
+                 neigh = rep(0, length(spdf)))
+rownames(df) <- names(spdf)
+
+spdf <- SpatialPolygonsDataFrame(spdf, df, match.ID = TRUE)
+
+# to highlight neighbors of counties 2, 44, and 58
+spdf$neigh[nb[[2]]] <- 1
+spdf$neigh[nb[[44]]] <- 1
+spdf$neigh[nb[[58]]] <- 1
+```
+
+Then, we add variables called `long` and `lat` with the centroid coordinates for each county, and a variable `ID` identifying each county.
+```{r}
+coord <- st_coordinates(st_centroid(sfdf))
+
+sfdf$neigh <- spdf$neigh
+sfdf$long <- coord[, 1]
+sfdf$lat <- coord[, 2]
+sfdf$ID <- 1:nrow(coord)
+```
+
+We create the map with the `ggplot()` function from {ggplot2}.
+```{r}
+library(ggplot2)
+
+ggplot(sfdf) + 
+  geom_sf(aes(fill = as.factor(neigh))) +
+  geom_text(aes(long, lat, label = ID), color = "white") +
+  theme_minimal() + 
+  guides(fill = FALSE)
+```
+
+We see that county number 2 has counties 3, 4, 10, 63, and 62 as neighbors. County 44 has counties 14, 31, 34, 55, and 60 as neighbors. 
+
+Other neighborhood definitions can be considered (see Chapter 4).
+
+A simple measure of disease risk is the standardized incidence ratio (SIR). For each region $i$, $i = 1, \ldots, n$ the SIR is defined as the ratio of observed counts to the expected counts
+$$
+\hbox{SIR}_i = Y_i/E_i.
+$$
+
+The expected count $E_i$ is the total number of cases that one would expect if the population of area $i$ behaves the way the standard population behaves. If we ignore differences in rates for different stratum (e.g., age groups) then we compute the expected counts as
+$$
+E_i = r^{(s)} n^{(i)},
+$$
+where $r^{(s)}$ is the rate in the standard population (total number of cases divided by the total population across all regions), amd $n^{(i)}$ is the population of region $i$.
+
+$\hbox{SIR}_i$ indicates whether region $i$ has higher ($\hbox{SIR}_i > 1$), equal ($\hbox{SIR}_i = 1$) or lower ($\hbox{SIR}_i < 1$) risk than expected relative to the standard population.
+
+When applied to mortality data, the ratio is known as the standardized mortality ratio (SMR).
+
+### Example 1: Lung cancer in Pennsylvania
+
+The data frame `pennLC$data` from the {SpatialEpi} package contains the number of lung cancer cases and the population of Pennsylvania at county level, stratified on race (white and non-white), gender (female and male) and age (under 40, 40-59, 60-69 and 70+). 
+
+We obtain the number of cases for all the strata together in each county, Y, by aggregating the rows of `pennLC$data` by county and adding up the number of cases.
+```{r}
+library(dplyr)
+
+County.df <- pennLC$data %>%
+  group_by(county) %>%
+  summarize(Y = sum(cases))
+head(County.df)
+```
+
+We calculate the expected number of cases in each county using indirect standardization. The expected counts in each county represent the total number of disease cases one would expect if the population in the county behaved the way the population of Pennsylvania behaves. We can do this by using the `expected()` function from the {SpatialEpi} package. This function has three arguments, namely,
+
+* `population`: vector of population counts for each strata in each area,
+* `cases`: vector with the number of cases for each strata in each area,
+* `n.strata`: number of strata.
+
+The vectors `population` and `cases` need to be sorted by area first and then, within each area, the counts for all strata need to be listed in the same order. All strata need to be included in the vectors, including strata with 0 cases. Here we use the `arrange()` function from the {dplyr} package.
+```{r}
+Strata.df <- pennLC$data %>%
+  arrange(county, race, gender, age)
+head(Strata.df)
+```
+
+Then, we obtain the expected counts E in each county by calling the `expected()` function where we set population equal to Strata.df$population and cases equal to Strata.df$cases. There are 2 races, 2 genders and 4 age groups for each county, so number of strata is set to 2 x 2 x 4 = 16.
+```{r}
+( E <- expected(
+  population = Strata.df$population,
+  cases = Strata.df$cases, 
+  n.strata = 16
+) )
+```
+
+Now we add the observed count `Y`, the expected count `E` the computed SIR to `sfdf` and make a map of SIR.
+```{r}
+sfdf <- sfdf %>%
+  mutate(Y = County.df$Y,
+         E = E,
+         SIR = Y/E)
+
+ggplot(sfdf) + 
+  geom_sf(aes(fill = SIR)) +
+  scale_fill_gradient2(midpoint = 1, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red") +
+  theme_minimal()
+```
+
+Counties with SIR = 1 (color white) the number of lung cancer cases observed is the same as the number of expected cases. In counties where SIR > 1 (color red), the number of lung cancer cases observed is higher than the expected cases. Counties where SIR < 1 (color blue) have fewer lung cancer cases observed than expected.
+
+### Estimating disease risk in small areas
+
+With rare diseases in regions with few people, the expected counts may be very low and SIRs may be misleading. Therefore, it is preferred to estimate disease risk by using models that borrow information from neighboring areas, and incorporate covariate information. This results in smoothing (shrinkage) of extreme values.
+
+Let the observed counts $Y_i$ be modeled with a Poisson distribution having a mean $E_i\theta_i$, where $E_i$ are the expected counts and $\theta_i$ are the relative risks. The logarithm of the relative risk is expressed as the sum of an intercept that models the overall disease risk level, and random effects to account for local variability.
+
+The relative risk quantifies whether an area has a higher ($\theta_i > 1$) or lower ($\theta_i < 1$) risk than the average risk in the population. For example if $\theta_i = 2$, then the risk in area $i$ is twice the average risk in the population.
+
+The model is expressed as
+$$
+Y_i \sim \hbox{Poisson}(E_i\theta_i), i = 1, \ldots, n, \\
+\log(\theta_i) = \alpha + u_i + v_i
+$$
+
+The parameter $\alpha$ represents the overall risk in the region of study, $u_i$ is the spatially structured random effect respresenting the dependency in risk across neighboring areas (spatial autocorrelation), and $v_i$ is the uncorrelated random noise modeled as $v_i \sim N(0, \sigma_v^2)$.
+
+It is common to include covariates to quantify risk factors (e.g., distance to nearest coal plant). Thus the log($\theta_i$) is expressed as
+$$
+\log(\theta_i) = \alpha + \beta x_i + u_i + v_i
+$$
+where $x_i$ is the covariate value in area $i$ and $\beta$ is the associated coefficient. The coefficient is interpreted such that a one-unit increase in $x$ changes the relative risk by a factor $\exp(\beta)$, holding the other parameters constant.
+
+A popular form for the combined spatially structured random effect and the uncorrelated random effect is the Besag-York-Mollié (BYM) model which assigns a conditional autoregressive distribution to $u_i$ as
+$$
+u_i | {\bf u_{j \ne i}} \sim N(\bar u_{\delta_i}, \frac{\sigma_u^2}{n_{\delta_i}})
+$$
+where $\bar  u_{\delta_i} = \Sigma_{j \in \delta_i} u_j/n_{\delta_i}$ and where $\delta_i$ is the set of neighbors of area $i$ and $n_{\delta_i}$ is the number of neighbors of area $i$.
+
+In words, the logarithm of the disease incidence rate in area $i$ conditional on the incidence rates in the neighborhood of $i$ is modeled with a normal distribution centered on the neighborhood average ($\bar  u_{\delta_i}$) with a variance scaled by the number of neighbors. This is called the conditional autoregressive (CAR) distribution.
+
+The syntax for the BYM model in INLA is given as
+```{r eval=FALSE}
+formula <- Y ~
+  f(ID_u, model = "besag", graph = g, scale.model = TRUE) +
+  f(ID_v, model = "iid")
+```
+
+The formula includes the response in the left-hand side, and the fixed and random effects on the right-hand side. By default, the formula includes an intercept. 
+
+The random effects are set using `f()` with parameters equal to the name of the index variable, the model, and other options. The BYM formula includes a spatially structured random effect with index variable with name `ID_u` and equal to c(1, 2, ..., I), and model `"besag"` with a CAR distribution and with neighborhood structure given by the graph `g`. The option `scale.model = TRUE` is used to make the precision parameter of models with different CAR priors comparable (Freni-Sterrantino, Ventrucci, and Rue 2018). 
+
+The formula also includes an uncorrelated random effect with index variable with name `ID_v` again equal to c(1, 2, ..., I), and model "iid". This is an independent and identically distributed zero-mean normally distributed random effect. Note that both the `ID` variables are identical but need to be specified as two different objects since R-INLA does not allow to include two effects with `f()` that use the same index variable. 
+
+The BYM model can also be specified with the model "bym" which defines both the spatially structured random effect and the uncorrelated random effect ($u_i$ and $v_i$).
+
+Simpson et al. (2017) proposed a parametrization of the BYM model called BYM2 which makes parameters interpretable and facilitates the assignment of meaningful penalized complexity (PC) priors. The BYM2 model combines the scaled spatially structured random effect ${\bf u_*}$ with a scaled unstructured effect ${\bf v_*}$ as
+$$
+{\bf b} = \frac{1}{\sqrt{\tau_b}}(\sqrt{1 - \phi}{\bf v_*} + \sqrt{\phi}{\bf u_*}).
+$$
+
+Here the precision parameter $\tau_b > 0$ controls the marginal variance contribution of the weighted sum of ${\bf u_*}$ and ${\bf v_*}$. The mixing parameter $0 \le \phi \le 1$ measures the proportion of the marginal variance explained by the structured random effect. Thus the BYM2 model is equal to a spatial only model when $\phi = 1$ and to an random noise when $\phi = 0$.
+
+In INLA we specify the BYM2 model as follows:
+```{r}
+formula <- Y ~ f(ID, model = "bym2", graph = g)
+```
+again where `ID` is an index for the areas and `g` is the graph of the neighborhood structure.
+
+The priors for the BYM2 model penalize for model complexity in terms of deviation from the base model which has a constant relative risk over all areas. To define the prior for the marginal precision $\tau_b$ we use the probability statement $P[(1/\sqrt{\tau_b}) > U] = \alpha$. A prior for $\phi$ is defined using $P(\phi < U) = \alpha$.
+
+### Example 1 continued
+
+Here we continue with the example to calculate the relative risks of lung cancer in the Pennsylvania counties using the BYM2 random effects term. Moraga (2018) analyzes the same data by using a BYM model that includes a covariate related to the proportion of smokers. 
+
+First we define the formula that includes the response variable `Y` on the left and the random effect `"bym2"` on the right. Note that we do not need to include an intercept as it is included by default. In the random effect, we specify the index variable `id_area` with the indices of the random effect. This variable is equal to c(1, 2, ..., I) where I is the number of counties (67). The number of counties is obtained with the number of rows in the simple feature data frame `sfdf`.
+
+We define the prior for the marginal precision $\tau_b$ by considering a standard deviation of .5 as a reasonable upper bound. We use the rule of thumb describe in Simpson et al. (2017) and set $U = .5/.31$ and $\alpha = .01$.
+
+We define the prior for the mixing parameter $\phi$ as 2/3 which is a conservative choice that assumes that the unstructured random effect accounts for more variability than the spatially structured random effect.
+```{r}
+prior <- list(
+  prec = list(
+    prior = "pc.prec",
+    param = c(.5/.31, .01)),
+  phi = list(
+    prior = "pc",
+    param = c(.5, 2/3))
+  )
+```
+
+We also need to compute the graph object `g` with the neighborhood matrix that will be used in the spatially structured random effect. We use the `nb2INLA()` function to convert the neighborhood list object `nb` into an external file with the representation of the neighborhood matrix as required by R-INLA. Then we read this file using the `inla.read.graph()` function and assign it to the object `g`.
+```{r}
+library(INLA)
+
+nb2INLA("adj", nb)
+g <- inla.read.graph(filename = "adj")
+```
+
+Next we specify the full formula.
+```{r}
+formula <- Y ~ f(ID, model = "bym2", graph = g, hyper = prior)
+```
+
+Finally we fit the model with the `inla()` function specifying the formula, the family, the data, the expected counts.
+```{r}
+fit <- inla(formula,
+            family = "poisson", 
+            data = sfdf,
+            E = E, 
+            control.predictor = list(compute = TRUE)
+)
+```
+
+We obtain a summary of the model fit with the `summary()` method.
+```{r}
+summary(fit)
+```
+
+Object `fit$summary.fitted.values` contains summaries of the relative risks including the mean posterior and the lower and upper limits of 95% credible intervals of the relative risks. Specifically, column `mean` is the mean posterior and `0.025quant` and `0.975quant` are the 2.5 and 97.5 percentiles, respectively.
+```{r}
+head(fit$summary.fitted.values)
+```
+
+The correlation between the raw SIRs and the posterior means is
+```{r}
+cor(sfdf$SIR, fit$summary.fitted.values$mean)
+```
+
+To map the results we add columns to our `sfdf` and then use `ggplot()`.
+```{r}
+sfdf <- sfdf %>%
+  mutate(RRmean = fit$summary.fitted.values$mean,
+         RRlo = fit$summary.fitted.values$"0.025quant",
+         RRhi = fit$summary.fitted.values$"0.975quant")
+
+gRRmean <- ggplot(sfdf) + 
+  geom_sf(aes(fill = RRmean)) +
+  scale_fill_gradient2(midpoint = 1, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red",
+                       limits = c(.7, 1.5)) +
+  theme_minimal()
+
+gRRlo <- ggplot(sfdf) + 
+  geom_sf(aes(fill = RRlo)) +
+  scale_fill_gradient2(midpoint = 1, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red",
+                       limits = c(.7, 1.5)) +
+  theme_minimal()
+
+gRRhi <- ggplot(sfdf) + 
+  geom_sf(aes(fill = RRhi)) +
+  scale_fill_gradient2(midpoint = 1, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red",
+                       limits = c(.7, 1.5)) +
+  theme_minimal()
+
+library(patchwork)
+
+gRRmean / gRRlo /gRRhi
+```
+
+A data frame with the summary of the BYM2 random effects is in `fit$summary.random$ID`. This has the number of rows equal to 2 times the number of areas (2 * 67) where the first 67 rows correspond to the combined spatially structured and unstructured random effects (${\bf b}$) and the the second 67 rows to the spatially structured random effect (${\bf u_*}$).
+```{r}
+head(fit$summary.random$ID)
+```
+
+We make a map of the posterior mean of the ${\bf b}$ term.
+```{r}
+sfdf <- sfdf %>%
+  mutate(bmean = fit$summary.random$ID[1:67, "mean"])
+
+ggplot(sfdf) + 
+  geom_sf(aes(fill = bmean)) +
+  scale_fill_gradient2(midpoint = 0, 
+                       low = "blue", 
+                       mid = "white", 
+                       high = "red") +
+  theme_minimal()
+```
+
+### Example 2: Lip cancers in Scotland
+
+As another example here we estimate the risk of lip cancer in men in Scotland, UK. We use data on the number of observed and expected lip cancer cases, and the proportion of population engaged in agriculture, fishing, or forestry (AFF) for each of the Scotland counties. These data are obtained from the {SpatialEpi} package [@KimWakefield2018].
+
+We examine the data in the list object `scotland` from the {SpatialEpi} package.
+```{r}
+data(scotland)
+names(scotland)
+
+names(scotland$data)
+```
+
+Create a simple feature data frame with a geometry column and data as attributes.
+```{r}
+spdf <- scotland$spatial.polygon
+sfdf <- st_as_sf(spdf) %>%
+  st_make_valid() %>%
+  cbind(scotland$data) %>%
+  mutate(SIR = cases/expected)
+head(sfdf)
+```
+
+Map the SIRs.
+```{r}
+library(tmap)
+
+tm_shape(sfdf) +
+  tm_polygons(col = "SIR")
+```
+
+Note the correlation between SIR and AFF.
+```{r}
+cor(sfdf$AFF, sfdf$SIR)
+```
+
+As before, the model is expressed as
+$$
+Y_i \sim \hbox{Poisson}(E_i\theta_i), i = 1, \ldots, n, \\
+\log(\theta_i) = \alpha + \beta_{\hbox{AFF}} \times \hbox{AFF}_i +  u_i + v_i,
+$$
+
+where $E_i$ is the expected count and $\theta_i$ is the relative risk in area $i$. The logarithm of $\theta_i$ is logically related to the overall risk $\alpha$, the covariate (AFF) through the term $\beta_{\hbox{AFF}} \times \hbox{AFF}_i$ and the spatial structured and unstructured random terms.
+
+The term $u_i$ is the spatial structured random effect and is modeled using a conditional autoregressive distribution that requires a neighborhood matrix.
+```{r}
+nb <- poly2nb(sfdf)
+head(nb)
+
+nb2INLA("adj", nb)
+g <- inla.read.graph(filename = "adj")
+```
+
+We need specify IDs for $u_i$ and $v_i$.
+```{r}
+sfdf$IDu <- 1:nrow(sfdf)
+sfdf$IDv <- 1:nrow(sfdf)
+```
+
+We specify the model formula by including the response in the left-hand side, and the fixed and random effects in the right-hand side. The response variable is `cases` and we use the covariate `AFF`. Random effects are defined using `f()` with parameters equal to the name of the index variable and the chosen model. For $u_i$ we use `model = "besag"` with neighborhood matrix given by `g`. We also use option `scale.model = TRUE` to make the precision parameter of models with different CAR priors comparable. For $v_i$ we use `model = "iid"`.
+```{r}
+formula <- cases ~ AFF +
+  f(IDu, model = "besag", graph = g, scale.model = TRUE) +
+  f(IDv, model = "iid")
+```
+
+We fit the model by calling the `inla()` function. We specify the formula, `family = "poisson"`, data, and the expected counts (`expected`). We also set `control.predictor = list(compute = TRUE)` to compute the posteriors of the predictions.
+```{r}
+fit <- inla(formula,
+            family = "poisson", 
+            data = sfdf,
+            E = expected, 
+            control.predictor = list(compute = TRUE))
+
+summary(fit)
+```
+
+We observed the intercept has a value of -.305 with a 95% credible interval of (-.539, -.068). The coefficient on AFF has a value of 4.330 with a 95% credible interval of (1.744, 6.770) indicating that lip cancer rates increase with the percentage of workers in this category.
+
+We plot the marginal density of this coefficient
+```{r}
+marginal <- inla.smarginal(fit$marginals.fixed$AFF) %>%
+   data.frame()
+ggplot(marginal, aes(x = x, y = y)) + 
+  geom_line() +
+  labs(x = expression(beta[AFF]), y = "Density") +
+  geom_vline(xintercept = 0, col = "black") + 
+  theme_minimal()
+```
+
+We map the posterior mean relative risks as follows.
+```{r}
+sfdf <- sfdf %>%
+  mutate(RRmean = fit$summary.fitted.values$mean)
+
+tm_shape(sfdf) +
+  tm_polygons(col = "RRmean")
+```
+
+We can  calculate the probabilities of relative risk estimates being greater than a given threshold value. These probabilities are called exceedance probabilities and are useful to assess unusual elevation of disease risk. The probability that the relative risk of area $i$ is higher than a value $c$ is $P(\theta_i > c)$. In INLA $P(\theta_i \le c)$ is computed with `inla.pmarginal()`.
+
+The probability that the first county has a relative risk exceeding 2 is
+```{r}
+1 - inla.pmarginal(q = 2, marginal = fit$marginals.fitted.values[[1]])
+```
+
+To calculate the exceedance probabilities for all counties, we can use the `sapply()` function passing as arguments the list with the marginals of all counties (`fit$marginals.fitted.values`), and the function to calculate the exceedance probabilities (`1- inla.pmarginal()`). The `sapply()` function returns a vector of the same length as the list `fit$marginals.fitted.values` which we add to the simple feature data frame before making a map.
+```{r}
+exc <- sapply(fit$marginals.fitted.values, 
+              FUN = function(marg){1 - inla.pmarginal(q = 2, marginal = marg)})
+sfdf$exc <- exc
+
+tm_shape(sfdf) +
+  tm_polygons(col = "exc", title = "Probability\nRelative Risk > 2")
+```
+
+This map provides evidence of excess risk within individual areas. In areas with probabilities close to 1, it is very likely that the relative risk exceeds 2, and areas with probabilities close to 0 correspond to areas where it is very unlikely that the relative risk exceeds 2. Areas with probabilities around 0.5 have the highest uncertainty, and correspond to areas where the relative risk is below or above 2 with equal probability. We observe that the counties in the north of Scotland are the counties where it is most likely that relative risk exceeds 2.
+
+## Agent based modeling
+
+https://www.youtube.com/watch?v=qAbkMSUrUXo
+
+Individual based
+- each person/agent has properties
+- parameters and attributes
+- agents/individuals have behaviors
