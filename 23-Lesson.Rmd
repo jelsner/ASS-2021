@@ -16,9 +16,9 @@ Last time we were introduced to the mathematics, terminology and procedures of s
 The work flow for spatial interpolation includes:
 
 Step 1: Examine the observed data for trends, check for normality
-Step 2: Compute empirical variograms
+Step 2: Compute an empirical variogram
 Step 3: Fit a variogram model to the empirical variogram
-Step 4: Create the kriged surface. Kriging uses the variogram model and the observed data to estimate data values at any location of interest. The kriged estimates are a weighted average of the neighborhood values where the weights are taken from the variogram model. 
+Step 4: Create an interpolated surface. Spatial interpolation (kriging) uses the variogram model and the observed data to estimate data values at any location of interest. The kriged estimates are a weighted average of the neighborhood values where the weights are taken from the variogram model.
 
 ## Interpolating spatial data using functions from the {geoR} package
 
@@ -218,7 +218,7 @@ wca.sf <- st_as_sf(x = wca.df,
                    crs = "+proj=longlat +datum=WGS84")
 
 library(tmap)
-#tmap_mode("view")
+tmap_mode("view")
 
 tm_shape(wca.sf) +
   tm_dots("head")
@@ -230,8 +230,6 @@ wca.gdf <- as.geodata(wca.df,
                       coords.col = c("lon", "lat"), 
                       data.col = "head")
 ```
-
-Note we can also specify the coordinates and data by column names (`coords.col = c("lon", "lat")`, `data.col = "head"`).
 
 Find the duplicate location(s).
 ```{r}
@@ -344,11 +342,11 @@ This is done with the `variog()` function and specifying a `direction =` argumen
 
 For example to compute and plot the variogram for the direction of 45 degrees (NE to SW) with a default tolerance of 22.5 degrees (default), type
 ```{r}
-v45 <- variog(wca.gdf, 
+wca.v45 <- variog(wca.gdf, 
               trend = "1st", 
               max.dist = 2.3, 
               direction = pi/4)
-plot(v45)
+plot(wca.v45)
 ```
 
 Repeat for the other three quadrants (increments of $\pi$/4).
@@ -381,7 +379,7 @@ This plot makes it clear that the assumption of isotropy is reasonable.
 
 Step 3: Fit a variogram model to the empirical variogram
 
-Next we fit a curve through the set of points that make up the empirical variogram. The curve is called the variogram model. 
+Next we need to fit a curve through the set of points that make up the empirical variogram. The curve is called the variogram model. 
 
 Since the `s100` data were generated using a variogram model, we already know the answer. The model is exponential with a sill (partial) of 1, a range of .3, and a nugget of 0.
 
@@ -393,7 +391,7 @@ lines.variomodel(cov.model = "exp",
                  max.dist = 1.2, lwd = 2, col = "red")
 ```
 
-Note that the practical range for the exponential model is the distance along the horizontal axis at which the curve reaches 95% of the sill which is 3 times the range specified in the `cov.pars` argument.
+Note that the practical range for the exponential model is the distance along the horizontal axis at which the curve reaches 95% of the sill, which is 3 times the range specified in the `cov.pars` argument.
 
 The `uvec =` argument allows control over the range of distance values and the number of variogram estimates. We specify the maximum distance in the `lines.variomodel()` function.
 
@@ -419,4 +417,4 @@ lines.variomodel(cov.model = "sph",
                  col = "blue")
 ```
 
-The black line is the model used to generate the `s100` dataset. The red line is based on the same exponential (exp) function but has a range of .5 and a nugget of .1. The blue line is based on a spherical function with a sill and range of .8 and a nugget of .1. All three models fit the points reasonably well. This is important: In practice the choice often makes little difference in the quality of the spatial interpolation.
+The black line is the model used to generate the `s100` dataset. The red line is based on the same exponential (exp) function but has a range of .5 and a nugget of .1. The blue line is based on a spherical function with a sill and range of .8 and a nugget of .1. All three models fit the points reasonably well. In practice, the choice often makes little difference in the quality of the spatial interpolation.

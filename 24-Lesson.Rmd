@@ -10,14 +10,82 @@ editor_options:
 
 **"The first step of any project is to grossly underestimate its complexity and difficulty."** – Nicoll Hunt
 
+Fitting a variogram model to the empirical variogram
+
+After we have an empirical variogram we need to fit a curve through the set of points that make up the variogram. The curve is called the variogram model. 
+
+Since the `s100` data were generated using a variogram model, we already know the answer. The model is exponential with a sill (partial) of 1, a range of .3, and a nugget of 0.
+
+Plot the empirical variogram values and overlay the curve corresponding to the exponential model with the `lines.variomodel()` function. The sill and range parameters are given in order using the `cov.pars` argument.
+```{r}
+library(geoR)
+
+plot(variog(s100, uvec = seq(0, 1, l = 21)))
+lines.variomodel(cov.model = "exp", 
+                 cov.pars = c(1, .3), nugget = 0, 
+                 max.dist = 1.2, lwd = 2, col = "red")
+```
+
+Note that the practical range for the exponential model is the distance along the horizontal axis at which the curve reaches 95% of the sill, which is 3 times the range specified in the `cov.pars` argument.
+
+The `uvec =` argument allows control over the range of distance values and the number of variogram estimates. We specify the maximum distance in the `lines.variomodel()` function.
+
+With observed data we don't know the model so we estimate the parameters using information from the empirical variogram.
+
+* By eye: Trial and error over several models and parameter values. The `lines.variomodel()` function can help.  
+* By least squares fit:  Using ordinary least squares (OLS) or weighted least squares (WLS) methods available through the `variofit()` function.  
+* By maximum likelihood methods: Options for maximum likelihood (ML) and restricted maximum likelihood (REML) are available through the `likfit()` function.  
+
+Try various curves and choosing the one that looks the best. Here we plot three models on top of the `s100` empirical variogram.
+```{r}
+plot(variog(s100, max.dist = 1))
+lines.variomodel(cov.model = "exp", 
+                 cov.pars = c(1, .3), 
+                 nug = 0, max.dist = 1)
+lines.variomodel(cov.model = "exp", 
+                 cov.pars = c(1, .5),
+                 nug = .1, max.dist = 1, 
+                 col = "red")
+lines.variomodel(cov.model = "sph", 
+                 cov.pars = c(.8, .8),
+                 nug = .1, max.dist = 1, 
+                 col = "blue")
+```
+
+The black line is the model used to generate the `s100` dataset. The red line is based on the same exponential (exp) function but has a range of .5 and a nugget of .1. The blue line is based on a spherical function with a sill and range of .8 and a nugget of .1. All three models fit the points reasonably well. In practice, the choice often makes little difference in the quality of the spatial interpolation.
+
 Variogram model for the Wolfcamp aquifer data
 
 Let's fit a variogram model to the Wolfcamp aquifer data. First plot the empirical variogram. We've seen that directional variograms are not needed.
 ```{r}
+L <- "http://myweb.fsu.edu/jelsner/temp/data/wolfcamp.csv"
+wca.df <- read_csv(L)
+
+wca.gdf <- as.geodata(wca.df[-30, ], 
+                      coords.col = c("lon", "lat"), 
+                      data.col = "head")
+
 wca.v <- variog(wca.gdf, 
                 trend = "1st", 
                 max.dist = 2.3)
 plot(wca.v)
+
+ggplot(data = data.frame(h = wca.v$u, v = wca.v$v), 
+       mapping = aes(x = h, y = v)) + 
+  geom_point() + 
+  geom_smooth() +
+  scale_y_continuous(limits = c(0, NA)) +
+  ylab(expression(paste("Variogram [", gamma,"(h)]"))) +
+  xlab("Lag distance (h)") +
+  theme_minimal() +
+  geom_hline(yintercept = c(12000, 45000), color = "red") +
+  geom_vline(xintercept = .85, color = "red") +
+  geom_segment(aes(x = 0, y = 0, xend = 0, yend = 12000,), arrow = arrow(angle = 15, length = unit(.3, "cm"))) +
+  geom_label(aes(x = .1, y = 11000, label = "nugget")) +
+  geom_segment(aes(x = 0, y = 12000, xend = 0, yend = 45000,), arrow = arrow(angle = 15, length = unit(.3, "cm"))) +
+  geom_label(aes(x = .1, y = 44000, label = "sill")) +
+  geom_segment(aes(x = 0, y = 47000, xend = .85, yend = 47000,), arrow = arrow(angle = 15, length = unit(.3, "cm"))) +
+  geom_label(aes(x = .55, y = 48000, label = "range"))
 ```
 
 Begin with a spherical model with a range of .8, a sill of 40000, and a nugget of 10000.  
