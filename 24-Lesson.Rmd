@@ -64,7 +64,11 @@ lines.variomodel(cov.model = "sph",
                  lwd = 2, col = "gray70")
 ```
 
+<<<<<<< HEAD
 The black line is based on the same exponential form, but it has a range of .5 and a nugget of .1. The gray line is based on a spherical model with a sill and range of .8 and a nugget of .1. 
+=======
+The black line is the model used to generate the `s100` dataset. The red line is based on the same exponential (exp) function but has a range of .5 and a nugget of .1. The blue line is based on a spherical function with a sill and range of .8 and a nugget of .1. All three models fit the points reasonably well. Key point: In practice, the choice often makes little difference in the quality of the spatial interpolation.
+>>>>>>> f51359f6ef65eba2c3c3c21286737b379675238f
 
 All three curves fit the points reasonably well. In practice, the choice often makes little difference in the quality of the spatial interpolation.
 
@@ -83,6 +87,8 @@ wca.v <- variog(wca.gdf,
                 trend = "1st", 
                 max.dist = 2.3)
 plot(wca.v)
+
+library(ggplot2)
 
 ggplot(data = data.frame(h = wca.v$u, v = wca.v$v), 
        mapping = aes(x = h, y = v)) + 
@@ -203,7 +209,13 @@ par(mfrow = c(1, 3))
 plot(prof, nlevels = 8)
 ```
 
+<<<<<<< HEAD
 Let's consider another data set. Here we want to find a variogram model for April temperatures in the Midwest. The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April.
+=======
+## Another example: A variogram model for April temperatures in the Midwest
+
+The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April.
+>>>>>>> f51359f6ef65eba2c3c3c21286737b379675238f
 ```{r}
 library(tidyverse)
 
@@ -212,7 +224,11 @@ t.df <- read_table(L)
 summary(t.df)
 ```
 
+<<<<<<< HEAD
 Map the values.
+=======
+Map the observed values.
+>>>>>>> f51359f6ef65eba2c3c3c21286737b379675238f
 ```{r}
 library(sf)
 library(tmap)
