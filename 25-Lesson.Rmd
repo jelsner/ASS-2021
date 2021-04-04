@@ -11,14 +11,16 @@ editor_options:
 **"Statistics is such a powerful language for describing data in ways that reveal nothing about their causes. Of course statistics is powerful for revealing causes as well. But it takes some care. Like the difference between talking and making sense."** -- Richard McElreath
 
 
-## Example 2: April temperatures in the Midwest
+## Interpolating April temperatures across the Midwest
 
 The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April. The goal is a spatial interpolation of these values onto a 56 by 35 grid.
 
 Step 1: Examine the data for spatial trends and normality.
 ```{r}
+library(tidyverse)
+
 L <- "http://myweb.fsu.edu/jelsner/temp/data/MidwestTemps.txt"
-t.df <- read.table(L, header = TRUE)
+t.df <- read_table(L)
 summary(t.df)
 ```
 
@@ -26,7 +28,7 @@ Map the values.
 ```{r}
 t.sf <- st_as_sf(x = t.df, 
                  coords = c("lon", "lat"),
-                 crs = "+proj=longlat +datum=WGS84")
+                 crs = 4326)
 
 tm_shape(t.sf) +
   tm_text(text = "temp", size = .6) +
@@ -65,7 +67,7 @@ plot(variog4(t.gdf, trend = "2nd",
 
 There is no strong evidence to reject isotropy.
 
-Step 3: Fit a variogram model to the data. Here we consider several likelihood fits to an exponential model and examine the AIC for final parameter selection. 
+Fit a variogram model to the data. Here we consider several likelihood fits to an exponential model and examine the AIC for final parameter selection. 
 
 The AIC is used as a selection criterion and is a function of the maximized likelihood function but includes a penalty for model complexity that favors simpler models. Recall the best fit has the largest log-likelihood and smallest AIC.  
 
@@ -126,7 +128,7 @@ modelS <- likfit(t.gdf, ini = iv, cov.model = "sph",
                   trend = "2nd", fix.nug = FALSE)
 ```
 
-Step 4: Create an interpolated surface. We create a grid of locations at which we want the temperatures to be interpolated. Here we use the `expand.grid` function where the arguments are the sequence of longitudes and latitudes, respectively. We then use the `krige.conv()` function to interpolate the values to the grid. We save the interpolation in `kcE` when we use the exponential variogram model to weight the observations and save the interpolation in `kcS` when we use the spherical model to weight the observations.
+Create an interpolated surface. We create a grid of locations at which we want the temperatures to be interpolated. Here we use the `expand.grid` function where the arguments are the sequence of longitudes and latitudes, respectively. We then use the `krige.conv()` function to interpolate the values to the grid. We save the interpolation in `kcE` when we use the exponential variogram model to weight the observations and save the interpolation in `kcS` when we use the spherical model to weight the observations.
 ```{r}
 pgrid.df<- expand.grid(lon = seq(-99, -88, l = 224), 
                        lat = seq(38.4, 45.4, l = 136))
@@ -186,10 +188,6 @@ tm_shape(t.sf) +
 
 The model with a non-zero nugget is smoother. The greater the nugget relative to the sill (relative nugget effect), the smoother the interpolation.
 
-## Combine prediction and uncertainty in a single map
-
-See `Pixelate.Rmd`.
-
 ## Synthetic data
 
 Synthetic data are useful as input to a deterministic model. An example is rainfall as input to spatially-distributed rainfall-runoff model. Interpolated values of precipitation and their variances might be of little value, but running the rainfall-runoff model with a large number of simulated rainfall fields can give a realistic assessment of the uncertainty in runoff arising from the variability in the rainfall.
@@ -217,14 +215,6 @@ image(sim2, col = gray(seq(1, .1, l = 30)))
 sim3 <- grf(4441, grid = "reg", cov.pars = c(1, .25))
 image(sim3, col = gray(seq(1, .1, l = 30)))
 par(mfrow = c(1, 1))
-```
-
-For an even higher resolution simulation it is necessary to have the {RandomFields} package.
-```{r, eval=FALSE}
-library(RandomFields)
-sim4 <- grf(40401, grid = "reg", cov.pars = c(10, .2))
-image(sim4, main = "simulation on a fine grid", 
-      col = gray(seq(1, .1, l = 30)))
 ```
 
 ## Interpolation using functions from the {gstat} package
@@ -362,7 +352,7 @@ plot(variogram(log(zinc) ~ x + y,
      xlab = "Lag Distance (m)")
 ```
 
-The variogram in the sw-ne direction appears to be different. And there appears to be very little spatial autocorrelation in the n-s direction. This is partly due to the anistropy of the domain.
+The variogram in the sw-ne direction appears to be different. And there appears to be very little spatial autocorrelation in the n-s direction. This is partly due to the anisotropy of the domain.
 
 ### Variogram maps
 

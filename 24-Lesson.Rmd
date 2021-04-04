@@ -3,6 +3,7 @@ title: "Lesson 24"
 author: "James B. Elsner"
 date: "April 5, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -10,54 +11,67 @@ editor_options:
 
 **"The first step of any project is to grossly underestimate its complexity and difficulty."** – Nicoll Hunt
 
-Fitting a variogram model to the empirical variogram
+Last two weeks of what has been a long (and lonely) semester. Here is my plan to bring this course across the finish line. 
 
-After we have an empirical variogram we need to fit a curve through the set of points that make up the variogram. The curve is called the variogram model. 
+Last week: introduction to spatial statistical interpolation. It begins with separating trends from local spatial autocorrelation. The local spatial autocorrelation is quantified with an empirical variogram. The next step involves fitting a model to the empirical variogram.
 
-Since the `s100` data were generated using a variogram model, we already know the answer. The model is exponential with a sill (partial) of 1, a range of .3, and a nugget of 0.
+Today: modeling the variogram and creating an interpolated surface.
 
-Plot the empirical variogram values and overlay the curve corresponding to the exponential model with the `lines.variomodel()` function. The sill and range parameters are given in order using the `cov.pars` argument.
+## Modeling the variogram
+
+A parametric curve through the set of points that make up the empirical variogram is called the variogram model.
+
+As an example, lets plot the empirical variogram from the `s100` data. The `uvec =` argument controls the range of lag distance values and the number of variogram estimates. 
 ```{r}
 library(geoR)
 
-plot(variog(s100, uvec = seq(0, 1, l = 21)))
-lines.variomodel(cov.model = "exp", 
-                 cov.pars = c(1, .3), nugget = 0, 
-                 max.dist = 1.2, lwd = 2, col = "red")
+s100.v <- variog(s100, uvec = seq(0, 1, l = 21))
+plot(s100.v)
 ```
 
-Note that the practical range for the exponential model is the distance along the horizontal axis at which the curve reaches 95% of the sill, which is 3 times the range specified in the `cov.pars` argument.
+We overlay a curve corresponding to a variogram model using the `lines.variomodel()` function. We specify the type of model with the `cov.model` argument and values for the sill and range parameters (in that order) with the `cov.pars` argument. We specify the nugget with the `nugget` argument.
 
-The `uvec =` argument allows control over the range of distance values and the number of variogram estimates. We specify the maximum distance in the `lines.variomodel()` function.
+Here we entertain an exponential model with `cov.model = "exp"` having a sill value of 1 and a range value of .3 and with a nugget of 0. The practical range for the exponential model is the distance along the horizontal axis at which the curve reaches 95% of the sill, which is 3 times the range specified in the `cov.pars` (covariance parameters) argument (here .9). Finally we specify the maximum distance with the `max.dist` argument.
+```{r}
+plot(s100.v)
+lines.variomodel(cov.model = "exp", 
+                 cov.pars = c(1, .3), 
+                 nugget = 0, 
+                 max.dist = 1, 
+                 lwd = 2, col = "red")
+```
 
-With observed data we don't know the model so we estimate the parameters using information from the empirical variogram.
+The red curve corresponds to an exponential model with those parameters. It looks like it fits the variogram estimates reasonably well. It should because the data were generated from this model.
+
+With observed data we don't know the model, so we estimate the parameters using information from the empirical variogram. The estimation procedure can involve
 
 * By eye: Trial and error over several models and parameter values. The `lines.variomodel()` function can help.  
 * By least squares fit:  Using ordinary least squares (OLS) or weighted least squares (WLS) methods available through the `variofit()` function.  
 * By maximum likelihood methods: Options for maximum likelihood (ML) and restricted maximum likelihood (REML) are available through the `likfit()` function.  
 
-Try various curves and choosing the one that looks the best. Here we plot three models on top of the `s100` empirical variogram.
+Try various curves and choosing the one that looks the best. Here we plot two other models on top of the `s100` empirical variogram and the original model.
 ```{r}
-plot(variog(s100, max.dist = 1))
-lines.variomodel(cov.model = "exp", 
-                 cov.pars = c(1, .3), 
-                 nug = 0, max.dist = 1)
+plot(s100.v)
 lines.variomodel(cov.model = "exp", 
                  cov.pars = c(1, .5),
-                 nug = .1, max.dist = 1, 
-                 col = "red")
+                 nug = .1, 
+                 max.dist = 1, 
+                 lwd = 2, col = "black")
 lines.variomodel(cov.model = "sph", 
                  cov.pars = c(.8, .8),
-                 nug = .1, max.dist = 1, 
-                 col = "blue")
+                 nug = .1, 
+                 max.dist = 1, 
+                 lwd = 2, col = "gray70")
 ```
 
-The black line is the model used to generate the `s100` dataset. The red line is based on the same exponential (exp) function but has a range of .5 and a nugget of .1. The blue line is based on a spherical function with a sill and range of .8 and a nugget of .1. All three models fit the points reasonably well. In practice, the choice often makes little difference in the quality of the spatial interpolation.
+The black line is based on the same exponential form, but it has a range of .5 and a nugget of .1. The gray line is based on a spherical model with a sill and range of .8 and a nugget of .1. 
 
-Variogram model for the Wolfcamp aquifer data
+All three curves fit the points reasonably well. In practice, the choice often makes little difference in the quality of the spatial interpolation.
 
-Let's fit a variogram model to the Wolfcamp aquifer data. First plot the empirical variogram. We've seen that directional variograms are not needed.
+Let's fit a variogram model to the Wolfcamp aquifer data. Recall the  head heights represent the geopotential energy of the aquifer, the gradient of which is related to the speed and direction of water flow.  First plot the empirical variogram.
 ```{r}
+library(tidyverse)
+
 L <- "http://myweb.fsu.edu/jelsner/temp/data/wolfcamp.csv"
 wca.df <- read_csv(L)
 
@@ -93,10 +107,11 @@ Begin with a spherical model with a range of .8, a sill of 40000, and a nugget o
 plot(wca.v)
 lines.variomodel(cov.model = "sph", 
                  cov.pars = c(30000, .8),
-                 nug = 10000, max.dist = 2.3)
+                 nug = 10000, 
+                 max.dist = 2.3)
 ```
  
-In the `cov.pars` argument the first value is the "partial" sill and the second is the range. With the nugget set at 10000 and partial sill at 30000, the sill is 400000. The sill and nugget are variance measures so they have units of square feet. The range is distance so it has the corresponding spatial units.
+In the `cov.pars` argument the first value is the "partial" sill and the second is the range. With the nugget set at 10000 and partial sill at 30000, the sill is 400000. The sill and nugget are variance measures so they have units of feet squared. The range is distance so it has the corresponding spatial units.
 
 The model looks reasonable. Perhaps the sill should be a bit higher, say 43000. We increase the partial sill accordingly,
 ```{r}
@@ -118,9 +133,7 @@ lines.variomodel(cov.model = "exp",
 
 Not as good. The exponential model does not have the sharp turn at the sill. We settle on the spherical model with a sill of 43000, a range of .8, and a nugget of 10000.
 
-Fine tune the parameter values
-
-Next we tune the parameter estimates using the `variofit()` function. The function takes a set of initial parameter values and improves upon them using the method of weighted least squares. Alternatively we can use the `likfit()` function to fine tune the parameters. Here we use it to adjust the variogram model parameters estimated above. We save the model in the object `wca.vm`.
+Next we tune the parameter estimates using the `variofit()` function. The function takes a set of initial parameter values that we estimate from looking at the shape and form of the empirical variogram and improves upon them using the method of weighted least squares. Alternatively we can use the `likfit()` function to fine tune the parameters. Here we use it to adjust the variogram model parameters estimated above. We save the model in the object `wca.vm`.
 ```{r}
 wca.vm <- likfit(wca.gdf, 
                  trend = "1st", 
@@ -130,7 +143,7 @@ wca.vm <- likfit(wca.gdf,
 wca.vm
 ```
 
-The function improves on the initial set of model parameters until the log-likelihood value is maximized. Any other set of parameters will produce a log likelihood value smaller than -553.  
+The function improves on the initial set of parameters until the log-likelihood value is maximized. Any other set of parameters will produce a log likelihood value smaller than -553.  
 
 The output includes values for the trend surface. It is a linear trend in two dimensions so it's represented by a plane with a single z-intercept value (`beta0`) and two slope values corresponding to the x (`beta1`) and y (`beta2`) directions.  
 
@@ -150,7 +163,7 @@ lines.variomodel(cov.model = "sph",
 lines(wca.vm, col = "blue")
 ```
 
-We see the maximum likelihood solution is better at fitting the points at lag distances between .5 and 1. At these lags, the variogram estimates are most reliable as n (number of observation pairs) is largest.
+We see the maximum likelihood solution is a better fit for the variogram estimates at lag distances between .5 and 1. At these lags, the variogram estimates are most reliable as n (number of observation pairs) is largest.
 ```{r}
 variog(wca.gdf)$n
 ```
@@ -158,22 +171,20 @@ variog(wca.gdf)$n
 The `likfit()` function is iterative and should find the same solution using somewhat different starting values. Try it using a partial sill of 30000 a nugget of 5000 and a range of 1. 
 ```{r}
 likfit(wca.gdf, 
-                 trend = "1st", 
-                 ini = c(30000, 1),
-                 nug = 5000, 
-                 cov.model = "spherical")
+       trend = "1st", 
+       ini = c(30000, 1),
+       nug = 5000, 
+       cov.model = "spherical")
 ```
 
-A summary function on the `likfit` output provides more information about the fitted variogram model.
+A summary function on the variogram model object provides more information about the fitted variogram model.
 ```{r}
 summary(wca.vm)
 ```
 
-The summary provides parameters of the trend model and values of the spatial model parameters. Importantly the summary gives the log likelihood along with the AIC and BIC values. It also gives those values for a non-spatial model. A non-spatial model in this context is the trend plus spatially uncorrelated random variation.
+The summary gives the parameters of the trend model and parameter values for the variogram model. Importantly the summary gives the log likelihood along with the AIC and BIC values. It also gives those values for a non-spatial model. A non-spatial model in this context is the trend plus spatially _uncorrelated_ random variation.
 
 Since the log likelihood value is larger for the spatial model and the AIC and BIC values are smaller, it is clear that a spatial model is better than the non-spatial model.
-
-Profile likelihood
 
 The `proflik()` function gives a matrix of log likelihood values for a range of model parameters. The matrix can then be plotted to get a synoptic view of the relationship between the parameters and the likelihood. This can take a few seconds to compute.
 ```{r}
@@ -192,32 +203,27 @@ par(mfrow = c(1, 3))
 plot(prof, nlevels = 8)
 ```
 
-
-
-## Another example: A variogram model for April temperatures in the Midwest
-
-Let's finish with another example.
-
-The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April.
+Let's consider another data set. Here we want to find a variogram model for April temperatures in the Midwest. The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April.
 ```{r}
+library(tidyverse)
+
 L <- "http://myweb.fsu.edu/jelsner/temp/data/MidwestTemps.txt"
-t.df <- read.table(L, header = TRUE)
+t.df <- read_table(L)
 summary(t.df)
 ```
 
-Map the data values. Create a `geodata` object. Plot the empirical variogram using the residuals from a 2nd-order trend model. Fit an exponential model to the variogram using the `likfit()` function and starting values of 3 for the sill and 4 for the range.
-
 Map the values.
 ```{r}
+library(sf)
 library(tmap)
 
 t.sf <- st_as_sf(x = t.df, 
                  coords = c("lon", "lat"),
-                 crs = "+proj=longlat +datum=WGS84")
+                 crs = 4326)
 
 library(USAboundaries)
 
-sts <- us_states()
+sts <- us_states(states = c("WI", "MN", "IA", "IL", "MO", "KS", "NE", "SD"))
 
 tm_shape(t.sf) +
   tm_text(text = "temp", size = .6) +
@@ -256,7 +262,6 @@ iv <- c(3, 4)
 ```
 
 The beta values refer to the second order trend. The nugget is `tausq` the partial sill is `sigmasq` and the range is `phi`.
-
 ```{r}
 plot(variog(t.gdf, 
             trend = "2nd", 
@@ -264,54 +269,18 @@ plot(variog(t.gdf,
 lines(t.vm, col = "blue")
 ```
 
-## Example 1: Wolfcamp Aquifer head heights
+## Creating an interpolated surface
 
-We've been examining piezometric head heights from the Wolfcamp Aquifer. Head heights measurements indicate the potential energy of the water in units of height.
+Returning to the Wolfcamp aquifer data. We fit a variogram model and saved it as `wca.vm`.
 
-The data are in `wolfcamp.csv` on my website.
-```{r}
-L <- "http://myweb.fsu.edu/jelsner/temp/data/wolfcamp.csv"
-wca.df <- read.csv(L, header = TRUE)
-```
-
-Step 1: Examine the data for trends and isotropy. Convert the data frame to a `geodata` object. The duplicate measurement is removed with the subset operator when converting from a `data.frame` to a `geodata` object.
-```{r}
-wca.gdf <- as.geodata(wca.df[-30, ], 
-                      coords.col = 1:2, 
-                      data.col = 3)
-```
-
-Plot the residuals after removing the 1st-order trend.
-```{r}
-plot(wca.gdf, trend = "1st")
-```
-
-Step 2: Compute empirical variograms. To compute and plot the variogram on the residuals from a 1st-order trend type
-```{r}
-wca.v <- variog(wca.gdf, 
-                trend = "1st",
-                max.dist = 2.3)
-plot(wca.v)
-```
-
-Step 3: Fit a variogram model. Eyeball the initial values for the nugget, partial sill and range. Then use the `likfit()` function together with the initial estimates to get a variogram model. Here we assign the model to the object `wca.vm`.
-```{r}
-wca.vm <- likfit(wca.gdf, 
-                 trend = "1st", 
-                 ini = c(33000, .8),
-                 nug = 10000, 
-                 cov.model = "spherical")
-wca.vm
-```
-
-Step 4: Create the kriged surface. Kriging uses the variogram model and the observed data to estimate data values at any location of interest. The kriged estimates are a weighted average of the neighborhood values where the weights are taken from the variogram model. 
+Kriging uses the variogram model together with the observed data to estimate data values at any location of interest. The kriged estimates are a weighted average of the neighborhood values where the weights are taken from the variogram model. 
 
 Estimates are often made at locations defined on a regular grid.
 
 (a) First create a grid of locations across the domain. Here we use the `expand.grid()` function. The coordinates names of the grid are those defined in the `geodata` object (here `lon` and `lat`). Grid spacing is defined by the `l =` argument in the sequence function.
 ```{r}
-pgrid.df <- expand.grid(lon = seq(-105, -100, l = 61),
-                        lat = seq(33, 37, l = 61))
+pgrid.df <- expand.grid(lon = seq(-105, -100, l = 161),
+                        lat = seq(33, 37, l = 161))
 head(pgrid.df)
 ```
 
@@ -320,10 +289,10 @@ The resulting data frame is a series of locations specified as in a raster start
 library(sf)
 pgrid.sf <- st_as_sf(x = pgrid.df,
                      coords = c("lon", "lat"),
-                     crs = "+proj=longlat +datum=WGS84")
+                     crs = 4326)
 wca.sf <- st_as_sf(x = wca.df, 
                    coords = c("lon", "lat"),
-                   crs = "+proj=longlat +datum=WGS84")
+                   crs = 4326)
 
 library(USAboundaries)
 sts <- us_states()
@@ -332,7 +301,9 @@ library(tmap)
 tm_shape(wca.sf) +
   tm_bubbles(size = .25) +
 tm_shape(pgrid.sf) +
-  tm_dots(col = "red")
+  tm_dots(col = "red") +
+tm_shape(sts) +
+  tm_borders()
 ```
 
 (b) Next predict the head heights at the grid locations. 
@@ -357,20 +328,19 @@ pgrid.df$height <- wca.ks$predict
 pgrid.df$var <- wca.ks$krige.var
 ```
 
-Map the predicted values and the uncertainty values using `ggplot()`.
-
-Start with the predicted values. Here we use the `geom_raster()` function.
+Map the predicted values and the uncertainty values using `ggplot()`. Start with the predicted values. Here we use the `geom_raster()` function.
 ```{r}
 library(ggplot2)
 
-ggplot(data = pgrid.df, aes(x = lon, y = lat)) + 
-  geom_raster(aes(fill = height)) +
+ggplot(data = pgrid.df, 
+       mapping = aes(x = lon, y = lat)) + 
+  geom_raster(mapping = aes(fill = height)) +
   scale_fill_viridis_c()
 ```
 
 The map shows the predicted values as a combination of the spatial gradient and spatial autocorrelation.
 
-Or use {tmap}. First convert the grid data frame to a spatial pixels data frame (S4 spatial object). Then convert the spatial pixels data frame to a raster.
+To use functions from {tmap} we first convert the grid data frame to a spatial pixels data frame (S4 spatial object). Then convert the spatial pixels data frame to a raster.
 ```{r}
 library(sp)
 spdf <- pgrid.df
@@ -382,26 +352,29 @@ library(raster)
 r <- raster(spdf)
 
 tm_shape(r) +
-  tm_raster(n = 9) +
+  tm_raster(n = 10, palette = "viridis") +
 tm_shape(wca.sf) +
-  tm_text("head", size = .5)
+  tm_text("head", size = .5) +
+tm_shape(sts) +
+  tm_borders()
 ```
 
 Plot the uncertainty.
 ```{r}
 ggplot(data = pgrid.df, aes(lon, lat)) + 
-  geom_raster(aes(fill = var)) +
+  geom_raster(mapping = aes(fill = var)) +
   scale_fill_gradient() +
-  geom_point(data = wca.df, aes(x = lon, y = lat))
+  geom_point(data = wca.df, 
+             mapping = aes(x = lon, y = lat))
 ```
 
-The map shows that the prediction variances are smallest in regions surrounding the observations. This makes sense since what we know about the field comes from the observations.
+The prediction variances are smallest at locations nearest to the observations. This makes sense since what we know about the field comes from these observations.
 
-Step 5: Evaluate the prediction. How do we evaluate how good the interpolated surface is? If we use the variogram model to predict at the observation locations, we will get the observed values back when the nugget is fixed at zero. So this is not helpful. Instead we use cross validation.
+Evaluate the prediction. How do we evaluate how good the interpolated surface is? If we use the variogram model to predict at the observation locations, we will get the observed values back (when the nugget is fixed at zero). So this is not helpful. Instead we use cross validation.
 
 Cross validation is a procedure for assessing how well a model will do at predicting values when observations specific to the prediction are removed. The procedure first partitions the data into disjoint subsets. The model is then fit to one subset of the data (training set) and the model is validated on a different subset (testing set). 
 
-Leave-one-out cross validation uses all but one observation for fitting and the left-out observation for testing. The procedure is repeated with every observation taking turns in being left out. 
+Leave-one-out cross validation uses all but one observation for fitting and the left-out observation for testing. The procedure is repeated with every observation taking turns being left out. 
 
 K-fold cross validation uses K observations for fitting and N-K for testing. With large K there are many ways to slice the sample so the procedure is not exhaustive like hold-one-out. 
 
@@ -409,7 +382,8 @@ With kriging, the data is used in two ways (1) to fit the variogram model, and (
 
 The `xvalid()` function from the {geoR} package computes the cross-validated prediction error of the Wolfcamp aquifer interpolation in this weak sense.
 ```{r}
-xv.wk <- xvalid(wca.gdf, model = wca.vm)
+xv.wk <- xvalid(wca.gdf, 
+                model = wca.vm)
 df <- data.frame(observed = xv.wk$data, 
                  predicted = xv.wk$predicted)
 
@@ -421,238 +395,43 @@ ggplot(df, aes(x = observed, y = predicted)) +
   xlab("Observed head heights (ft)") +
   ggtitle("Weak Cross Validation") +
   theme_minimal()
+```
+
+The black line represents a perfect prediction and the red line is the best fit line when we regress the predicted head heights onto the observed head heights. The fact that the two lines nearly coincide indicates the interpolation is good.
+
+We quantify how good using the mean squared error and mean absolute error as follows/
+```{r}
 mean(xv.wk$error^2)
 mean(abs(xv.wk$error))
 ```
 
 The mean squared cross-validated prediction error is 30636 ft^2 and the mean absolute cross-validated prediction error is 137 ft.
 
-Strong cross validation requires that the variogram be re-estimated each time an observation is removed. The model must be fit using the `variofit()` function and the call must include the empirical variogram object. This is done with the argument `reestimate = TRUE`.
-```{r, warning=FALSE}
-xv.st <- xvalid(wca.gdf, model = wca.vm,
-               variog.obj = wca.v,
-               reestimate = TRUE)
+In contrast to weak cross validation, strong cross validation requires that the variogram be re-estimated each time an observation is removed. The model must be fit using the `variofit()` function and the call must include the empirical variogram object. This is done with the argument `reestimate = TRUE`.
+```{r}
+wca.vm2 <- variofit(wca.v, 
+                    ini = c(33000, .8),
+                    nug = 10000, 
+                    cov.model = "spherical")
+
+xv.st <- xvalid(wca.gdf, 
+                model = wca.vm2,
+                variog.obj = wca.v,
+                reestimate = TRUE)
 df <- data.frame(observed = xv.st$data, 
                  predicted = xv.st$predicted)
+
+ggplot(df, aes(x = observed, y = predicted)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  geom_smooth(method = lm, color = "red") +
+  ylab("Predicted head heights (ft)") +
+  xlab("Observed head heights (ft)") +
+  ggtitle("Strong Cross Validation") +
+  theme_minimal()
 
 mean(xv.st$error^2)
 mean(abs(xv.st$error))
 ```
 
-Strong cross validation will result in an error estimate that is larger than the error estimate from a weak cross validation.
-
-## Example 2: April temperatures in the Midwest
-
-The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April. The goal is a spatial interpolation of these values onto a 56 by 35 grid.
-
-Step 1: Examine the data for spatial trends and normality.
-```{r}
-L <- "http://myweb.fsu.edu/jelsner/temp/data/MidwestTemps.txt"
-t.df <- read.table(L, header = TRUE)
-summary(t.df)
-```
-
-Map the values.
-```{r}
-t.sf <- st_as_sf(x = t.df, 
-                 coords = c("lon", "lat"),
-                 crs = "+proj=longlat +datum=WGS84")
-
-tm_shape(t.sf) +
-  tm_text(text = "temp", size = .6) +
-tm_shape(sts) +
-  tm_borders() 
-```
-
-Create a `geodata` object from the data frame.
-```{r}
-t.gdf <- as.geodata(t.df)
-summary(t.gdf)
-plot(t.gdf)
-```
-
-The maximum pairwise distance is 11.5 degrees. There is a pronounced 1st order trend in the north/south direction as we might expect with air temperatures.
-
-Remove the trend and examine the residuals.
-```{r}
-plot(t.gdf, trend = "1st")
-```
-
-There is some evidence of a 2nd-order trend in the west-east direction. 
-```{r}
-plot(t.gdf, trend = "2nd")
-```
-
-By specifying a higher order trend, the lower order trends are taken care of. The distribution of residuals is approximately normal as we might expect. The data are monthly means.
-
-Step 2: Compute empirical variograms. Check for anisotropy by plotting directional variograms.
-```{r}
-par(mfrow = c(1, 1))
-plot(variog4(t.gdf, trend = "2nd", 
-             max.dist = 5.5), 
-     omni = TRUE, legend = FALSE)
-```
-
-There is no strong evidence to reject isotropy.
-
-Step 3: Fit a variogram model to the data. Here we consider several likelihood fits to an exponential model and examine the AIC for final parameter selection. 
-
-The AIC is used as a selection criterion and is a function of the maximized likelihood function but includes a penalty for model complexity that favors simpler models. Recall the best fit has the largest log-likelihood and smallest AIC.  
-
-Set initial values for the sill and range. From the variograms start with 3 for the sill and 4 for the range.
-```{r}
-iv <- c(3, 4)  
-summary(likfit(t.gdf, 
-               ini = iv, 
-               cov.model = "exp", 
-               trend = "2nd",
-               fix.nug = TRUE, 
-               message = FALSE))$likelihood$AIC
-summary(likfit(t.gdf, 
-               ini = iv, 
-               cov.model = "exp", 
-               trend = "2nd",
-               fix.nug = FALSE, 
-               message = FALSE))$likelihood$AIC
-summary(likfit(t.gdf, ini = iv, 
-               cov.model = "sph", 
-               trend = "2nd",
-               fix.nug = TRUE, 
-               message = FALSE))$likelihood$AIC
-summary(likfit(t.gdf, ini = iv, 
-               cov.model = "sph", 
-               trend = "2nd",
-               fix.nug = FALSE, 
-               message = FALSE))$likelihood$AIC
-```
-
-It appears that a good variogram model would be on the residuals of a 2nd order trend using an exponential function with fixed nugget equal to zero. A spherical function with a nugget is also a reasonable model.
-
-To obtain the model parameters, type
-```{r}
-likfit(t.gdf, ini = iv, cov.model = "exp", 
-       trend = "2nd", fix.nug = TRUE)
-likfit(t.gdf, ini = iv, cov.model = "sph", 
-       trend = "2nd", fix.nug = FALSE)
-```
-
-Plot the competing models on the empirical variogram.
-```{r}
-plot(variog(t.gdf, trend = "2nd", 
-            uvec = seq(0, 5.5, l = 29)))
-lines.variomodel(cov.model = "exp", 
-                 cov.pars = c(2.114, .4139), 
-                 nug = 0, max.dist = 5.5, col = "red")
-lines.variomodel(cov.model = "sph", 
-                 cov.pars = c(1.638, 1.307),
-                 nug =.5, max.dist = 5.5, col = "green")
-```
-
-Save the models.
-```{r}
-modelE <- likfit(t.gdf, ini = iv, cov.model = "exp", 
-                  trend = "2nd", fix.nug = TRUE)
-modelS <- likfit(t.gdf, ini = iv, cov.model = "sph", 
-                  trend = "2nd", fix.nug = FALSE)
-```
-
-Step 4: Create an interpolated surface. We create a grid of locations at which we want the temperatures to be interpolated. Here we use the `expand.grid` function where the arguments are the sequence of longitudes and latitudes, respectively. We then use the `krige.conv()` function to interpolate the values to the grid. We save the interpolation in `kcE` when we use the exponential variogram model to weight the observations and save the interpolation in `kcS` when we use the spherical model to weight the observations.
-```{r}
-pgrid.df<- expand.grid(lon = seq(-99, -88, l = 224), 
-                       lat = seq(38.4, 45.4, l = 136))
-kcE <- krige.conv(t.gdf, 
-                  loc = pgrid.df, 
-                  krige = krige.control(trend.d = "2nd", 
-                                       trend.l = "2nd",
-                                       obj.m = modelE))
-kcS <- krige.conv(t.gdf, 
-                  loc = pgrid.df,
-                  krige = krige.control(trend.d = "2nd", 
-                                       trend.l = "2nd",
-                                       obj.m = modelS))
-```
-
-Plot the interpolated surface generated using the exponential variogram. function.
-```{r}
-pgrid.df$temp <- kcE$predict
-pgrid.df$var <- kcE$krige.var
-
-spdf <- pgrid.df
-coordinates(spdf) <- c("lon", "lat")
-spdf <- as(spdf, "SpatialPixelsDataFrame")
-proj4string(spdf) <- st_crs(t.sf)$proj4string
-
-library(raster)
-r <- raster(spdf)
-
-tm_shape(r) +
-  tm_raster(n = 9, palette = "OrRd") +
-tm_shape(sts) +
-  tm_borders() +
-tm_shape(t.sf) +
-  tm_text("temp", size = .5)
-```
-
-Plot the interpolated surface generated using the spherical variogram.
-```{r}
-pgrid.df$temp <- kcS$predict
-pgrid.df$var <- kcS$krige.var
-
-spdf <- pgrid.df
-coordinates(spdf) <- c("lon", "lat")
-spdf <- as(spdf, "SpatialPixelsDataFrame")
-proj4string(spdf) <- st_crs(t.sf)$proj4string
-
-library(raster)
-r <- raster(spdf)
-
-tm_shape(r) +
-  tm_raster(n = 9, palette = "OrRd") +
-tm_shape(sts) +
-  tm_borders() +
-tm_shape(t.sf) +
-  tm_text("temp", size = .5)
-```
-
-The model with a non-zero nugget is smoother. The greater the nugget relative to the sill (relative nugget effect), the smoother the interpolation.
-
-## Combine prediction and uncertainty in a single map
-
-See `Pixelate.Rmd`.
-
-## Synthetic data
-
-Synthetic data are useful as input to a deterministic model. An example is rainfall as input to spatially-distributed rainfall-runoff model. Interpolated values of precipitation and their variances might be of little value, but running the rainfall-runoff model with a large number of simulated rainfall fields can give a realistic assessment of the uncertainty in runoff arising from the variability in the rainfall.
-
-The `grf()` function in the {geoR} package generates synthetic data from Gaussian random fields on regular or irregular sets of locations. For example, to generate 100 randomly spaced points with values at the points being a sample from a Gaussian random field with an exponential variogram (default with zero nugget) having a sill of 1 and a range of .25, type
-```{r}
-set.seed(3042)
-sim1 <- grf(100, cov.pars = c(1, .25))
-```
-
-Plot the points and the variograms.
-```{r}
-layout(matrix(c(1, 2), byrow = TRUE, ncol = 2), 
-       respect = TRUE)
-points.geodata(sim1, 
-               main = "simulated locations and values")
-plot(sim1, max.dist = .5, 
-     main = "true and empirical variograms")
-```
-
-The random fields can be put on a regular grid.
-```{r}
-sim2 <- grf(441, grid = "reg", cov.pars = c(1, .25))
-image(sim2, col = gray(seq(1, .1, l = 30)))
-sim3 <- grf(4441, grid = "reg", cov.pars = c(1, .25))
-image(sim3, col = gray(seq(1, .1, l = 30)))
-par(mfrow = c(1, 1))
-```
-
-For an even higher resolution simulation it is necessary to have the {RandomFields} package.
-```{r, eval=FALSE}
-library(RandomFields)
-sim4 <- grf(40401, grid = "reg", cov.pars = c(10, .2))
-image(sim4, main = "simulation on a fine grid", 
-      col = gray(seq(1, .1, l = 30)))
-```
+The prediction error estimated using the procedure of strong cross validation will be larger than the prediction error estimated using the procedure of weak cross validation.
