@@ -11,29 +11,32 @@ editor_options:
 
 **"The first step of any project is to grossly underestimate its complexity and difficulty."** – Nicoll Hunt
 
-Last two weeks of what has been a long (and lonely) semester. Here is my plan to bring this course across the finish line. 
+Last two weeks of what has been a long (and lonely) semester. Here is my plan to bring this course in for a soft landing. 
 
-Last week: introduction to spatial statistical interpolation. It begins with separating trends from local spatial autocorrelation. The local spatial autocorrelation is quantified with an empirical variogram. The next step involves fitting a model to the empirical variogram.
+This week: Last two synchronous lessons and the final assignment. The final assignment will be due on Friday, April 16 at 3p. I will be available this Friday and next Friday for live help if needed. The last two lessons next week will be Rmd files that you can work through on your own if interested.
 
-Today: modeling the variogram and creating an interpolated surface.
+Last week: introduction to spatial statistical interpolation. It begins with separating trends from local spatial autocorrelation. The local spatial autocorrelation is quantified with an empirical variogram. The next two steps involve fitting a model to the empirical variogram and using the model variogram together with the data to interpolate values across the domain.
+
+Today: modeling the variogram and creating the interpolated surface.
 
 ## Modeling the variogram
 
-A parametric curve through the set of points that make up the empirical variogram is called the variogram model.
+The variogram model is a curve through the set of values that make up the empirical variogram. The curve is described by a function with three parameters.
 
-As an example, lets plot the empirical variogram from the `s100` data. The `uvec =` argument controls the range of lag distance values and the number of variogram estimates. 
+As an example, lets plot the empirical variogram values from the `s100` data over a set of lag distances from 0 to 1. The `uvec =` argument controls the set of lag distances and/or the number of variogram values. 
 ```{r}
 library(geoR)
 
-s100.v <- variog(s100, uvec = seq(0, 1, l = 21))
+s100.v <- variog(s100, 
+                 uvec = seq(0, 1, l = 21))
 plot(s100.v)
 ```
 
-We overlay a curve corresponding to a variogram model using the `lines.variomodel()` function. We specify the type of model with the `cov.model` argument and values for the sill and range parameters (in that order) with the `cov.pars` argument. We specify the nugget with the `nugget` argument.
+We overlay a curve corresponding to a specific variogram model using the `lines.variomodel()` function. We specify the function type with the `cov.model` argument and values for the sill and range parameters (in that order) with the `cov.pars` argument. We specify the value for the nugget with the `nugget` argument.
 
-Here we entertain an exponential model with `cov.model = "exp"` having a sill value of 1 and a range value of .3 and with a nugget of 0. The practical range for the exponential model is the distance along the horizontal axis at which the curve reaches 95% of the sill, which is 3 times the range specified in the `cov.pars` (covariance parameters) argument (here .9). Finally we specify the maximum distance with the `max.dist` argument.
+Here we use an exponential function (`cov.model = "exp"`) having a sill of 1, a range of .3 and a nugget of 0. For the plot method we specify the maximum distance with the `max.dist` argument.
 ```{r}
-plot(s100.v)
+#plot(s100.v)
 lines.variomodel(cov.model = "exp", 
                  cov.pars = c(1, .3), 
                  nugget = 0, 
@@ -41,17 +44,19 @@ lines.variomodel(cov.model = "exp",
                  lwd = 2, col = "red")
 ```
 
-The red curve corresponds to an exponential model with those parameters. It looks like it fits the variogram estimates reasonably well. It should because the data were generated from this model.
+The red curve corresponds to an exponential model with those parameters. It looks like it fits the variogram values reasonably well. It should because the data were generated from this model.
 
-With observed data we don't know the model, so we estimate the parameters using information from the empirical variogram. The estimation procedure can involve
+Note: The practical range for the exponential model is the distance along the horizontal axis at which the curve reaches 95% of the sill, which is 3 times the range specified in the `cov.pars` (covariance parameters) argument (here .9). 
+
+With observed data we don't know the model, so we estimate values for the parameters using information from the empirical variogram. The estimation procedure can involve
 
 * By eye: Trial and error over several models and parameter values. The `lines.variomodel()` function can help.  
 * By least squares fit:  Using ordinary least squares (OLS) or weighted least squares (WLS) methods available through the `variofit()` function.  
 * By maximum likelihood methods: Options for maximum likelihood (ML) and restricted maximum likelihood (REML) are available through the `likfit()` function.  
 
-Try various curves and choosing the one that looks the best. Here we plot two other models on top of the `s100` empirical variogram and the original model.
+Try various curves and choose the one that looks the best. Here we plot two other models on top of the empirical variogram and the original model.
 ```{r}
-plot(s100.v)
+#plot(s100.v)
 lines.variomodel(cov.model = "exp", 
                  cov.pars = c(1, .5),
                  nug = .1, 
@@ -64,31 +69,26 @@ lines.variomodel(cov.model = "sph",
                  lwd = 2, col = "gray70")
 ```
 
-<<<<<<< HEAD
-The black line is based on the same exponential form, but it has a range of .5 and a nugget of .1. The gray line is based on a spherical model with a sill and range of .8 and a nugget of .1. 
-=======
-The black line is the model used to generate the `s100` dataset. The red line is based on the same exponential (exp) function but has a range of .5 and a nugget of .1. The blue line is based on a spherical function with a sill and range of .8 and a nugget of .1. All three models fit the points reasonably well. Key point: In practice, the choice often makes little difference in the quality of the spatial interpolation.
->>>>>>> f51359f6ef65eba2c3c3c21286737b379675238f
+The black line is based on the same exponential function, but it has a range of .5 and a nugget of .1. The gray line is based on a spherical function with a sill and range of .8 and a nugget of .1. 
 
-All three curves fit the points reasonably well. In practice, the choice often makes little difference in the quality of the spatial interpolation.
+All three curves fit the points reasonably well. Key point: In practice, the choice often makes little difference in the quality of the spatial interpolation.
 
 Let's fit a variogram model to the Wolfcamp aquifer data. Recall the  head heights represent the geopotential energy of the aquifer, the gradient of which is related to the speed and direction of water flow.  First plot the empirical variogram.
 ```{r}
 library(tidyverse)
+library(ggplot2)
 
 L <- "http://myweb.fsu.edu/jelsner/temp/data/wolfcamp.csv"
 wca.df <- read_csv(L)
 
-wca.gdf <- as.geodata(wca.df[-30, ], 
+wca.gdf <- as.geodata(wca.df[-30, ], # removed a duplicate measurement
                       coords.col = c("lon", "lat"), 
                       data.col = "head")
 
 wca.v <- variog(wca.gdf, 
-                trend = "1st", 
+                trend = "1st", # compute the variogram values on the residuals from a trend model (1st order)
                 max.dist = 2.3)
 plot(wca.v)
-
-library(ggplot2)
 
 ggplot(data = data.frame(h = wca.v$u, v = wca.v$v), 
        mapping = aes(x = h, y = v)) + 
@@ -209,13 +209,7 @@ par(mfrow = c(1, 3))
 plot(prof, nlevels = 8)
 ```
 
-<<<<<<< HEAD
 Let's consider another data set. Here we want to find a variogram model for April temperatures in the Midwest. The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April.
-=======
-## Another example: A variogram model for April temperatures in the Midwest
-
-The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April.
->>>>>>> f51359f6ef65eba2c3c3c21286737b379675238f
 ```{r}
 library(tidyverse)
 
@@ -224,11 +218,7 @@ t.df <- read_table(L)
 summary(t.df)
 ```
 
-<<<<<<< HEAD
 Map the values.
-=======
-Map the observed values.
->>>>>>> f51359f6ef65eba2c3c3c21286737b379675238f
 ```{r}
 library(sf)
 library(tmap)
