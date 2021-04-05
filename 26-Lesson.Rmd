@@ -10,321 +10,6 @@ editor_options:
 
 **"When debugging, novices insert corrective code; experts remove defective code."** – Richard Pattis
 
-## Example 1: Tropical cyclone rainfall
-
-In 2008, Tropical Cyclone Fay formed from a tropical wave near the Dominican Republic, passed over the island of Hispaniola, Cuba, and the Florida Keys, then crossed the Florida peninsula and moved westward across portions of the panhandle producing heavy rains in parts of the state.
-
-Storm total rainfall amounts from stations in and around the state are in `FayRain.txt`. They are a compilation of reports from the U.S. NOAA/NWS official weather sites and coop sites.
-
-The coop sites are the Community Collaborative Rain, Hail and Snow Network (CoCoRaHS), a community-based, high density precipitation network made up of volunteers who take measurements of precipitation in their backyards. The data were obtained from NOAA/NCEP/HPC and from the Florida Climate Center.
-
-Load the data.
-```{r}
-L <- "http://myweb.fsu.edu/jelsner/temp/data/FayRain.txt"
-FR.df <- read.table(L, header = TRUE)
-names(FR.df)
-```
-
-The data frame contains 803 rainfall sites. Longitude and latitude coordinates of the sites are given in the first two columns and total rainfall in inches and millimeters are given in the second two columns. Create a spatial points data frame by specifying columns that contain the spatial coordinates. Then assign a geographic coordinate system and convert the rainfall from millimeters to centimeters.
-```{r}
-library(sf)
-
-FR.sf <- st_as_sf(x = FR.df,
-                 coords = c("lon", "lat"),
-                 crs = 4326)
-
-FR.sf$tpm <- FR.sf$tpm/10
-summary(FR.sf$tpm)
-```
-
-The median value is 15.8 cm and the maximum is 60.2 cm. 
-
-Next get the Florida county boundaries from the {USAboundaries} package.
-```{r}
-FL.sf <- USAboundaries::us_counties(states = "Florida")
-```
-
-Next we create a character string specifying the tags for a planar projection and transform the geographic coordinates of the site locations and map polygons to the projected coordinates. Here we use Florida GDL Albers (EPSG:3087) with meter as the distance unit.
-
-```{r}
-FR.sf <- st_transform(FR.sf, crs = 3087)
-FL.sf <- st_transform(FL.sf, crs = 3087)
-```
-
-A map of the rainfall sites and storm totals with the state boundaries is made by typing
-```{r}
-library(tmap)
-
-tm_shape(FR.sf) +
-  tm_dots(col = "tpm", size = 1) +
-tm_shape(FL.sf) +
-  tm_borders()
-```
-
-Two areas of heavy rainfall are noted.  One running north-south along the east coast and another across the north. Rainfall collection sites are clustered in and around cities. This will make it difficult to use a spline interpolation.
-
-### Empirical variogram
-
-Rainfall is an example of geostatistical data. In principle it can be measured anywhere, but typically we have values at a sample of sites. The pattern of observation sites is not of much interest as it is a consequence of constraints (convenience, opportunity, economics, etc) unrelated to the phenomenon. Interest centers on inference about how much rain fell across the region.
-
-The empirical variogram is computed using the `variogram()` function. The first argument is the model formula specifying the rainfall column from the data frame and the second argument is the data frame name.  Here `~ 1` in the model formula indicates no covariates or trends in the data. Trends can be included by specifying coordinate names through the `st_coordinates()` function.
-
-We compute the empirical variogram for Fay's rainfall and save it by typing
-```{r}
-FR.v <- variogram(tpm ~ 1, 
-                  data = FR.sf)
-```
-
-We plot the variogram values as a function of lag distance and add text indicating the number of point pairs for each lag distance.
-```{r}
-library(ggplot2)
-
-v.df <- data.frame(dist = FR.v$dist/1000,
-                   gamma = FR.v$gamma,
-                   np = FR.v$np)
-
-( pv <- ggplot(v.df, aes(x = dist, y = gamma)) +
-  geom_point() +
-  geom_text(aes(label = np), nudge_y = -5) +
-  scale_y_continuous(limits = c(0, 220)) +
-  scale_x_continuous(limits = c(0, 400)) +
-  xlab("Lagged distance (h) [km]") +
-  ylab(expression(paste("Semivariance (", gamma, ") [", cm^2, "]"))) +
-  theme_minimal() )
-```
-
-Values start low (~50 cm$^2$) at short lag distance, then increase to over 200 cm$^2$ at lag distance of about 200 km.
-
-The zero-lag semivariance is called the 'nugget' and the semivariance at a level where the variogram values no longer increase is called the 'sill.'  The lag distance to the sill is called the 'range.'  These three parameters (nugget, sill, and range) are used to fit a model to the variogram.
-
-### Variogram model
-
-Next we fit a model to the empirical variogram. The variogram model is a mathematical relationship defining the semivariance as a function of lag distance. We first save the family and the initial parameter guesses in a variogram model (`FR.vmi`) object by typing
-```{r}
-FR.vmi <- vgm(model = "Gau", 
-              psill = 150, 
-              range = 200 * 1000, 
-              nugget = 50)
-FR.vmi
-```
-
-The `psill` argument is the partial sill as the difference between the sill and the nugget. We get estimates of the parameter values from looking at the empirical variogram. 
-
-Next we use the `fit.variogram()` function to improve the fit.  Given a set of initial parameter values, the method of weighted least squares improves the parameter estimates. Ordinary least squares is not appropriate as the semivariances are correlated across the lag distances and the precision on the estimates varies depending on the number of site pairs for a given lag.
-```{r}
-FR.vm <- fit.variogram(object = FR.v, 
-                       model = FR.vmi)
-FR.vm
-```
-
-The result is a variogram model with a nugget of 46.8 cm$^2$, a partial sill of 157 cm$^2$, and a range on the sill of 129 km. 
-
-Let $r$ be the range, $c$ the partial sill and $c_o$ the nugget, then the equation defining the curve over the set of lag distances $h$ is
-$$
-\gamma(h)=c\left(1-\exp\left(-\frac{h^2}{r^2}\right)\right)+c_o
-$$
-
-We create a data frame with values of h and gamma using this equation.
-
-```{r}
-nug <- FR.vm$psill[1]
-ps <- FR.vm$psill[2]
-r <- FR.vm$range[2] / 1000
-h <- seq(0, 400, .2)
-gamma <- ps * (1 - exp(-h^2 / (r^2))) + nug
-
-vm.df <- data.frame(dist = h,
-                    gamma = gamma)
-
-pv + geom_line(aes(x = dist, y = gamma), data = vm.df)
-```
-
-Check for anisotropy.
-```{r}
-plot(variogram(tpm ~ 1, 
-               data = FR.sf, 
-               alpha = c(0, 45, 90, 135)), 
-     xlab = "Lag Distance (m)")
-```
-
-We see the range of correlations is longer (about 300 km) in the north-south direction (0 degrees). We refit the variogram defining an anistropy ellipse with the `anis =` argument. The first parameter is the direction of longest range and the second parameter is the ratio of the longest to shortest. Here about (200/300 = .67).
-```{r}
-FR.vmi <- vgm(model = "Gau", 
-              psill = 150, 
-              range = 300 * 1000, 
-              nugget = 50,
-              anis = c(0, .67))
-FR.vm <- fit.variogram(FR.v, FR.vmi)
-```
-
-### Kriging
-
-The final step is to use the variogram model together with the rainfall values at the observation sites to create an interpolated surface. The process is called kriging. As Edzer Pebesma notes, 'krige' is to 'kriging' as 'predict' is to 'predicting.' Here we use ordinary kriging as there are no spatial trends in the rainfall.
-
-Interpolation is done using the `krige()` function. The first argument is the model specification and the second is the data. Two other arguments are needed. One is the variogram model using the argument name model and the other is a set of locations identifying where the interpolations are to be made. This is specified with the argument name `newdata =`.
-
-#### Interpolate to point loctions
-
-Here we interpolate to locations on a regular grid. We create a grid of locations within the boundary of Florida using the `st_sample()` function.
-```{r}
-grid.sf <- st_sample(FL.sf,
-                     size = 5000,
-                     type = "regular")
-```
-
-We specify the number of locations using the argument `size =`. Note that the actual number of locations will be somewhat different because of the irregular boundary. 
-
-First we use the `krige()` function to interpolate the observed rainfall to the grid locations. Recall that for a given location, the interpolation is a weighted average of the rainfall across the entire region where the weights are determined by the variogram model.
-```{r}
-ipl <- krige(tpm ~ 1, 
-             locations = FR.sf, 
-             newdata = grid.sf,
-             model = FR.vm)
-```
-
-If the variogram model is not included then inverse distance weighted interpolation is performed. The function will not work if different values share the same location. 
-
-The saved object (`ipl`) inherits the spatial object specified in the `newdata` argument, but extends it to a spatial data frame. The data frame with two variables.  The first `var1.pred` is the interpolated rainfall and the second `var1.var` is the prediction variance.
-
-We plot the interpolated field.
-```{r}
-tm_shape(ipl) +
-  tm_dots("var1.pred",
-          size = .1,
-          palette = "Greens",
-          title = "Rainfall (cm)") +
-  tm_shape(FL.sf) +
-  tm_borders() +
-  tm_layout(legend.position = c("left", "bottom"),
-            title = "Tropical Cyclone Fay (2008)",
-            title.position = c("left", "bottom"))
-```
-
-Note that a portion of the data values where outside of the state but our interest is only to have values on a grid within the state. 
-
-The spatial interpolation shows that parts of east central and north Florida were deluged by Fay.
-
-#### Interpolate to the counties (block kriging)
-
-We use block kriging to estimate average rainfall within each county. The county-wide rainfall average is relevant for water resource managers. Block kriging produces a smoothed estimate of this area average, which will differ from a simple average over all sites within the county because of spatial autocorrelation.
-
-We use the same function to interpolate but specify the spatial polygons rather than the spatial grid as the new data.
-```{r}
-ipl2 <- krige(tpm ~ 1, 
-              locations = FR.sf, 
-              newdata = FL.sf, 
-              model = FR.vm)
-```
-
-Again we plot the interpolations.
-```{r}
-tm_shape(ipl2) +
-  tm_polygons(col = "var1.pred",
-            palette = "Greens",
-            title = "Rainfall (cm)") +
-  tm_layout(legend.position = c("left", "bottom"),
-            title = "Tropical Cyclone Fay (2008)",
-            title.position = c("left", "bottom"))
-```
-
-The overall pattern of rainfall from Fay featuring the largest amounts along the central east coast and over the eastern panhandle are similar in both maps.
-
-We compare the kriged average with the simple average at the county level with `aggregate()` from the {sf} package.
-```{r}
-ipl3 <- aggregate(FR.sf, by = FL.sf, FUN = mean)
-```
-
-The function returns a simple feature data frame of the average rainfall in each county.
-
-The state-wide mean of the kriged estimates at the county level is 
-```{r}
-round(mean(ipl2$var1.pred), 2)
-```
-
-This compares with a state-wide mean from the simple averages.
-```{r}
-round(mean(ipl3$tpm), 2)
-```
-
-The correlation between the two estimates across the 67 counties is 
-```{r}
-round(cor(ipl3$tpm, ipl2$var1.pred), 2)
-```
-
-The variogram model reduces the standard deviation of the kriged estimate relative to the standard deviation of the simple averages because of the local smoothing.
-```{r}
-round(sd(ipl2$var1.pred), 2)
-round(sd(ipl3$tpm), 2)
-```
-
-This can be seen with a scatter plot of simple averages versus kriged averages at the county level.
-```{r}
-compare.df <- data.frame(simpleAvg = ipl3$tpm,
-                         krigeAvg = ipl2$var1.pred)
-ggplot(compare.df, aes(x = simpleAvg,
-                       y = krigeAvg)) +
-  geom_point() +
-  geom_abline(slope = 1) +
-  geom_smooth(method = lm, se = FALSE)
-```
-
-### Uncertainty
-
-Another advantage of kriging as a method of spatial interpolation is the accompanying uncertainty estimates.  
-
-The prediction variances are listed in a column in the spatial data frame saved from apply the `krige()` function. Variances are smaller in regions with more rainfall observations.  
-
-Prediction variances are also smaller with block kriging as much of the variability within the county averages out. To compare the distribution characteristics of the prediction variances for the point and block kriging of the rainfall observations, type
-```{r}
-round(summary(ipl$var1.var), 1)
-round(summary(ipl2$var1.var), 1)
-```
-
-The median prediction variance (in cm$^2$) for our point kriging is close to the value of the nugget.
-```{r}
-round(fivenum(ipl$var1.var)[3], 1)
-```
-
-In contrast the median prediction variance for our block kriging is a much smaller 
-```{r} 
-round(fivenum(ipl2$var1.var)[3], 1)
-```
-
-Simulations exploit this uncertainty and provide synthetic data for use in deterministic models. 
-
-Conditional simulation, where the simulated field (realization) is generated given the data and the variogram model, is done using the same `krige()` function by adding the argument `nsim` to specify the number of simulations.  
-
-For a large number it may be necessary to limit the number neighbors in the kriging. This is done using the `nmax` argument. For a given location, the weights assigned to observations far away are very small, so it is efficient to limit how many are used in the simulation.
-
-As an example, here we generate four realizations of the county-level storm total rainfall for Fay and limit the neighborhood to 50 of the closest observation sites. Note that it may take a few seconds.
-```{r}
-ipl.sim <- krige(tpm ~ 1, 
-                 locations = FR.sf, 
-                 newdata = FL.sf, 
-                 model = FR.vm, 
-                 nsim = 4, 
-                 nmax = 50)
-```
-
-Simulations are conditional on the observed rainfall and the variogram model using block kriging on the counties.
-
-```{r}
-library(tmap)
-
-tm_shape(ipl.sim) +
-    tm_polygons(col = c("sim1", "sim2", "sim3", "sim4"),
-                palette = "Greens",
-                title = "Simulated Rainfall [cm]") +
-    tm_facets(free.scales = FALSE) 
-```
-
-The overall pattern of rainfall remains the same, but there are differences especially in counties with fewer observations and in counties where the rainfall gradients are sharp.
-
-
-## Example 2: Beauregard Tornado
-
-BeauregardTornado.Rmd
-
 ## Cokriging
 
 Statistical interpolation can be extended to obtain surfaces of multiple field variables. The idea is that if two field variables are correlated then information about the spatial correlation in one field variable can help provide information about values in the other field variable. The spatial variability of one variable is correlated with the spatial variability of the other variable. And this idea is not limited to only two variables. 
@@ -415,3 +100,243 @@ spplot(cok, "cov.logCd.logZn")
 The map shows areas of the flood plain with high (and low) correlations between cadmium and zinc.
 
 Obtaining a quality statistical interpolation is a nuanced process but with practice kriging can be an important tool in a spatial analyst's toolbox.
+
+## Block cross validation for species distribution models
+
+The use of spatial and environmental blocks to separate training and testing sets is needed for realistic error estimation in datasets with dependence structures, and for estimating the predictive performance of models involving mapped distributions [@RobertsEtAl2017]. 
+
+Package {blockCV} provides functions to separate train and test sets using buffers, spatial and environmental blocks. It provides several options for how those blocks are constructed. It also has a function that applies geostatistical techniques to investigate the existing level of spatial autocorrelation in the covariates to inform the choice of a suitable distance band by which to separate the data sets. In addition, some visualization tools are provided to help the user choose the block size and explore generated folds.
+
+The package has been written with Species Distribution Modelling (SDM) in mind, and the functions allow for a number of common scenarios (including presence-absence and presence-background species data, rare and common species, raster data for predictor variables). Although it can be applied to any spatial modelling e.g. multi-class responses for remote sensing image classification.
+
+You can find more information about blocking strategies of blockCV package and in general block cross-validation technique in the package associated paper [@ValaviEtAl2018].
+
+This chapter presents the main functions of the package and illustrates its usage with three examples: modelling using {randomForest}, {maxnet} (new implementation of Maxent software in R) and {biomod2} packages.
+
+The package contains the raw format of the following data:
+* Raster covariates of Australian Wet Tropic region (`.tif`)
+* Simulated species data (`.csv`)
+
+These data are used to illustrate how the package is used. The raster data include several bioclimatic and topographic variables from Australian Wet Tropic region aggregated to 800 m resolution. The species data contains records of a species, simulated based on the above environmental variables for the region. There are two .csv files with presence-absence and presence-background data.
+
+First we load the packages and import the raster data.
+```{r}
+library(blockCV)
+library(raster)
+library(sf)
+
+awt <- raster::brick(system.file("extdata", "awt.grd", package = "blockCV"))
+```
+
+The presence absence species data include 116 presence points and 138 absence points. The appropriate format of species data for the blockCV package is simple features (sf) or SpatialPointsDataFrame. We convert the data frame to simple feature data frame as follows:
+```{r}
+PA.df <- read.csv(system.file("extdata", "PA.csv", package = "blockCV"))
+PA.sf <- st_as_sf(PA.df, 
+                  coords = c("x", "y"), 
+                  crs = crs(awt))
+PA.sf
+```
+
+Map these data.
+```{r}
+library(tmap)
+
+tm_shape(awt[[1]]) +
+  tm_raster() +
+tm_shape(PA.sf[PA.sf$Species == 1,]) +
+  tm_bubbles(size = .4, col = "red") +
+tm_shape(PA.sf[PA.sf$Species == 0,]) +
+  tm_bubbles(size = .4, col = "gray")
+```
+
+The presence background data include the 116 presence points and 10,000 random background points (0s here).
+```{r}
+PB.df <- read.csv(system.file("extdata", "PB.csv", package = "blockCV"))
+PB.sf <- st_as_sf(PB.df, 
+                  coords = c("x", "y"), 
+                  crs = crs(awt))
+
+table(PB.sf$Species)
+```
+
+The function `spatialBlock()` creates spatially separated folds based on a pre-specified distance (cell size of the blocks). It then assigns blocks to the training and testing folds with random, checkerboard pattern or in a systematic manner. The function can also divide the study region into vertical and horizontal bins with a given number of rows and columns.
+
+The range argument (`theRange`) needs to be in meters. When the input map has geographic coordinate system (decimal degrees), the block size is calculated based on dividing `theRange` by 111325 (the standard distance of a degree in meters, on the Equator).
+
+The xOffset and yOffset can be used to shift the spatial position of the blocks in horizontal and vertical axes, respectively. This only works when the block have been built based on theRange. The blocks argument allows users to define an external spatial polygon as blocking layer. The polygon layer must cover all the species points. In addition, blocks can be masked by species spatial data. This option keeps the blocks that cover species data and remove the rest.
+
+Here we block by specified range with random assignment.
+```{r}
+sb <- spatialBlock(speciesData = PA.sf,
+                   species = "Species",
+                   rasterLayer = awt,
+                   theRange = 70000, # size of the blocks
+                   k = 5,
+                   selection = "random",
+                   iteration = 100, # find evenly dispersed folds
+                   biomod2Format = TRUE,
+                   xOffset = 0, # shift the blocks horizontally
+                   yOffset = 0)
+```
+
+Here we block by rows and columns with checkerboard assignment.
+```{r}
+sb2 <- spatialBlock(speciesData = PA.sf, # presence-background data
+                    species = "Species",
+                    rasterLayer = awt,
+                    rows = 5,
+                    cols = 6,
+                    k = 5,
+                    selection = "systematic",
+                    biomod2Format = TRUE)
+```
+
+For visualising the species data on top of the spatial blocks, one can use `geom_sf()` function of the {ggplot2} package. However, a more sophisticated way of plotting each fold separately is presented in the visualisation tools section.
+```{r}
+library(ggplot2)
+
+sb$plots + 
+  geom_sf(data = PA.sf, alpha = 0.5)
+```
+
+The function `buffering()` generates spatially separated training and testing folds by considering buffers of specified distance around each observation point. This approach is a form of leave-one-out cross-validation. Each fold is generated by excluding nearby observations around each testing point within the specified distance (ideally the range of spatial autocorrelation). In this method the test set never directly abuts a training presence or absence.
+
+When working with presence-background (presence and pseudo-absence) data (specified by `spDataType` argument), only presence records are used for specifying the folds. Consider a target presence point. The buffer is defined around this target point, using the specified range (`theRange`). The testing fold comprises the target presence point and all background points within the buffer. Any non-target presence points inside the buffer are excluded. All points (presence and background) outside of buffer are used for training set. The method cycles through all the presence data, so the number of folds is equal to the number of presence points in the dataset.
+
+For presence-absence data, folds are created based on all records, both presences and absences. As above, a target observation (presence or absence) forms a test point, all presence and absence points other than the target point within the buffer are ignored, and the training set comprises all presences and absences outside the buffer. 
+
+Apart from the folds, the number of training-presence, training-absence, testing-presence and testing-absence records is stored and returned in the records table. If `species = NULL` (no column with 0s and 1s is defined), the procedure is like presence-absence data. All other types of data (continuous, count or multi-class response) should be used like this.
+
+Buffering with presence-absence data
+```{r}
+bf1 <- buffering(speciesData = PA.sf,
+                 theRange = 70000,
+                 species = "Species", # to count the number of presences and absences/backgrounds
+                 spDataType = "PA", # presence-absence  data type
+                 progress = TRUE)
+```
+
+In the following buffering example, presence-background data are used. As explained above, by default the background data within any target point will remain in the testing fold. This can be changed by setting `addBG = FALSE` (this option only works when `spDataType = "PB"`; note the default value is `"PA"`).
+
+Buffering with presence-background data
+```{r eval=FALSE}
+bf2 <- buffering(speciesData = PB.sf, # presence-background data
+                 theRange = 70000,
+                 species = "Species",
+                 spDataType = "PB", # presence-background data type
+                 addBG = TRUE, # add background data to testing folds
+                 progress = TRUE)
+```
+
+The function `envBlock()` uses clustering methods to specify sets of similar environmental conditions based on the input covariates. Species data corresponding to any of these groups or clusters are assigned to a fold.
+
+As k-means algorithms use Euclidean distance to estimate clusters, the input covariates should be quantitative variables. Since variables with wider ranges of values might dominate the clusters and bias the environmental clustering (Hastie et al., 2009), all the input rasters are first standardized within the function. This is done either by normalizing based on subtracting the mean and dividing by the standard deviation of each raster (the default) or optionally by standardizing using linear scaling to constrain all raster values between 0 and 1. 
+
+By default, the clustering is done in the raster space. In this approach, the clusters will be consistent throughout the region and across species (in the same region). However, this may result in cluster(s) that cover none of the species records especially when species data is not dispersed throughout the region or the number of clusters (k or folds) is high. In this case, the number of folds is less than the specified k. If `rasterBlock = FALSE`, the clustering will be done based only on the values of the predictors at the species presence and absence/background points. In this case, and the number of the folds will be the same as k.
+
+Note that the input raster layer should cover all the species points, otherwise an error will rise. The records with no raster value should be deleted prior to the analysis.
+```{r}
+eb <- envBlock(rasterLayer = awt,
+               speciesData = PA.sf,
+               species = "Species",
+               k = 5,
+               standardization = "standard", # rescale variables between 0 and 1
+               rasterBlock = FALSE,
+               numLimit = 50)
+```
+
+To support a first choice of block size, prior to any model fitting, package {blockCV} includes the option for the user to look at the existing autocorrelation in the predictors, as an indication of landscape spatial structure in their study area. The tool does not suggest any absolute solution to the problem, but serves as a guide to the user. 
+
+The function works by automatically fitting variograms to each continuous raster and finding the effective range of spatial autocorrelation. Variogram is a fundamental geostatistical tool for measuring spatial autocorrelation. It does so by assessing variability between all pairs of points. It provides information about the effective range of spatial autocorrelation which is the range over which observations are independent.
+```{r}
+sac <- spatialAutoRange(rasterLayer = awt,
+                        sampleNumber = 5000,
+                        doParallel = TRUE,
+                        showPlots = TRUE)
+
+summary(sac)
+
+library(automap)
+
+plot(sac$variograms[[1]])
+```
+
+Another data set: PRISM temperatures
+
+Clear, calm days in April "1991-04-02" "1992-04-15" "1993-04-11" "1994-04-02" "1995-04-09"
+```{r}
+CCdates <- "2020-04-09" # record hot day 94F at airport
+CCdates <- c("1991-04-02", "1992-04-15", "1993-04-11", "1994-04-02", "1995-04-09")
+CCstring <- gsub("-", "", CCdates)
+```
+
+```{r}
+library(prism)
+options(prism.path = "PRISM")
+```
+
+```{r}
+i <- 1
+
+get_prism_dailys(
+  type = "tmax",
+  minDate = CCdates[i], 
+  maxDate = CCdates[i], 
+  keepZip = FALSE 
+)
+get_prism_dailys(
+  type = "tmin",
+  minDate = CCdates[i], 
+  maxDate = CCdates[i], 
+  keepZip = FALSE 
+)
+
+tmin.r <- raster(paste0("PRISM/PRISM_tmin_provisional_4kmD2_", CCstring[i], "_bil/PRISM_tmin_provisional_4kmD2_", CCstring[i], "_bil.bil"))
+tmax.r <- raster(paste0("PRISM/PRISM_tmax_provisional_4kmD2_", CCstring[i], "_bil/PRISM_tmax_provisional_4kmD2_", CCstring[i], "_bil.bil"))
+
+Leon.sf <- USAboundaries::us_counties(states = "FL") %>%
+  dplyr::filter(name %in% c("Leon", "Gadsden", "Liberty", "Wakulla", "Jefferson", "Jackson", "Calhoun")) %>%
+  sf::st_transform(crs = projection(tmax.r))
+
+tmin.r2 <- crop(tmin.r, Leon.sf)
+tmax.r2 <- crop(tmax.r, Leon.sf)
+
+#Moran(tmin.r2)
+#Moran(tmax.r2)
+
+temps <- brick(tmin.r2, tmax.r2)
+#tempsp <- projectRaster(temps, crs = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+
+sac <- spatialAutoRange(rasterLayer = temps,
+                        sampleNumber = 100,
+                        doParallel = TRUE,
+                        showPlots = TRUE)
+
+summary(sac)$range
+
+#plot(sac$variograms[[1]])
+```
+
+Package {blockCV} provides two major visualisation tools for graphical exploration of the generated folds and assisting in block size selection. These tools have been developed as local web applications using R-package shiny. With `rangeExplorer()`, the user can choose among block sizes in a specified range, visualise the resulting blocks interactively, viewing the impact of block size on number and arrangement of blocks in the landscape (and optionally on the distribution of species data in those blocks). The `foldExplorer()` tool displays folds and the number of records in each fold; it works for all three blocking methods.
+
+Explore generated folds
+```{r}
+foldExplorer(blocks = sb, 
+             rasterLayer = awt, 
+             speciesData = PA.sf)
+```
+
+Explore the block size
+```{r}
+rangeExplorer(rasterLayer = awt) # the only mandatory input
+```
+
+Add species data to add them on the map
+```{r}
+rangeExplorer(rasterLayer = awt,
+              speciesData = PA.sf,
+              species = "Species",
+              rangeTable = NULL,
+              minRange = 30000, # limit the search domain
+              maxRange = 100000)
+```
