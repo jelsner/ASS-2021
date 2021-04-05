@@ -13,7 +13,7 @@ editor_options:
 
 Last two weeks of what has been a long (and lonely) semester. Here is my plan to bring this course in for a soft landing. 
 
-This week: Last two synchronous lessons and the final assignment. The final assignment will be due on Friday, April 16 at 3p. I will be available this Friday and next Friday for live help if needed. The last two lessons next week will be Rmd files that you can work through on your own if interested.
+This week: Last two synchronous lessons and the final assignment. The final assignment will be due on Friday, April 16 at 3p. I will be available this Friday for live help if needed. The last two lessons next week will be Rmd files that you can work through on your own if interested.
 
 Last week: introduction to spatial statistical interpolation. It begins with separating trends from local spatial autocorrelation. The local spatial autocorrelation is quantified with an empirical variogram. The next two steps involve fitting a model to the empirical variogram and using the model variogram together with the data to interpolate values across the domain.
 
@@ -128,7 +128,7 @@ lines.variomodel(cov.model="sph",
                  col = "red")
 ```
 
-Better still. We try an exponential model with the same sill but the same range.
+Better still. We try an exponential model with the same sill but a different range.
 ```{r}
 plot(wca.v)
 lines.variomodel(cov.model = "exp", 
@@ -314,7 +314,7 @@ tm_shape(sts) +
 
 (b) Next predict the head heights at the grid locations. 
 
-The `krige.conv()` function performs the kriging. Predictions are made at the grid locations using the data and the variogram model (`wca.vm`). We specify a 1st-order trend in the data (`trend.d`) and we want the predictions to include the trend (`trend.l`) so these are included as parameters in the `krige.control()` function.
+The `krige.conv()` function performs the kriging. Predictions (interpolations) are made at the grid locations using the data and the variogram model (`wca.vm`). We specify a 1st-order trend in the data (`trend.d`) and we want the predictions to include the trend (`trend.l`) so these are included as parameters in the `krige.control()` function.
 ```{r}
 wca.ks <- krige.conv(wca.gdf, 
                      loc = pgrid.df, 
@@ -405,7 +405,7 @@ ggplot(df, aes(x = observed, y = predicted)) +
 
 The black line represents a perfect prediction and the red line is the best fit line when we regress the predicted head heights onto the observed head heights. The fact that the two lines nearly coincide indicates the interpolation is good.
 
-We quantify how good using the mean squared error and mean absolute error as follows/
+We quantify how good using the mean squared error and mean absolute error as follows.
 ```{r}
 mean(xv.wk$error^2)
 mean(abs(xv.wk$error))
