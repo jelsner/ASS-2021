@@ -10,9 +10,11 @@ editor_options:
 
 **"Statistics is such a powerful language for describing data in ways that reveal nothing about their causes. Of course statistics is powerful for revealing causes as well. But it takes some care. Like the difference between talking and making sense."** -- Richard McElreath
 
+Last synchronous lesson. The final assignment will be due next Friday, April 16 at 3p. I will be available this Friday for live help if needed. Next week the last two lessons will be Rmd files that you can work through on your own if interested.
+
 ## Interpolating April temperatures across the Midwest
 
-The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April. The goal is a spatial interpolation of these values onto a 56 by 35 grid.
+The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April. The goal is a spatial interpolation of these values.
 
 Step 1: Examine the data for spatial trends and normality.
 ```{r}
@@ -25,9 +27,15 @@ summary(t.df)
 
 Map the values.
 ```{r}
+library(sf)
+library(tmap)
+library(USAboundaries)
+
 t.sf <- st_as_sf(x = t.df, 
                  coords = c("lon", "lat"),
                  crs = 4326)
+
+sts <- us_states()
 
 tm_shape(t.sf) +
   tm_text(text = "temp", size = .6) +
@@ -37,6 +45,8 @@ tm_shape(sts) +
 
 Create a `geodata` object from the data frame.
 ```{r}
+library(geoR)
+
 t.gdf <- as.geodata(t.df)
 summary(t.gdf)
 plot(t.gdf)
@@ -46,24 +56,26 @@ The maximum pairwise distance is 11.5 degrees. There is a pronounced 1st order t
 
 Remove the non-linear trend and examine the residuals.
 ```{r}
-plot(t.gdf, trend = "2nd")
+plot(t.gdf, 
+     trend = "2nd")
 ```
 
 By specifying a higher order trend, the lower order trends are taken care of. The distribution of residuals is approximately normal as we might expect. The data are monthly means.
 
-Step 2: Compute empirical variograms. Check for anisotropy by plotting directional variograms.
+Step 2: Compute empirical variograms. Check for anisotropy (correlations are more persistent in a particular direction) by plotting directional variograms.
 ```{r}
-par(mfrow = c(1, 1))
-plot(variog4(t.gdf, trend = "2nd", 
+plot(variog4(t.gdf, 
+             trend = "2nd", 
              max.dist = 5.5), 
-     omni = TRUE, legend = FALSE)
+     omni = TRUE, 
+     legend = FALSE)
 ```
 
 There is no strong evidence to reject isotropy.
 
 Fit a variogram model to the data. Here we consider several likelihood fits to an exponential model and examine the AIC for final parameter selection.  The AIC is used as a selection criterion and is a function of the maximized likelihood function but includes a penalty for model complexity that favors simpler models. Recall the best fit has the largest log-likelihood and smallest AIC.  
 
-Set initial values for the sill and range. From the variograms start with 3 for the sill and 4 for the range.
+Set initial values for the sill and range. From the variograms we start with 3 for the sill and 4 for the range.
 ```{r}
 iv <- c(3, 4)  
 summary(likfit(t.gdf, 
@@ -90,7 +102,7 @@ summary(likfit(t.gdf, ini = iv,
                message = FALSE))$likelihood$AIC
 ```
 
-It appears that a good variogram model would be on the residuals of a 2nd order trend using an exponential function with fixed nugget equal to zero. A spherical function with a nugget is also a reasonable model.
+It appears that a good variogram model on the residuals would be an exponential function with fixed nugget equal to zero. A spherical function with a nugget is also a reasonable model.
 
 To obtain the model parameters, type
 ```{r}
@@ -136,8 +148,15 @@ kcS <- krige.conv(t.gdf,
                                        obj.m = modelS))
 ```
 
-Plot the interpolated surface generated using the exponential variogram. function.
+Plot the interpolated surface. A quick plot is made with the `image()` function.
 ```{r}
+image(kcE)
+```
+
+To create a more publishable version we create a raster then use the functions from the {tmap} package.
+```{r}
+library(sp)
+
 pgrid.df$temp <- kcE$predict
 pgrid.df$var <- kcE$krige.var
 
@@ -239,6 +258,8 @@ The empirical variogram is computed using the `variogram()` function. The first 
 
 We compute the empirical variogram for Fay's rainfall and save it by typing
 ```{r}
+library(gstat)
+
 FR.v <- variogram(tpm ~ 1, 
                   data = FR.sf)
 ```
