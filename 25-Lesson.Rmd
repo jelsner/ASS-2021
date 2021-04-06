@@ -3,6 +3,7 @@ title: "Lesson 25"
 author: "James B. Elsner"
 date: "April 7, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -10,7 +11,7 @@ editor_options:
 
 **"Statistics is such a powerful language for describing data in ways that reveal nothing about their causes. Of course statistics is powerful for revealing causes as well. But it takes some care. Like the difference between talking and making sense."** -- Richard McElreath
 
-Last synchronous lesson. The final assignment will be due next Friday, April 16 at 3p. I will be available this Friday for live help if needed. Next week the last two lessons will be Rmd files that you can work through on your own if interested.
+Last synchronous lesson. Next week the last two lessons on assorted topics in spatial statistics will be available as Rmd files that you can work through on your own if interested. The final assignment will be due _next_ Friday, April 16 at 3p. I will be available this Friday (but not next) for live help if needed. 
 
 ## Interpolating April temperatures across the Midwest
 
