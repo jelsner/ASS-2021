@@ -11,22 +11,23 @@ editor_options:
 
 **"Statistics is such a powerful language for describing data in ways that reveal nothing about their causes. Of course statistics is powerful for revealing causes as well. But it takes some care. Like the difference between talking and making sense."** -- Richard McElreath
 
-Last synchronous lesson. Next week the last two lessons on assorted topics in spatial statistics will be available as Rmd files that you can work through on your own if interested. The final assignment will be due _next_ Friday, April 16 at 3p. I will be available this Friday (but not next) for live help if needed. 
+Last synchronous lesson. Next week the last two lessons, covering assorted topics in spatial statistics, will be available as Rmd files only (no video). You can work through the files on your own if interested. The final assignment will be due _next_ Friday, April 16 at 3p. I will be available this Friday (but not next) for live help if needed.
 
-## Interpolating April temperatures across the Midwest
+Today: Two full examples of spatial interpolation. We start by returning to the Midwest temperature data that we considered last lesson and create an interpolated surface using functions from the {geoR} package. We then consider precipitation from a tropical cyclone affecting Florida and we use functions from the {gstat} package to create the interpolated surface.
 
-The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April. The goal is a spatial interpolation of these values.
+## Interpolating temperatures across the Midwest using functions from the {geoR} package
 
-Step 1: Examine the data for spatial trends and normality.
+The data in `MidwestTemps.txt` are average temperatures in and around the state of Iowa for the month of April. The goal is a procedure that can be used to estimate the average temperature (and the uncertainty) anywhere across the Midwest.
+
+We start by examining the data for spatial trends.
 ```{r}
 library(tidyverse)
 
 L <- "http://myweb.fsu.edu/jelsner/temp/data/MidwestTemps.txt"
-t.df <- read_table(L)
-summary(t.df)
+( t.df <- read_table(L) )
 ```
 
-Map the values.
+We map the values.
 ```{r}
 library(sf)
 library(tmap)
@@ -39,31 +40,33 @@ t.sf <- st_as_sf(x = t.df,
 sts <- us_states()
 
 tm_shape(t.sf) +
-  tm_text(text = "temp", size = .6) +
+  tm_text(text = "temp", 
+          size = .6) +
 tm_shape(sts) +
   tm_borders() 
 ```
 
-Create a `geodata` object from the data frame.
+We create a `geodata` object from the data frame.
 ```{r}
 library(geoR)
 
 t.gdf <- as.geodata(t.df)
 summary(t.gdf)
+
 plot(t.gdf)
 ```
 
 The maximum pairwise distance is 11.5 degrees. There is a pronounced 1st order trend in the north/south direction as we might expect with air temperatures.
 
-Remove the non-linear trend and examine the residuals.
+Remove the 2nd-order trend and examine the residuals.
 ```{r}
 plot(t.gdf, 
      trend = "2nd")
 ```
 
-By specifying a higher order trend, the lower order trends are taken care of. The distribution of residuals is approximately normal as we might expect. The data are monthly means.
+By specifying a 2nd-order trend, the 1st-order trend is taken care of. The distribution of the residuals from this non-linear trend is approximately normal as we might expect since the values are monthly averages.
 
-Step 2: Compute empirical variograms. Check for anisotropy (correlations are more persistent in a particular direction) by plotting directional variograms.
+Compute empirical variograms. Check for anisotropy (correlations are more persistent in a particular direction) by plotting directional variograms.
 ```{r}
 plot(variog4(t.gdf, 
              trend = "2nd", 
@@ -74,7 +77,7 @@ plot(variog4(t.gdf,
 
 There is no strong evidence to reject isotropy.
 
-Fit a variogram model to the data. Here we consider several likelihood fits to an exponential model and examine the AIC for final parameter selection.  The AIC is used as a selection criterion and is a function of the maximized likelihood function but includes a penalty for model complexity that favors simpler models. Recall the best fit has the largest log-likelihood and smallest AIC.  
+Next we fit a variogram model to the data. Here we consider several likelihood fits to an exponential model and examine the AIC for final parameter selection.  The AIC is used as a selection criterion and is a function of the maximized likelihood function but includes a penalty for model complexity that favors simpler models. Recall the best fit has the largest log-likelihood and smallest AIC.  
 
 Set initial values for the sill and range. From the variograms we start with 3 for the sill and 4 for the range.
 ```{r}
@@ -113,7 +116,7 @@ likfit(t.gdf, ini = iv, cov.model = "sph",
        trend = "2nd", fix.nug = FALSE)
 ```
 
-Plot the competing models on the empirical variogram.
+We plot the competing models on the empirical variogram.
 ```{r}
 plot(variog(t.gdf, trend = "2nd", 
             uvec = seq(0, 5.5, l = 29)))
@@ -125,36 +128,42 @@ lines.variomodel(cov.model = "sph",
                  nug =.5, max.dist = 5.5, col = "green")
 ```
 
-Save the models.
+We save the models by assigning the output.
 ```{r}
-modelE <- likfit(t.gdf, ini = iv, cov.model = "exp", 
-                  trend = "2nd", fix.nug = TRUE)
-modelS <- likfit(t.gdf, ini = iv, cov.model = "sph", 
-                  trend = "2nd", fix.nug = FALSE)
+modelE <- likfit(t.gdf, 
+                 ini = iv, 
+                 cov.model = "exp", 
+                 trend = "2nd", 
+                 fix.nug = TRUE)
+modelS <- likfit(t.gdf,
+                 ini = iv,
+                 cov.model = "sph", 
+                 trend = "2nd",
+                 fix.nug = FALSE)
 ```
 
-Create an interpolated surface. We create a grid of locations at which we want the temperatures to be interpolated. Here we use the `expand.grid` function where the arguments are the sequence of longitudes and latitudes, respectively. We then use the `krige.conv()` function to interpolate the values to the grid. We save the interpolation in `kcE` when we use the exponential variogram model to weight the observations and save the interpolation in `kcS` when we use the spherical model to weight the observations.
+Next we create an interpolated surface. We make a grid of locations at which we want the temperatures to be interpolated. We use the `expand.grid()` function where the arguments are the sequence of longitudes and latitudes, respectively. We then use the `krige.conv()` function to interpolate the values to the grid. We save the interpolation in `kcE` when we use the exponential variogram model to weight the observations and save the interpolation in `kcS` when we use the spherical model to weight the observations.
 ```{r}
 pgrid.df<- expand.grid(lon = seq(-99, -88, l = 224), 
                        lat = seq(38.4, 45.4, l = 136))
 kcE <- krige.conv(t.gdf, 
                   loc = pgrid.df, 
                   krige = krige.control(trend.d = "2nd", 
-                                       trend.l = "2nd",
-                                       obj.m = modelE))
+                                        trend.l = "2nd",
+                                        obj.m = modelE))
 kcS <- krige.conv(t.gdf, 
                   loc = pgrid.df,
                   krige = krige.control(trend.d = "2nd", 
-                                       trend.l = "2nd",
-                                       obj.m = modelS))
+                                        trend.l = "2nd",
+                                        obj.m = modelS))
 ```
 
-Plot the interpolated surface. A quick plot is made with the `image()` function.
+We make a quick plot of the interpolated surface with the `image()` function.
 ```{r}
 image(kcE)
 ```
 
-To create a more publishable version we create a raster then use the functions from the {tmap} package.
+We create a more publishable version using the functions from the {tmap} package. We first convert the predicted values to a raster.
 ```{r}
 library(sp)
 
@@ -200,19 +209,16 @@ tm_shape(t.sf) +
 
 The model with a non-zero nugget is smoother. The greater the nugget relative to the sill (relative nugget effect), the smoother the interpolation.
 
-## Spatial statistical interpolation using functions from the {gstat} package
+## Interpolating rainfall across Florida using functions from the {gstat} package
 
 In 2008, Tropical Cyclone Fay formed from a tropical wave near the Dominican Republic, passed over the island of Hispaniola, Cuba, and the Florida Keys, then crossed the Florida peninsula and moved westward across portions of the panhandle producing heavy rains in parts of the state.
 
-Storm total rainfall amounts from stations in and around the state are in `FayRain.txt`. They are a compilation of reports from the U.S. NOAA/NWS official weather sites and coop sites.
+Storm total rainfall amounts from stations in and around the state are in `FayRain.txt`. They are compiled reports from official weather sites and many cooperative sites. The cooperative sites are the Community Collaborative Rain, Hail and Snow Network (CoCoRaHS), a community-based, high density precipitation network made up of volunteers who take measurements of precipitation in their backyards. The data were obtained from NOAA/NCEP/HPC and from the Florida Climate Center.
 
-The coop sites are the Community Collaborative Rain, Hail and Snow Network (CoCoRaHS), a community-based, high density precipitation network made up of volunteers who take measurements of precipitation in their backyards. The data were obtained from NOAA/NCEP/HPC and from the Florida Climate Center.
-
-Load the data.
+Import the data.
 ```{r}
 L <- "http://myweb.fsu.edu/jelsner/temp/data/FayRain.txt"
-FR.df <- read.table(L, header = TRUE)
-names(FR.df)
+( FR.df <- read.table(L, header = TRUE) )
 ```
 
 The data frame contains 803 rainfall sites. Longitude and latitude coordinates of the sites are given in the first two columns and total rainfall in inches and millimeters are given in the second two columns. Create a spatial points data frame by specifying columns that contain the spatial coordinates. Then assign a geographic coordinate system and convert the rainfall from millimeters to centimeters.
@@ -220,28 +226,27 @@ The data frame contains 803 rainfall sites. Longitude and latitude coordinates o
 library(sf)
 
 FR.sf <- st_as_sf(x = FR.df,
-                 coords = c("lon", "lat"),
-                 crs = 4326)
+                  coords = c("lon", "lat"),
+                  crs = 4326)
 
 FR.sf$tpm <- FR.sf$tpm/10
 summary(FR.sf$tpm)
 ```
 
-The median value is 15.8 cm and the maximum is 60.2 cm. 
+The median rainfall amount is 15.8 cm and the highest amount is 60.2 cm. 
 
-Next get the Florida county boundaries from the {USAboundaries} package.
+We get the Florida county boundaries from the {USAboundaries} package.
 ```{r}
 FL.sf <- USAboundaries::us_counties(states = "Florida")
 ```
 
-Next we create a character string specifying the tags for a planar projection and transform the geographic coordinates of the site locations and map polygons to the projected coordinates. Here we use Florida GDL Albers (EPSG:3087) with meter as the distance unit.
-
+We create a character string specifying the tags for a planar projection and transform the geographic coordinates of the site locations and map polygons to the projected coordinates. Here we use Florida GDL Albers (EPSG:3087) with meter as the distance unit.
 ```{r}
 FR.sf <- st_transform(FR.sf, crs = 3087)
 FL.sf <- st_transform(FL.sf, crs = 3087)
 ```
 
-A map of the rainfall sites and storm totals with the state boundaries is made by typing
+We make a map of the rainfall sites and storm totals with the state boundaries.
 ```{r}
 library(tmap)
 
@@ -313,7 +318,6 @@ $$
 $$
 
 We create a data frame with values of h and gamma using this equation.
-
 ```{r}
 nug <- FR.vm$psill[1]
 ps <- FR.vm$psill[2]
@@ -345,7 +349,7 @@ FR.vmi <- vgm(model = "Gau",
 FR.vm <- fit.variogram(FR.v, FR.vmi)
 ```
 
-The final step is to use the variogram model together with the rainfall values at the observation sites to create an interpolated surface. Here we use _ordinary_ kriging as there are no spatial trends in the rainfall.
+In the final step we use the variogram model together with the rainfall values at the observation sites to create an interpolated surface. Here we use _ordinary_ kriging as there are no spatial trends in the rainfall.
 
 Interpolation is done using the `krige()` function. The first argument is the model specification and the second is the data. Two other arguments are needed. One is the variogram model using the argument name model and the other is a set of locations identifying where the interpolations are to be made. This is specified with the argument name `newdata =`.
 
@@ -384,7 +388,7 @@ tm_shape(ipl) +
             title.position = c("left", "bottom"))
 ```
 
-Note that a portion of the data values where outside of the state but our interest is only to have values on a grid within the state. 
+Note: a portion of the data locations are outside of the state but our interest is only to have values on a grid within the state. 
 
 The spatial interpolation shows that parts of east central and north Florida were deluged by Fay.
 
@@ -413,7 +417,9 @@ The overall pattern of rainfall from Fay featuring the largest amounts along the
 
 We compare the kriged average with the simple average at the county level with `aggregate()` from the {sf} package.
 ```{r}
-ipl3 <- aggregate(FR.sf, by = FL.sf, FUN = mean)
+ipl3 <- aggregate(FR.sf, 
+                  by = FL.sf, 
+                  FUN = mean)
 ```
 
 The function returns a simple feature data frame of the average rainfall in each county.
@@ -470,7 +476,7 @@ round(fivenum(ipl2$var1.var)[3], 1)
 
 Simulations exploit this uncertainty and provide synthetic data for use in deterministic models. 
 
-Conditional simulation, where the simulated field (realization) is generated given the data and the variogram model, is done using the same `krige()` function by adding the argument `nsim` to specify the number of simulations.  
+Conditional simulation, where the simulated field (realization) is generated given the data and the variogram model, is done using the same `krige()` function by adding the argument `nsim =` to specify the number of simulations.  
 
 For a large number it may be necessary to limit the number neighbors in the kriging. This is done using the `nmax` argument. For a given location, the weights assigned to observations far away are very small, so it is efficient to limit how many are used in the simulation.
 
@@ -485,7 +491,6 @@ ipl.sim <- krige(tpm ~ 1,
 ```
 
 Simulations are conditional on the observed rainfall and the variogram model using block kriging on the counties.
-
 ```{r}
 library(tmap)
 
