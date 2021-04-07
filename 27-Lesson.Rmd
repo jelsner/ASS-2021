@@ -12,7 +12,7 @@ editor_options:
 
 ## Machine learning for spatial prediction
 
-Modified from https://geocompr.robinlovelace.net/spatial-cv.html
+This material is taken from https://geocompr.robinlovelace.net/spatial-cv.html
 
 The lesson uses the following packages:
 ```{r}
@@ -29,7 +29,7 @@ This lesson focuses on supervised techniques in which there is a training datase
 
 The primary aim of machine learning is to make good predictions, as opposed to statistical/Bayesian inference, which is good at helping to understand underlying mechanisms and uncertainties in the data. Machine learning is used in predicting the future behavior of customers, in recommending services (music, movies, what to buy next), in recognizing faces, in autonomous driving, in classifying text classification and in predicting maintenance (infrastructure, industry).
 
-### Example: Landslide susceptibility
+Example: Landslide susceptibility
 
 Here we show how machine learning is used to predict landslides. The case is based on a dataset of landslide locations in Southern Ecuador described in detail in Muenchow, Brenning, and Richter (2012). A subset of the dataset used in that paper is provided in the {RSAGA} package, which can be loaded as follows.
 ```{r}
@@ -155,11 +155,9 @@ library(pROC)
 pROC::auc(pROC::roc(lsl$lslpts, fitted(fit)))
 ```
 
-An AUROC value of 0.83 represents a good fit. However, this is an overoptimistic estimation since we have computed it on the complete dataset. To derive a biased-reduced assessment, we have to use cross-validation and in the case of spatial data should make use of spatial CV.
+An AUROC value of 0.83 represents a good fit. However, this is an overoptimistic estimation since we have computed it on the complete dataset. To derive a biased-reduced assessment, we have to use cross-validation (CV) and in the case of spatial data should make use of block CV.
 
-### Spatial cross-validation
-
-Cross-validation belongs to the family of resampling methods (James et al. 2013). The basic idea is to split (repeatedly) a dataset into training and test sets whereby the training data is used to fit a model which then is applied to the test set. 
+The basic idea is to split (repeatedly) a dataset into training and test sets whereby the training data is used to fit a model which then is applied to the test set. 
 
 Comparing the predicted values with the known response values from the test set (using a performance measure such as the AUROC in the binomial case) gives a bias-reduced assessment of the model’s capability to generalize the learned relationship to independent data. For example, a 100-repeated 5-fold cross-validation means to randomly split the data into five partitions (folds) with each fold being used once as a test set. 
 
@@ -167,16 +165,13 @@ This guarantees that each observation is used once in one of the test sets, and 
 
 However, geographic data is special. Points close to each other are, generally, more similar than points farther away. This means these points are not statistically independent because training and test points in conventional CV are often too close to each other. 
 
-‘Training’ observations near the ‘test’ observations can provide a kind of ‘sneak preview’: information that should be unavailable to the training dataset. To alleviate this problem ‘spatial partitioning’ is used to split the observations into spatially disjointed subsets (using the observations’ coordinates in a k-means clustering; A. Brenning (2012b); second row of Figure 11.3).
-
-[Partioning](13_partitioning.png)
+‘Training’ observations near the ‘test’ observations can provide a kind of ‘sneak preview’: information that should be unavailable to the training dataset. To alleviate this problem ‘spatial partitioning’ is used to split the observations into spatially disjointed subsets (using the observations’ coordinates in a k-means clustering).
 
 This partitioning strategy is the only difference between spatial and conventional CV. As a result, spatial CV leads to a bias-reduced assessment of a model’s predictive performance, and hence helps to avoid overfitting.
 
 There are dozens of packages for statistical learning, as described for example in the CRAN machine learning task view. Getting acquainted with each of these packages, including how to undertake cross-validation and hyperparameter tuning, can be time-consuming. Comparing model results from different packages can be even more laborious. 
 
 The {mlr} package was developed to address these issues. It acts as a ‘meta-package’, providing a unified interface to popular supervised and unsupervised statistical learning techniques including classification, regression, survival analysis and clustering. 
-
 The {mlr} modeling process consists of three main stages. First, a task specifies the data (including response and predictor variables) and the model type (such as regression or classification). Second, a learner defines the specific learning algorithm that is applied to the created task. Third, the resampling approach assesses the predictive performance of the model, i.e., its ability to generalize to new data).
 
 To implement a GLM using the functions from the {mlr} package, we create a task containing the landslide data. Since the response is binary (two-category variable), we create a classification task with the `makeClassifTask()` function (for regression tasks, use `makeRegrTask()`, see `?makeRegrTask` for other task types). 
@@ -253,7 +248,7 @@ To put these results in perspective, let us compare them with AUROC values from 
 
 Machine learning, more specifically the field of predictive modeling, is primarily concerned with minimizing the error of a model or making the most accurate predictions possible, at the expense of explainability. In applied machine learning we will borrow, reuse and steal algorithms from many different fields, including statistics and use them towards these ends.
 
-### Support vector machines (SVM)
+## Support vector machines (SVM)
 
 This section introduces support vector machines (SVM) for the same purpose. Random forest models might be more popular than SVMs; however, the positive effect of tuning hyperparameters on model performance is much more pronounced in the case of SVMs. Since (spatial) hyperparameter tuning is the major aim of this section, we will use an SVM.
 
@@ -387,11 +382,11 @@ result$aggr
 mean(result$measures.test$auc)
 ```
 
-It appears that the GLM (aggregated AUROC was 0.78) is slightly better than the SVM in this specific case. However, using more than 50 iterations in the random search would probably yield hyperparameters that result in models with a better AUROC (Schratz et al. 2018). On the other hand, increasing the number of random search iterations would also increase the total number of models and thus runtime.
+It appears that the GLM (aggregated AUROC was 0.78) is slightly better than the SVM in this specific case. However, using more than 50 iterations in the random search would probably yield hyper-parameters that result in models with a better AUROC (Schratz et al. 2018). On the other hand, increasing the number of random search iterations would also increase the total number of models and thus run time.
 
-The estimated optimal hyperparameters for each fold at the performance estimation level can also be viewed. The following command shows the best hyperparameter combination of the first fold of the first iteration (recall this results from the first 5 * 50 model runs):
+The estimated optimal hyper-parameters for each fold at the performance estimation level can also be viewed. The following command shows the best hyper-parameter combination of the first fold of the first iteration (recall this results from the first 5 * 50 model runs):
 
-Winning hyperparameters of tuning step, i.e. the best combination out of 50 * 5 models
+Winning hyper-parameters of tuning step, i.e. the best combination out of 50 * 5 models
 ```{r}
 result$extract[[1]]$x
 ```
@@ -403,12 +398,6 @@ result$measures.test[1, ]
 
 So far spatial CV has been used to assess the ability of learning algorithms to generalize to unseen data. For spatial predictions, we often tune the hyperparameters on the complete dataset.
 
-Cross-validation is used to assess predictive performance of models. Spatial CV reduces bias introduced by spatial autocorrelation.
+Cross-validation is used to assess predictive performance of models. Block CV reduces bias introduced by spatial autocorrelation.
 
-The {mlr} package facilitates (spatial) resampling techniques in combination with the most popular statistical learning techniques including linear regression, semi-parametric models such as generalized additive models and machine learning techniques such as random forests, SVMs, and boosted regression trees (Bischl et al. 2016; Schratz et al. 2018). Machine learning algorithms often require hyperparameter inputs, the optimal ‘tuning’ of which can require thousands of model runs which require large computational resources, consuming much time, RAM and/or cores. mlr tackles this issue by enabling parallelization.
-
-Machine learning overall, and its use to understand spatial data, is a large field and this chapter has provided the basics, but there is more to learn. We recommend the following resources in this direction:
-
-* The {mlr} tutorials on Machine Learning in R and Handling of spatial Data. 
-* An academic paper on hyperparameter tuning (Schratz et al. 2018). 
-* In case of spatio-temporal data, one should account for spatial and temporal autocorrelation when doing CV (Meyer et al. 2018).
+The {mlr} package facilitates (spatial) re-sampling techniques in combination with the most popular statistical learning techniques including linear regression, semi-parametric models such as generalized additive models and machine learning techniques such as random forests, SVMs, and boosted regression trees. Machine learning algorithms often require hyper-parameter inputs, the optimal ‘tuning’ of which can require thousands of model runs which require large computational resources, consuming much time, RAM and/or cores. Functions in the {mlr} package address this issue by running operations in parallel.

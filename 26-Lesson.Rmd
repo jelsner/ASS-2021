@@ -14,7 +14,7 @@ editor_options:
 
 Statistical interpolation can be extended to obtain surfaces of multiple field variables. The idea is that if two field variables are correlated then information about the spatial correlation in one field variable can help provide information about values in the other field variable. The spatial variability of one variable is correlated with the spatial variability of the other variable. And this idea is not limited to only two variables. 
 
-Here we return to the Meuse River data. Concentrations of heavy metals in the flood plain of the Meuse River in Holland.
+Here we consider data measuring concentrations of heavy metals in the flood plain of the Meuse River in Holland.
 ```{r}
 library(gstat)
 library(sp)
@@ -27,7 +27,7 @@ prj <- paste("+init=epsg:28992",
 proj4string(meuse) <- CRS(prj)
 ```
 
-Suppose we are interested in the spatial distribution of all the heavy metals in the soils along the river (Not just zinc like we looked in Lesson 22). 
+Suppose we are interested in the spatial distribution of all the heavy metals in the soils along the river.
 
 First we need to organize the data as a `gstat` object. This is done with the `gstat()` function which orders (and copies) the field variables into a single object. It is done successively with the `gstat()` function.
 
@@ -50,7 +50,7 @@ The plot method displays the set of direct and cross variograms. The direct vari
 
 The cross variograms are shown in the six panels below the diagonal. For example, the cross variogram between the values of cadmium and copper is given in the second row of the first column. 
 
-Q: The cross variogram is similar to what function from the `spatstat` package?
+Note: The cross variogram is analogous to the `Kcross()` function from the {spatstat} package.
 
 Next we use `fit.lmc()` to fit separate models to each of the empirical variograms. We use an initial partial sill and nugget equal to one and a range of 800.
 ```{r}
@@ -103,21 +103,17 @@ Obtaining a quality statistical interpolation is a nuanced process but with prac
 
 ## Block cross validation for species distribution models
 
-The use of spatial and environmental blocks to separate training and testing sets is needed for realistic error estimation in datasets with dependence structures, and for estimating the predictive performance of models involving mapped distributions [@RobertsEtAl2017]. 
+This material is taken from https://cran.r-project.org/web/packages/blockCV/vignettes/BlockCV_for_SDM.html
 
-Package {blockCV} provides functions to separate train and test sets using buffers, spatial and environmental blocks. It provides several options for how those blocks are constructed. It also has a function that applies geostatistical techniques to investigate the existing level of spatial autocorrelation in the covariates to inform the choice of a suitable distance band by which to separate the data sets. In addition, some visualization tools are provided to help the user choose the block size and explore generated folds.
+The use of spatial and environmental blocks to separate training and testing sets is needed for realistic error estimation in data with spatial correlation, and for estimating the predictive performance of models involving mapped distributions. 
 
-The package has been written with Species Distribution Modelling (SDM) in mind, and the functions allow for a number of common scenarios (including presence-absence and presence-background species data, rare and common species, raster data for predictor variables). Although it can be applied to any spatial modelling e.g. multi-class responses for remote sensing image classification.
+Package {blockCV} provides functions to separate train and test sets using buffers, spatial and environmental blocks. It provides several options for how those blocks are constructed. It also has a function that applies geostatistical techniques to investigate the existing level of spatial autocorrelation in the explanatory variables to inform the choice of a suitable distance band by which to separate the data sets. In addition, some visualization tools are provided to help the user choose the block size and explore generated folds.
 
-You can find more information about blocking strategies of blockCV package and in general block cross-validation technique in the package associated paper [@ValaviEtAl2018].
+The package has been written with species distribution modeling (SDM) in mind, and the functions allow for a number of common scenarios (including presence-absence and presence-background species data, rare and common species, raster data for predictor variables), although it can be applied to any spatial model.
 
-This chapter presents the main functions of the package and illustrates its usage with three examples: modelling using {randomForest}, {maxnet} (new implementation of Maxent software in R) and {biomod2} packages.
+The package contains the raw format of the following data: Raster covariates of Australian Wet Tropic region (`.tif`) and simulated species data (`.csv`)
 
-The package contains the raw format of the following data:
-* Raster covariates of Australian Wet Tropic region (`.tif`)
-* Simulated species data (`.csv`)
-
-These data are used to illustrate how the package is used. The raster data include several bioclimatic and topographic variables from Australian Wet Tropic region aggregated to 800 m resolution. The species data contains records of a species, simulated based on the above environmental variables for the region. There are two .csv files with presence-absence and presence-background data.
+The raster data include several bio-climatic and topographic variables from Australian Wet Tropic region aggregated to 800 m resolution. The species data contains records of a species, simulated based on the above environmental variables for the region. There are two .csv files with presence-absence and presence-background data.
 
 First we load the packages and import the raster data.
 ```{r}
@@ -128,7 +124,7 @@ library(sf)
 awt <- raster::brick(system.file("extdata", "awt.grd", package = "blockCV"))
 ```
 
-The presence absence species data include 116 presence points and 138 absence points. The appropriate format of species data for the blockCV package is simple features (sf) or SpatialPointsDataFrame. We convert the data frame to simple feature data frame as follows:
+The presence absence species data include 116 presence points and 138 absence points. Spatial data can be simple features or S4 data objects. We convert the data frame to simple feature data frame as follows.
 ```{r}
 PA.df <- read.csv(system.file("extdata", "PA.csv", package = "blockCV"))
 PA.sf <- st_as_sf(PA.df, 
@@ -161,9 +157,9 @@ table(PB.sf$Species)
 
 The function `spatialBlock()` creates spatially separated folds based on a pre-specified distance (cell size of the blocks). It then assigns blocks to the training and testing folds with random, checkerboard pattern or in a systematic manner. The function can also divide the study region into vertical and horizontal bins with a given number of rows and columns.
 
-The range argument (`theRange`) needs to be in meters. When the input map has geographic coordinate system (decimal degrees), the block size is calculated based on dividing `theRange` by 111325 (the standard distance of a degree in meters, on the Equator).
+The range argument (`theRange =`) needs to be in meters. When the input map has geographic coordinate system (decimal degrees), the block size is calculated by dividing `theRange =` by 111325 (the standard distance of a degree in meters, on the Equator).
 
-The xOffset and yOffset can be used to shift the spatial position of the blocks in horizontal and vertical axes, respectively. This only works when the block have been built based on theRange. The blocks argument allows users to define an external spatial polygon as blocking layer. The polygon layer must cover all the species points. In addition, blocks can be masked by species spatial data. This option keeps the blocks that cover species data and remove the rest.
+The `xOffset =` and `yOffset =` can be used to shift the spatial position of the blocks in horizontal and vertical axes, respectively. This only works when the blocks have been built based on `theRange` argument. The blocks argument allows users to define an external spatial polygon as blocking layer. The polygon layer must cover all the species points. In addition, blocks can be masked by species spatial data. This option keeps the blocks that cover species data and remove the rest.
 
 Here we block by specified range with random assignment.
 ```{r}
@@ -191,7 +187,7 @@ sb2 <- spatialBlock(speciesData = PA.sf, # presence-background data
                     biomod2Format = TRUE)
 ```
 
-For visualising the species data on top of the spatial blocks, one can use `geom_sf()` function of the {ggplot2} package. However, a more sophisticated way of plotting each fold separately is presented in the visualisation tools section.
+For visualizing the species data on top of the spatial blocks, one can use `geom_sf()` function of the {ggplot2} package. However, a more sophisticated way of plotting each fold separately is presented in the visualization tools section.
 ```{r}
 library(ggplot2)
 
@@ -201,7 +197,7 @@ sb$plots +
 
 The function `buffering()` generates spatially separated training and testing folds by considering buffers of specified distance around each observation point. This approach is a form of leave-one-out cross-validation. Each fold is generated by excluding nearby observations around each testing point within the specified distance (ideally the range of spatial autocorrelation). In this method the test set never directly abuts a training presence or absence.
 
-When working with presence-background (presence and pseudo-absence) data (specified by `spDataType` argument), only presence records are used for specifying the folds. Consider a target presence point. The buffer is defined around this target point, using the specified range (`theRange`). The testing fold comprises the target presence point and all background points within the buffer. Any non-target presence points inside the buffer are excluded. All points (presence and background) outside of buffer are used for training set. The method cycles through all the presence data, so the number of folds is equal to the number of presence points in the dataset.
+When working with presence-background (presence and pseudo-absence) data (specified by `spDataType =` argument), only presence records are used for specifying the folds. Consider a target presence point. The buffer is defined around this target point, using the specified range (`theRange =`). The testing fold comprises the target presence point and all background points within the buffer. Any non-target presence points inside the buffer are excluded. All points (presence and background) outside of buffer are used for training set. The method cycles through all the presence data, so the number of folds is equal to the number of presence points in the dataset.
 
 For presence-absence data, folds are created based on all records, both presences and absences. As above, a target observation (presence or absence) forms a test point, all presence and absence points other than the target point within the buffer are ignored, and the training set comprises all presences and absences outside the buffer. 
 
@@ -216,7 +212,7 @@ bf1 <- buffering(speciesData = PA.sf,
                  progress = TRUE)
 ```
 
-In the following buffering example, presence-background data are used. As explained above, by default the background data within any target point will remain in the testing fold. This can be changed by setting `addBG = FALSE` (this option only works when `spDataType = "PB"`; note the default value is `"PA"`).
+In the following buffering example, presence-background data are used. By default the background data within any target point will remain in the testing fold. This can be changed by setting `addBG = FALSE` (this option only works when `spDataType = "PB"`; note the default value is `"PA"`).
 
 Buffering with presence-background data
 ```{r eval=FALSE}
@@ -228,9 +224,9 @@ bf2 <- buffering(speciesData = PB.sf, # presence-background data
                  progress = TRUE)
 ```
 
-The function `envBlock()` uses clustering methods to specify sets of similar environmental conditions based on the input covariates. Species data corresponding to any of these groups or clusters are assigned to a fold.
+The function `envBlock()` uses clustering methods to specify sets of similar environmental conditions based on the input explanatory variables. Species data corresponding to any of these groups or clusters are assigned to a fold.
 
-As k-means algorithms use Euclidean distance to estimate clusters, the input covariates should be quantitative variables. Since variables with wider ranges of values might dominate the clusters and bias the environmental clustering (Hastie et al., 2009), all the input rasters are first standardized within the function. This is done either by normalizing based on subtracting the mean and dividing by the standard deviation of each raster (the default) or optionally by standardizing using linear scaling to constrain all raster values between 0 and 1. 
+As k-means algorithms use Euclidean distance to estimate clusters, the input explanatory variables should be quantitative variables. Since variables with wider ranges of values might dominate the clusters and bias the environmental clustering, all the input rasters are first standardized within the function. This is done either by normalizing based on subtracting the mean and dividing by the standard deviation of each raster (the default) or optionally by standardizing using linear scaling to constrain all raster values between 0 and 1. 
 
 By default, the clustering is done in the raster space. In this approach, the clusters will be consistent throughout the region and across species (in the same region). However, this may result in cluster(s) that cover none of the species records especially when species data is not dispersed throughout the region or the number of clusters (k or folds) is high. In this case, the number of folds is less than the specified k. If `rasterBlock = FALSE`, the clustering will be done based only on the values of the predictors at the species presence and absence/background points. In this case, and the number of the folds will be the same as k.
 
@@ -261,63 +257,7 @@ library(automap)
 plot(sac$variograms[[1]])
 ```
 
-Another data set: PRISM temperatures
-
-Clear, calm days in April "1991-04-02" "1992-04-15" "1993-04-11" "1994-04-02" "1995-04-09"
-```{r}
-CCdates <- "2020-04-09" # record hot day 94F at airport
-CCdates <- c("1991-04-02", "1992-04-15", "1993-04-11", "1994-04-02", "1995-04-09")
-CCstring <- gsub("-", "", CCdates)
-```
-
-```{r}
-library(prism)
-options(prism.path = "PRISM")
-```
-
-```{r}
-i <- 1
-
-get_prism_dailys(
-  type = "tmax",
-  minDate = CCdates[i], 
-  maxDate = CCdates[i], 
-  keepZip = FALSE 
-)
-get_prism_dailys(
-  type = "tmin",
-  minDate = CCdates[i], 
-  maxDate = CCdates[i], 
-  keepZip = FALSE 
-)
-
-tmin.r <- raster(paste0("PRISM/PRISM_tmin_provisional_4kmD2_", CCstring[i], "_bil/PRISM_tmin_provisional_4kmD2_", CCstring[i], "_bil.bil"))
-tmax.r <- raster(paste0("PRISM/PRISM_tmax_provisional_4kmD2_", CCstring[i], "_bil/PRISM_tmax_provisional_4kmD2_", CCstring[i], "_bil.bil"))
-
-Leon.sf <- USAboundaries::us_counties(states = "FL") %>%
-  dplyr::filter(name %in% c("Leon", "Gadsden", "Liberty", "Wakulla", "Jefferson", "Jackson", "Calhoun")) %>%
-  sf::st_transform(crs = projection(tmax.r))
-
-tmin.r2 <- crop(tmin.r, Leon.sf)
-tmax.r2 <- crop(tmax.r, Leon.sf)
-
-#Moran(tmin.r2)
-#Moran(tmax.r2)
-
-temps <- brick(tmin.r2, tmax.r2)
-#tempsp <- projectRaster(temps, crs = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
-
-sac <- spatialAutoRange(rasterLayer = temps,
-                        sampleNumber = 100,
-                        doParallel = TRUE,
-                        showPlots = TRUE)
-
-summary(sac)$range
-
-#plot(sac$variograms[[1]])
-```
-
-Package {blockCV} provides two major visualisation tools for graphical exploration of the generated folds and assisting in block size selection. These tools have been developed as local web applications using R-package shiny. With `rangeExplorer()`, the user can choose among block sizes in a specified range, visualise the resulting blocks interactively, viewing the impact of block size on number and arrangement of blocks in the landscape (and optionally on the distribution of species data in those blocks). The `foldExplorer()` tool displays folds and the number of records in each fold; it works for all three blocking methods.
+Package {blockCV} provides two major visualization tools for graphical exploration of the generated folds and assisting in block size selection. These tools have been developed as local web applications using R-package shiny. With `rangeExplorer()`, the user can choose among block sizes in a specified range, visualize the resulting blocks interactively, viewing the impact of block size on number and arrangement of blocks in the landscape (and optionally on the distribution of species data in those blocks). The `foldExplorer()` tool displays folds and the number of records in each fold; it works for all three blocking methods.
 
 Explore generated folds
 ```{r}
