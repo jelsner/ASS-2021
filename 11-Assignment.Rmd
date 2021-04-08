@@ -13,7 +13,7 @@ Due: April 16, 2021, 3pm
 
 Total Points: 40
 
-Consider the geodata object `parana` from the {geoR} package containing rainfall values from the state of Paran\`a. The data are average rainfall (mm) over the period May-June.
+Consider the geodata object `parana` from the {geoR} package containing rainfall values from the state of Paran\`a. The data are average rainfall (mm) during May and June.
 
 (a) First plot the observed values using the `plot()` method. Then plot the residuals after a 2nd-order trend is removed from the observed values. (5)
 (b) Compute and plot an empirical variogram on the residuals after removing the 2nd-order trend. Hint: Use the `variog()` function. (5)
