@@ -14,7 +14,7 @@ editor_options:
 
 This material is taken from https://geocompr.robinlovelace.net/spatial-cv.html
 
-The lesson uses the following packages:
+The lesson uses the following packages.
 ```{r}
 library(sf)
 library(raster)
@@ -31,7 +31,7 @@ The primary aim of machine learning is to make good predictions, as opposed to s
 
 Example: Landslide susceptibility
 
-Here we show how machine learning is used to predict landslides. The case is based on a dataset of landslide locations in Southern Ecuador described in detail in Muenchow, Brenning, and Richter (2012). A subset of the dataset used in that paper is provided in the {RSAGA} package, which can be loaded as follows.
+Here we show how machine learning is used to predict landslides. The case is based on a dataset of landslide locations in Southern Ecuador. A subset of the dataset used in that paper is provided in the {RSAGA} package, which can be loaded as follows.
 ```{r}
 library(RSAGA)
 
@@ -89,21 +89,20 @@ Landslide initiation points (red) and points unaffected by landsliding (white) i
 
 To model landslide susceptibility, we need some predictors. Terrain attributes are frequently associated with landsliding, and these can be computed from the digital elevation model (dem). 
 
-slope: slope angle (°).
-cplan: plan curvature (rad m−1) expressing the convergence or divergence of a slope and thus water flow.
-cprof: profile curvature (rad m-1) as a measure of flow acceleration, also known as downslope change in slope angle.
-elev: elevation (m a.s.l.) as the representation of different altitudinal zones of vegetation and precipitation in the study area.
-log10_carea: the decadic logarithm of the catchment area (log10 m2) representing the amount of water flowing towards a location.
+`slope`: slope angle (°).
+`cplan`: plan curvature (rad per m) expressing the convergence or divergence of a slope and thus water flow.
+`cprof`: profile curvature (rad per m) as a measure of flow acceleration, also known as downslope change in slope angle.
+`elev`: elevation (m above sea level) as the representation of different altitude zones of vegetation and precipitation in the study area.
+`log10_carea`: the logarithm of the catchment area (log10 m2) representing the amount of water flowing towards a location.
 
-Data containing the landslide points, with the corresponding terrain attributes, is provided in the **spDataLarge** package, along with the terrain attribute raster stack from which the values were extracted.
+Data containing the landslide points, with the corresponding terrain attributes, is provided in the {spDataLarge} package, along with the terrain attribute raster stack from which the values were extracted.
 
 Attach landslide points with terrain attributes
 ```{r}
-install.packages("remotes")
+#install.packages("remotes")
+#remotes::install_github("Nowosad/spDataLarge")
 
-remotes::install_github("Nowosad/spDataLarge")
 data("lsl", package = "spDataLarge")
-
 head(lsl)
 ```
 
@@ -112,31 +111,31 @@ Attach terrain attribute raster stack
 data("ta", package = "spDataLarge")
 ```
 
-Before introducing the **mlr** package, an umbrella-package providing a unified interface to dozens of learning algorithms, it is worth taking a look at the conventional modeling interface in R. 
-
-This introduction to supervised statistical learning provides the basis for doing spatial CV, and contributes to a better grasp on the mlr approach presented subsequently.
+Before introducing functions from the {mlr} package, an umbrella-package providing a unified interface to dozens of learning algorithms, it is worth taking a look at the conventional modeling interface in R. This introduction to supervised statistical learning provides the basis for doing spatial CV, and contributes to a better grasp on the {mlr} approach presented subsequently.
 
 Supervised learning involves predicting a response variable as a function of predictors. The following command specifies and fits a generalized linear model:
 ```{r}
 fit <- glm(lslpts ~ slope + cplan + cprof + elev + log10_carea,
            family = binomial(),
            data = lsl)
-
 fit
 ```
 
-The model object `fit`, of class glm, contains the coefficients defining the fitted relationship between response and predictors. 
+The model object `fit`, of class `glm`, contains the coefficients defining the fitted relationship between response and predictors.
 
-It can also be used for prediction. This is done with the generic `predict()` method, which in this case calls the function `predict.glm()`. Setting type to response returns the predicted probabilities (of landslide occurrence) for each observation in `lsl`, as illustrated below (see ?predict.glm):
+It can also be used for prediction. This is done with the generic `predict()` method, which in this case calls the function `predict.glm()`. Setting type to response returns the predicted probabilities (of landslide occurrence) for each observation in `lsl`, as illustrated below (see `?predict.glm`):
 ```{r}
-pred_glm <- predict(object = fit, type = "response")
+pred_glm <- predict(object = fit,
+                    type = "response")
 head(pred_glm)
 ```
 
 Spatial predictions are made by applying the coefficients to the predictor rasters. This is done manually or with `raster::predict()`. In addition to a model object (`fit`), this function also expects a raster stack with the predictors named as in the model’s input data frame.
 
 ```{r}
-pred <- raster::predict(ta, model = fit, type = "response")
+pred <- raster::predict(ta,
+                        model = fit, 
+                        type = "response")
 
 tm_shape(pred) + 
   tm_raster()
@@ -155,7 +154,7 @@ library(pROC)
 pROC::auc(pROC::roc(lsl$lslpts, fitted(fit)))
 ```
 
-An AUROC value of 0.83 represents a good fit. However, this is an overoptimistic estimation since we have computed it on the complete dataset. To derive a biased-reduced assessment, we have to use cross-validation (CV) and in the case of spatial data should make use of block CV.
+An AUROC value of .83 represents a good fit. However, this is an overoptimistic estimation since we have computed it on the complete dataset. To derive a biased-reduced assessment, we have to use cross-validation (CV) and in the case of spatial data should make use of block CV.
 
 The basic idea is to split (repeatedly) a dataset into training and test sets whereby the training data is used to fit a model which then is applied to the test set. 
 
@@ -171,7 +170,8 @@ This partitioning strategy is the only difference between spatial and convention
 
 There are dozens of packages for statistical learning, as described for example in the CRAN machine learning task view. Getting acquainted with each of these packages, including how to undertake cross-validation and hyperparameter tuning, can be time-consuming. Comparing model results from different packages can be even more laborious. 
 
-The {mlr} package was developed to address these issues. It acts as a ‘meta-package’, providing a unified interface to popular supervised and unsupervised statistical learning techniques including classification, regression, survival analysis and clustering. 
+The {mlr} package was developed to address these issues. It acts as a ‘meta-package’, providing a unified interface to popular supervised and unsupervised statistical learning techniques including classification, regression, survival analysis and clustering.
+
 The {mlr} modeling process consists of three main stages. First, a task specifies the data (including response and predictor variables) and the model type (such as regression or classification). Second, a learner defines the specific learning algorithm that is applied to the created task. Third, the resampling approach assesses the predictive performance of the model, i.e., its ability to generalize to new data).
 
 To implement a GLM using the functions from the {mlr} package, we create a task containing the landslide data. Since the response is binary (two-category variable), we create a classification task with the `makeClassifTask()` function (for regression tasks, use `makeRegrTask()`, see `?makeRegrTask` for other task types). 
@@ -194,16 +194,16 @@ The function `makeLearner()` determines the statistical learning method to use. 
 
 Sample of available learners for binomial tasks in the mlr package.
 
-classif.binomial	Binomial Regression	binomial	stats
-classif.featureless	Featureless classifier	featureless	mlr
-classif.fnn	Fast k-Nearest Neighbour	fnn	FNN
-classif.gausspr	Gaussian Processes	gausspr	kernlab
-classif.knn	k-Nearest Neighbor	knn	class
-classif.ksvm	Support Vector Machines	ksvm	kernlab
+`classif.binomial`	Binomial Regression	binomial	stats
+`classif.featureless`	Featureless classifier	featureless	mlr
+`classif.fnn`	Fast k-Nearest Neighbour	fnn	FNN
+`classif.gausspr`	Gaussian Processes	gausspr	kernlab
+`classif.knn`	k-Nearest Neighbor	knn	class
+`classif.ksvm`	Support Vector Machines	ksvm	kernlab
 
-This yields all learners able to model two-class problems (landslide yes or no). We opt for the binomial classification method used and implemented as `classif.binomial` in mlr. 
+This yields all learners able to model two-class problems (landslide yes or no). We opt for the binomial classification method used and implemented as `classif.binomial` in {mlr}. 
 
-Additionally, we must specify the link-function, logit in this case, which is also the default of the binomial() function. predict.type determines the type of the prediction with prob resulting in the predicted probability for landslide occurrence between 0 and 1 (this corresponds to `type = response` in predict.glm).
+Additionally, we must specify the link-function, logit in this case, which is also the default of the `binomial()` function. predict.type determines the type of the prediction with prob resulting in the predicted probability for landslide occurrence between 0 and 1 (this corresponds to `type = response` in `predict.glm`).
 ```{r}
 lrn <- makeLearner(cl = "classif.binomial",
                   link = "logit",
@@ -212,7 +212,7 @@ lrn <- makeLearner(cl = "classif.binomial",
 ```
 
 To find out from which package the specified learner is taken and how to access the corresponding help pages, we can run:
-```{r}
+```{r, eval=FALSE}
 getLearnerPackages(lrn)
 helpLearner(lrn)
 ```
@@ -362,19 +362,20 @@ parallelStop()
 ```
 ```{r}
 # save your result, e.g.:
-saveRDS(result, "svm_sp_sp_rbf_50it.rds")
+#saveRDS(result, "svm_sp_sp_rbf_50it.rds")
 ```
 In case you do not want to run the code locally, we have saved a subset of the results in the book’s GitHub repo. They can be loaded as follows:
-```{r}
+```{r, eval=FALSE}
 result <- readRDS("svm_sp_sp_rbf_50it.rds")
 ```
-Note that runtime depends on many aspects: CPU speed, the selected algorithm, the selected number of cores and the dataset.
+Note that run time depends on many aspects: CPU speed, the selected algorithm, the selected number of cores and the dataset.
 
-Runtime in minutes
+Run time in minutes
 ```{r}
 round(result$runtime / 60, 2)
 ```
-Even more important than the runtime is the final aggregated AUROC: the model’s ability to discriminate the two classes.
+
+Even more important than the run time is the final aggregated AUROC: the model’s ability to discriminate the two classes.
 
 Final aggregated AUROC 
 ```{r}
@@ -382,7 +383,7 @@ result$aggr
 mean(result$measures.test$auc)
 ```
 
-It appears that the GLM (aggregated AUROC was 0.78) is slightly better than the SVM in this specific case. However, using more than 50 iterations in the random search would probably yield hyper-parameters that result in models with a better AUROC (Schratz et al. 2018). On the other hand, increasing the number of random search iterations would also increase the total number of models and thus run time.
+It appears that the GLM (aggregated AUROC was 0.78) is slightly better than the SVM in this specific case. However, using more than 50 iterations in the random search would probably yield hyper-parameters that result in models with a better AUROC. On the other hand, increasing the number of random search iterations would also increase the total number of models and thus run time.
 
 The estimated optimal hyper-parameters for each fold at the performance estimation level can also be viewed. The following command shows the best hyper-parameter combination of the first fold of the first iteration (recall this results from the first 5 * 50 model runs):
 

@@ -3,6 +3,7 @@ title: "Lesson 26"
 author: "James B. Elsner"
 date: "April 12, 2021"
 output:
+  pdf_document: default
   html_document: null
 editor_options:
   chunk_output_type: console
@@ -10,21 +11,22 @@ editor_options:
 
 **"When debugging, novices insert corrective code; experts remove defective code."** – Richard Pattis
 
-## Cokriging
+## Creating a spatial interpolation using more than one variable (cokriging)
 
 Statistical interpolation can be extended to obtain surfaces of multiple field variables. The idea is that if two field variables are correlated then information about the spatial correlation in one field variable can help provide information about values in the other field variable. The spatial variability of one variable is correlated with the spatial variability of the other variable. And this idea is not limited to only two variables. 
 
-Here we consider data measuring concentrations of heavy metals in the flood plain of the Meuse River in Holland.
+Here we consider data measuring concentrations of heavy metals in the flood plain of the Meuse River in Holland. The data are available in the {sp} package.
 ```{r}
 library(gstat)
+library(sf)
 library(sp)
 
 data(meuse)
 names(meuse)
-coordinates(meuse) <- ~ x + y
-prj <- paste("+init=epsg:28992", 
-             "+towgs84=565.237,50.0087,465.658,-0.406857,0.350733,-1.87035,4.0812")
-proj4string(meuse) <- CRS(prj)
+
+meuse.sf <- st_as_sf(x = meuse,
+                    coords = c("x", "y"),
+                    crs = 28992)
 ```
 
 Suppose we are interested in the spatial distribution of all the heavy metals in the soils along the river.
@@ -33,10 +35,10 @@ First we need to organize the data as a `gstat` object. This is done with the `g
 
 Here we specify the trend using the square root of the distance to river as we did previously.
 ```{r}
-g <- gstat(NULL, "logCd", log(cadmium) ~ sqrt(dist), meuse)
-g <- gstat(g, "logCu", log(copper) ~ sqrt(dist), meuse)
-g <- gstat(g, "logPb", log(lead) ~ sqrt(dist), meuse)
-g <- gstat(g, "logZn", log(zinc) ~ sqrt(dist), meuse)
+g <- gstat(NULL, "logCd", log(cadmium) ~ sqrt(dist), meuse.sf)
+g <- gstat(g, "logCu", log(copper) ~ sqrt(dist), meuse.sf)
+g <- gstat(g, "logPb", log(lead) ~ sqrt(dist), meuse.sf)
+g <- gstat(g, "logZn", log(zinc) ~ sqrt(dist), meuse.sf)
 g
 ```
 
@@ -62,7 +64,7 @@ plot(v, vm)
 
 As the variograms indicate, the variables have a strong cross correlations. Because these variables are co-located, we can also compute direct correlations.
 ```{r}
-cor(as.data.frame(meuse)[c("cadmium", "copper", "lead", "zinc")])
+cor(meuse[c("cadmium", "copper", "lead", "zinc")])
 ```
 
 The correlation matrix confirms strong cross correlation among the four variables at zero lag. The cross variogram generalizes these correlations across lag distance.
@@ -70,38 +72,47 @@ The correlation matrix confirms strong cross correlation among the four variable
 Given the variogram models, cokriged maps are produced using the `predict()` method after setting the grid locations for interpolation. The CRS for the grid locations matches the CRS of the data.
 ```{r}
 data(meuse.grid)
-coordinates(meuse.grid) <- ~ x + y
-proj4string(meuse.grid) <- CRS(proj4string(meuse))
-cok <- predict(vm, meuse.grid)
+
+grid.sf <- st_as_sf(x = meuse.grid,
+                    coords = c("x", "y"),
+                    crs = 28992)
+
+cok <- predict(vm, grid.sf)
 names(cok)
 ```
 
 The predictions for logarithm of zinc concentration are plotted.
 ```{r}
-spplot(cok, "logZn.pred")
+library(tmap)
+
+tm_shape(cok) +
+  tm_dots(col = "logZn.pred", size = .2)
 ```
 
 Compare with predictions using only zinc.
 ```{r}
 v2 <- variogram(log(zinc) ~ sqrt(dist), 
-               data = meuse)
+                data = meuse.sf)
 vm2 <- fit.variogram(v2, vgm(psill = .15, model = "Sph", 
                              range = 800, nugget = .1))
-uk <- krige(log(zinc) ~ sqrt(dist), meuse, newdata = meuse.grid, 
+uk <- krige(log(zinc) ~ sqrt(dist), meuse.sf, newdata = grid.sf, 
               model = vm2)
-spplot(uk, "var1.pred")
+
+tm_shape(uk) +
+  tm_dots(col = "var1.pred", size = .2)
 ```
 
-The predicted covariances between zinc and cadmium are plotted.
+The predicted co-variances between zinc and cadmium are plotted.
 ```{r}
-spplot(cok, "cov.logCd.logZn")
+tm_shape(cok) +
+  tm_dots(col = "cov.logCd.logZn", size = .2)
 ```
 
 The map shows areas of the flood plain with high (and low) correlations between cadmium and zinc.
 
-Obtaining a quality statistical interpolation is a nuanced process but with practice kriging can be an important tool in a spatial analyst's toolbox.
+Obtaining a quality statistical spatial interpolation is a nuanced process but with practice kriging can be an important tool in your toolbox.
 
-## Block cross validation for species distribution models
+## Properly cross validating with spatial data
 
 This material is taken from https://cran.r-project.org/web/packages/blockCV/vignettes/BlockCV_for_SDM.html
 
@@ -260,19 +271,19 @@ plot(sac$variograms[[1]])
 Package {blockCV} provides two major visualization tools for graphical exploration of the generated folds and assisting in block size selection. These tools have been developed as local web applications using R-package shiny. With `rangeExplorer()`, the user can choose among block sizes in a specified range, visualize the resulting blocks interactively, viewing the impact of block size on number and arrangement of blocks in the landscape (and optionally on the distribution of species data in those blocks). The `foldExplorer()` tool displays folds and the number of records in each fold; it works for all three blocking methods.
 
 Explore generated folds
-```{r}
+```{r, eval=FALSE}
 foldExplorer(blocks = sb, 
              rasterLayer = awt, 
              speciesData = PA.sf)
 ```
 
 Explore the block size
-```{r}
+```{r, eval=FALSE}
 rangeExplorer(rasterLayer = awt) # the only mandatory input
 ```
 
 Add species data to add them on the map
-```{r}
+```{r, eval=FALSE}
 rangeExplorer(rasterLayer = awt,
               speciesData = PA.sf,
               species = "Species",
